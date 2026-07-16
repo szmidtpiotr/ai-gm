@@ -95,6 +95,13 @@ def _auto_pick_armor_slot(conn, character_id: int, coverage: str) -> str:
 _CONSUMABLE_EFFECT_SIGNAL = frozenset(
     {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff"}
 )
+# Worn gear — never consumed. A passive relic effect (static_stat_modifier) projects to
+# the legacy "stat_buff" signal, which would otherwise mis-classify it as a consumable and
+# render a "Użyj" button (using it would DELETE the relic). Kinds here are exempt from the
+# consumable-effect heuristic above so a correctly-tagged relic/amulet stays equippable.
+_EQUIPPABLE_GEAR_KINDS = frozenset(
+    {"weapon", "armor", "shield", "relic", "trinket", "artifact", "amulet", "ring"}
+)
 _SUPPORTED_ITEM_USE_EFFECTS = {"heal_hp", "apply_condition", "remove_condition", "narrative_only", "damage_enemy"}
 
 
@@ -1608,7 +1615,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 clab = r["consumable_by_item_key_label"]
                 if clab:
                     label = str(clab)
-            elif et in _CONSUMABLE_EFFECT_SIGNAL:
+            elif et in _CONSUMABLE_EFFECT_SIGNAL and raw_kind not in _EQUIPPABLE_GEAR_KINDS:
                 item_type = "consumable"
             elif raw_kind == "quest" and dice:
                 # Mis-tagged elixirs/potions still stored as quest; dice + consumable-like row → treat as consumable.
@@ -2361,7 +2368,8 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
             item_effect_type = str(item_legacy.get("effect_type") or "").strip().lower()
             legacy_effect_type = str(row["legacy_effect_type"] or "").strip().lower()
             signal = item_effect_type or legacy_effect_type
-            item_type = "consumable" if signal in _CONSUMABLE_EFFECT_SIGNAL else (raw_item_type or "item")
+            is_gear = (raw_item_type or "").strip().lower() in _EQUIPPABLE_GEAR_KINDS
+            item_type = "consumable" if (signal in _CONSUMABLE_EFFECT_SIGNAL and not is_gear) else (raw_item_type or "item")
         if item_type != "consumable":
             raise ValueError("inventory item is not usable")
 
