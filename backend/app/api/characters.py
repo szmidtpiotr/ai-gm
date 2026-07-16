@@ -1748,6 +1748,17 @@ def get_character(character_id: int, _auth: dict | None = Depends(current_user_o
         except Exception:
             pass
 
+    # Zmęczenie z podróży (#1405) — poziom kondycji zmęczeniowej do ikon 😓 na mapie.
+    # Liczony data-driven z conditions (fatigue_service), max = wartość startowa 3
+    # (Numbers Policy — max_level katalogu zmeczony). Nie wywala karty, gdy padnie.
+    try:
+        from app.services.fatigue_service import read_fatigue_level
+        _raw_sheet = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
+        _conds = _raw_sheet.get("conditions") if isinstance(_raw_sheet, dict) else None
+        item["fatigue"] = {"level": read_fatigue_level(_conds), "max": 3}
+    except Exception:
+        item.setdefault("fatigue", None)
+
     conn.close()
     return item
 

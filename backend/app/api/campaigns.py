@@ -1310,7 +1310,21 @@ def travel_estimate(campaign_id: int, to_q: int, to_r: int, mode: str = "direct"
             (int(cur["q"]), int(cur["r"])), (int(to_q), int(to_r)), conn,
             route_mode=("road" if mode == "road" else "direct"),
         )
-        return {"dist": est.get("dist"), "hours": est.get("hours")}
+        # #1405: dołóż ścieżkę + per-hex koszty i bieżący budżet marszu, żeby front
+        # narysował podgląd trasy i oznaczył heks „tu dziś obóz" (dzienny cap).
+        from app.services.hex_travel_service import DAILY_SOFT_CAP, DAILY_HARD_CAP
+        _sf = json.loads((gs["session_flags"] if gs else None) or "{}")
+        return {
+            "dist": est.get("dist"),
+            "hours": est.get("hours"),
+            "path": est.get("path"),
+            "steps": est.get("steps"),
+            "march": {
+                "hours_today": round(float(_sf.get("hours_marched_today", 0.0) or 0.0), 1),
+                "soft_cap": float(DAILY_SOFT_CAP),
+                "hard_cap": float(DAILY_HARD_CAP),
+            },
+        }
     except Exception:
         return {"dist": None, "hours": None}
     finally:

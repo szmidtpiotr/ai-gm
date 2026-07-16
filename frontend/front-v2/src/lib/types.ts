@@ -152,6 +152,16 @@ export interface ClockState {
   is_night?: boolean;
   hours_to_night?: number;
   night_hint?: string | null;
+  // #1405 — dzienny budżet marszu (pasek wytrzymałości na mapie).
+  march?: MarchBudget | null;
+}
+
+// #1405 — budżet marszu dziennego: hours_today vs soft/hard cap (godziny).
+export interface MarchBudget {
+  hours_today: number;
+  soft_cap: number; // próg zmierzchu (prompt obozu)
+  hard_cap: number; // przymusowy obóz
+  night_march?: boolean;
 }
 
 // GET /characters/{id} — pełny bohater (paski HP/Mana + rail atrybutów).
@@ -164,6 +174,8 @@ export interface CharacterDetail {
   sheet_json: HeroSheet;
   current_location_label?: string | null;
   safe_for_rest?: boolean;
+  // #1405 — poziom zmęczenia z podróży (ikony 😓 na mapie). level 0 = brak.
+  fatigue?: { level: number; max: number } | null;
 }
 
 // Element listy quick-action chipów (suggested_actions z odpowiedzi tury).

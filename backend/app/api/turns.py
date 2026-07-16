@@ -9184,6 +9184,30 @@ def get_campaign_clock(campaign_id: int):
         if (not is_night and (22 - hour) <= 3)
         else None
     )
+
+    # Budżet marszu dziennego — pasek „wytrzymałości" na mapie (#1405). Wartości:
+    #  hours_today  — ile godzin przemaszerowano dziś (session_flags),
+    #  soft_cap     — próg zmierzchu (prompt obozu), hard_cap — przymusowy obóz.
+    # Bez tego gracz nie widział, czemu podróż nagle staje / pełznie po 1 heksie.
+    try:
+        from app.services.hex_travel_service import DAILY_SOFT_CAP, DAILY_HARD_CAP
+        _conn_m = sqlite3.connect(DB_PATH)
+        try:
+            _gs_m = _conn_m.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            _sf_m = json.loads((_gs_m[0] if _gs_m else None) or "{}")
+        finally:
+            _conn_m.close()
+        state["march"] = {
+            "hours_today": round(float(_sf_m.get("hours_marched_today", 0.0) or 0.0), 1),
+            "soft_cap": float(DAILY_SOFT_CAP),
+            "hard_cap": float(DAILY_HARD_CAP),
+            "night_march": bool(_sf_m.get("night_march", False)),
+        }
+    except Exception:
+        state.setdefault("march", None)
     return state
 
 

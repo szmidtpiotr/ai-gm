@@ -407,10 +407,20 @@ export function useTravelEstimate(
     enabled: !!campaignId && !!to,
     staleTime: 60_000,
     queryFn: () =>
-      apiFetch<{ dist: number | null; hours: number | null }>(
+      apiFetch<TravelEstimate>(
         `/campaigns/${campaignId}/travel-estimate?to_q=${to!.q}&to_r=${to!.r}`,
       ),
   });
+}
+
+// #1405 — szacunek podróży + ścieżka z per-hex kosztem budżetu i bieżący budżet
+// marszu → front rysuje podgląd trasy i oznacza heks „tu dziś obóz" (dzienny cap).
+export interface TravelEstimate {
+  dist: number | null;
+  hours: number | null;
+  path?: Array<{ q: number; r: number }>;
+  steps?: Array<{ q: number; r: number; cost: number }>;
+  march?: { hours_today: number; soft_cap: number; hard_cap: number };
 }
 
 /**

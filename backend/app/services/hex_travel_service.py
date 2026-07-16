@@ -2054,11 +2054,20 @@ def estimate_route_hours(
         if not path or len(path) <= 1:
             return out
         total = 0.0
+        steps: list[dict[str, Any]] = []
         for c in path[1:]:
             ht = hexes.get(c, {}).get("hex_type", "plains")
-            total += float((cfg or {}).get(ht, {}).get("travel_hours", 1.0)) or 1.0
+            cost = float((cfg or {}).get(ht, {}).get("travel_hours", 1.0)) or 1.0
+            total += cost
+            # #1405: per-hex koszt budżetu marszu — front liczy „dokąd dojdę dziś".
+            steps.append({"q": int(c[0]), "r": int(c[1]), "cost": round(cost, 2)})
         out["hours"] = round(total, 1)
         out["dist"] = len(path) - 1
+        # Ścieżka z origin (index 0) — front rysuje podgląd trasy na mapie (#1405).
+        out["path"] = [{"q": int(path[0][0]), "r": int(path[0][1])}] + [
+            {"q": s["q"], "r": s["r"]} for s in steps
+        ]
+        out["steps"] = steps
     except Exception as _er:  # never break UI over an estimate
         logger.warning("estimate_route_hours_failed", error=str(_er))
     return out

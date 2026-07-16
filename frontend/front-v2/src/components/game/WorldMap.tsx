@@ -10,11 +10,14 @@ import {
   MapPinSimpleArea,
   MoonStars,
   Path,
+  PersonSimpleWalk,
   Plus,
   Minus,
   Star,
   Sun,
   Sword,
+  Tent,
+  Warning,
   X,
   XCircle,
 } from "@phosphor-icons/react";
@@ -34,7 +37,8 @@ import {
   hexToPixel,
   terrainIcon,
 } from "@/lib/worldmap";
-import type { WorldHex } from "@/lib/types";
+import type { WorldHex, MarchBudget } from "@/lib/types";
+import type { TravelNotice } from "@/hooks/useGameData";
 import { cn } from "@/lib/utils";
 import { DayArcModal } from "./DayArcModal";
 
@@ -238,6 +242,17 @@ export function WorldMap({
     selected && !selectedIsCurrent ? { q: selected.q, r: selected.r } : undefined,
   );
   const estHours = travelEst.data?.hours ?? estimate?.hours ?? 0;
+  // #1405 — czy dzienny budżet marszu skończy się PRZED celem (obóz w drodze)?
+  const travelCampWarn = useMemo(() => {
+    const d = travelEst.data;
+    if (!d?.steps?.length || !d.march) return false;
+    let cum = d.march.hours_today;
+    for (const s of d.steps) {
+      if (cum + s.cost > d.march.soft_cap) return true;
+      cum += s.cost;
+    }
+    return false;
+  }, [travelEst.data]);
 
   // #1381 — podróż z mapy: zamiast pełnoekranowej cinematyki animujemy przeskok
   // pina po trasie NA mapie. Backend zwraca `path` (pełna trasa), `arrived_hex`
@@ -367,6 +382,14 @@ export function WorldMap({
           </button>
         </header>
 
+        {/* #1405 — pasek wytrzymałości marszu (dzienny budżet) + zmęczenie + powód
+            zatrzymania. Trwały wskaźnik nad mapą: tłumaczy „nagły stop" i „1-hex pełzanie". */}
+        <MarchStaminaBar
+          march={clock.data?.march ?? null}
+          fatigue={character.data?.fatigue ?? null}
+          notice={suggested.data?.travel_notice ?? null}
+        />
+
         {/* Mapa — wypełnia całą dostępną wysokość (mobile: pełny ekran, desktop: lewy panel) */}
         <div className="flex min-h-0 flex-1 flex-col p-3">
           <div
@@ -443,6 +466,62 @@ export function WorldMap({
                       onClick={() => selectHex(h)}
                     />
                   ))}
+                  {/* #1405 — podgląd trasy do wybranego celu: linia + marker „obóz
+                      dziś" na ostatnim heksie osiągalnym przed progiem zmierzchu
+                      (dzienny budżet). Pokazuje z góry, gdzie podróż się zatrzyma. */}
+                  {selected && !selectedIsCurrent && !anim &&
+                    travelEst.data?.path && travelEst.data.path.length > 1 && (() => {
+                    const path = travelEst.data!.path!;
+                    const steps = travelEst.data!.steps ?? [];
+                    const m = travelEst.data!.march;
+                    const pts = path.map((h) => hexToPixel(h.q, h.r));
+                    // Ostatni heks osiągalny dziś (cum kosztów + marsz dzisiejszy ≤ próg zmierzchu).
+                    let reached = path.length - 1;
+                    if (m && steps.length) {
+                      let cum = m.hours_today;
+                      reached = 0;
+                      for (let i = 0; i < steps.length; i++) {
+                        if (cum + steps[i].cost > m.soft_cap) break;
+                        cum += steps[i].cost;
+                        reached = i + 1;
+                      }
+                    }
+                    const campNeeded = reached < path.length - 1 && reached >= 0;
+                    const reachPts = pts.slice(0, reached + 1);
+                    const campPx = campNeeded ? pts[reached] : null;
+                    return (
+                      <g style={{ pointerEvents: "none" }}>
+                        {/* cała trasa — przygaszona przerywana */}
+                        <polyline
+                          points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                          fill="none"
+                          stroke="rgba(169,198,221,.28)"
+                          strokeWidth={1.4}
+                          strokeDasharray="2 4"
+                        />
+                        {/* odcinek osiągalny dziś — bursztyn */}
+                        {reachPts.length > 1 && (
+                          <polyline
+                            points={reachPts.map((p) => `${p.x},${p.y}`).join(" ")}
+                            fill="none"
+                            stroke="var(--ember)"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                          />
+                        )}
+                        {campPx && (
+                          <>
+                            <circle cx={campPx.x} cy={campPx.y} r={5} fill="var(--gold)" stroke="#170f09" strokeWidth={1.2} />
+                            <foreignObject x={campPx.x - 11} y={campPx.y - 30} width={22} height={22}>
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Tent size={17} color="var(--gold)" weight="fill" />
+                              </div>
+                            </foreignObject>
+                          </>
+                        )}
+                      </g>
+                    );
+                  })()}
                   {/* #1381 — nakładka animacji podróży: linia trasy + wędrujący
                       pin + ⚔ na heksie zasadzki. */}
                   {anim && (() => {
@@ -611,6 +690,13 @@ export function WorldMap({
                   <div className="mx-3.5 mb-3 flex items-center gap-2 rounded-md border border-line-danger bg-[rgba(232,96,79,.06)] px-3 py-2 font-ui text-micro text-text">
                     <MoonStars className="shrink-0 text-danger" size={15} />
                     Podróż nocą — zmęczenie rośnie szybciej, gorsza widoczność.
+                  </div>
+                )}
+                {/* #1405 — budżet marszu skończy się przed celem → obóz w drodze */}
+                {travelCampWarn && (
+                  <div className="mx-3.5 mb-3 flex items-center gap-2 rounded-md border border-line-ember bg-ember/[0.06] px-3 py-2 font-ui text-micro text-text">
+                    <Tent className="shrink-0 text-gold" size={15} weight="fill" />
+                    Nie dojdziesz dziś do celu — po drodze rozbijesz obóz (❝obóz❞ na mapie).
                   </div>
                 )}
                 <div className="px-4 pb-4 pt-1">
@@ -880,6 +966,130 @@ function LegendDot({ className, label }: { className: string; label: string }) {
       <i className={cn("h-2.5 w-2.5 rounded-[3px] border", className)} />
       {label}
     </span>
+  );
+}
+
+// #1405 — pasek wytrzymałości marszu (A) + zmęczenie (C) + powód zatrzymania (B).
+function fmtH(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+function MarchStaminaBar({
+  march,
+  fatigue,
+  notice,
+}: {
+  march: MarchBudget | null;
+  fatigue: { level: number; max: number } | null;
+  notice: TravelNotice | null;
+}) {
+  if (!march) return null; // stary backend bez budżetu → nic
+  const hard = march.hard_cap || 12;
+  const soft = march.soft_cap || 8;
+  const today = Math.max(0, march.hours_today || 0);
+  const used = Math.min(today, hard);
+  const pct = Math.max(0, Math.min(100, (used / hard) * 100));
+  const softPct = Math.max(0, Math.min(100, (soft / hard) * 100));
+  const overHard = today >= hard - 0.05;
+  const overSoft = today >= soft - 0.05;
+  const toDusk = Math.max(0, soft - today);
+  const fill = overHard ? "var(--danger)" : overSoft ? "var(--gold)" : "var(--success)";
+  const status = overHard
+    ? "Padasz z sił — obóz przymusowy"
+    : overSoft
+      ? "Zmierzch — nocny marsz ryzykowny"
+      : `Do zmierzchu ~${fmtH(toDusk)} h marszu`;
+  const fatLevel = fatigue?.level ?? 0;
+  const fatMax = fatigue?.max ?? 3;
+  const noticeDanger = notice?.severity === "danger";
+
+  return (
+    <div className="shrink-0 border-b border-line bg-surface px-4 py-2">
+      <div className="flex items-center gap-3">
+        <PersonSimpleWalk
+          weight="fill"
+          size={16}
+          className={cn("shrink-0", overHard ? "text-danger" : overSoft ? "text-gold" : "text-success")}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-text-3">
+              Wytrzymałość marszu
+            </span>
+            <span className="font-mono text-micro text-text-2">
+              {fmtH(used)}
+              <span className="text-text-3">/{fmtH(hard)} h</span>
+            </span>
+          </div>
+          <div className="relative h-2 overflow-hidden rounded-full bg-inset shadow-[inset_0_0_0_1px_var(--line-soft)]">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
+              style={{ width: `${pct}%`, background: fill }}
+            />
+            {/* znacznik progu zmierzchu (soft cap) */}
+            <div className="absolute inset-y-0 w-px bg-text/50" style={{ left: `${softPct}%` }} />
+          </div>
+        </div>
+        {/* zmęczenie (C) — piktogramy poziomu */}
+        {fatLevel > 0 && (
+          <div
+            className="flex shrink-0 items-center gap-1"
+            title={`Zmęczenie ${fatLevel}/${fatMax} — kary do testów i inicjatywy, odpocznij`}
+          >
+            <Warning weight="fill" size={13} className="text-danger" />
+            <span className="flex gap-0.5">
+              {Array.from({ length: fatMax }).map((_, i) => (
+                <i
+                  key={i}
+                  className={cn("h-1.5 w-1.5 rounded-full", i < fatLevel ? "bg-danger" : "bg-line")}
+                />
+              ))}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "font-ui text-[10.5px]",
+            overHard ? "text-danger-glow" : overSoft ? "text-gold" : "text-text-3",
+          )}
+        >
+          {status}
+        </span>
+        {march.night_march && (
+          <span className="flex items-center gap-1 font-ui text-[10px] text-mana">
+            <MoonStars weight="fill" size={11} /> marsz nocny
+          </span>
+        )}
+      </div>
+
+      {/* B — powód zatrzymania (trwałe echo modalu, widoczne na mapie) */}
+      {notice && (
+        <div
+          className={cn(
+            "mt-1.5 flex items-start gap-1.5 rounded border px-2 py-1",
+            noticeDanger ? "border-line-danger bg-danger/[0.07]" : "border-line-ember bg-ember/[0.06]",
+          )}
+        >
+          <Warning
+            weight="fill"
+            size={12}
+            className={cn("mt-px shrink-0", noticeDanger ? "text-danger" : "text-ember-glow")}
+          />
+          <span
+            className={cn(
+              "font-ui text-[10.5px] font-semibold",
+              noticeDanger ? "text-danger-glow" : "text-ember-glow",
+            )}
+          >
+            {notice.title}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
