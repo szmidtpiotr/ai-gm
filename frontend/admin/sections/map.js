@@ -31,7 +31,12 @@ function filterTableGeneric(input, tableId, nameClass) {
 
 // ── Generic row edit/delete (locations-table) ───────────────────────────────────
 const _ROW_REGISTRY = {
-  'locations-table':   { endpoint:'/api/admin/locations',   keyField:'key', fields:[
+  'locations-table':   { endpoint:'/api/admin/locations',
+      // Delete/patch live on the /api/locations router, NOT /api/admin/locations
+      // (which has no bare {key} route → the old value 404'd, "Błąd usuwania").
+      deleteEndpoint:'/api/locations', patchEndpoint:'/api/locations/admin/locations',
+      deleteForce:true,   // purge trash even when a parent still has sub-locations
+      keyField:'key', fields:[
       {name:'label',         label:'Nazwa',  type:'text'},
       {name:'location_type', label:'Typ',    type:'text'},
       {name:'biome',         label:'Biom',   type:'text'},
@@ -131,7 +136,7 @@ const _ROW_REGISTRY = {
         } else payload[f.name] = el.value.trim() || null;
       }
       try {
-        await apiFetch(`${cfg.endpoint}/${encodeURIComponent(key)}`, { method:'PATCH', body: JSON.stringify(payload) });
+        await apiFetch(`${cfg.patchEndpoint || cfg.endpoint}/${encodeURIComponent(key)}`, { method:'PATCH', body: JSON.stringify(payload) });
         _showToast('Zapisano.', 'success');
         overlay.remove();
         cfg.reload();
@@ -144,10 +149,156 @@ const _ROW_REGISTRY = {
     const label = record.label || record.key || key;
     if (!confirm(`Usunąć "${label}"?`)) return;
     try {
-      await apiFetch(`${cfg.endpoint}/${encodeURIComponent(key)}`, { method:'DELETE' });
+      const base = cfg.deleteEndpoint || cfg.endpoint;
+      const qs = cfg.deleteForce ? '?force=true' : '';
+      await apiFetch(`${base}/${encodeURIComponent(key)}${qs}`, { method:'DELETE' });
       _showToast('Usunięto.', 'success');
       cfg.reload();
     } catch(e) { _showToast(e.message || 'Błąd usuwania.', 'error'); }
+  }
+
+// ── Duplikaty lokacji (#1409) ───────────────────────────────────────────────
+  const _DUP_API = '/api/admin/location-duplicates';
+  let _locDupData = null;
+
+  async function _loadLocDupBadge() {
+    try {
+      const { count } = await apiFetch(`${_DUP_API}/count`);
+      const b = document.getElementById('loc-dup-badge');
+      if (b) { b.textContent = count; b.style.display = count > 0 ? '' : 'none'; }
+    } catch { /* badge is best-effort */ }
+  }
+
+  const _GARBAGE_LABELS = {
+    test:     ['🧪 Testowe / smoke', 'Klucz z prefiksem test_, znacznikiem [TEST] lub sufiksem czasu.'],
+    orphaned: ['🔗 Osierocone', 'Rodzic (parent) nie istnieje lub jest nieaktywny.'],
+    floating: ['🎈 Bez hexa i kampanii', 'Aktywna lokacja bez hexa, rodzica i kampanii — wisi w próżni.'],
+    inactive: ['💤 Nieaktywne', 'Już miękko usunięte (is_active=0), wciąż zalegają w bazie.'],
+  };
+
+  function _dupRecordRow(rec, gi) {
+    const locked = rec.hex_locked;
+    const removable = !locked;
+    return `<label class="loc-dup-rec" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;background:var(--bg2,#141414)">
+      <input type="radio" name="dup-keep-${gi}" value="${_esc(rec.key)}" ${!locked ? '' : 'checked'} title="Zachowaj tę lokację">
+      <input type="checkbox" class="loc-dup-rm" data-key="${_esc(rec.key)}" ${removable ? 'checked' : 'disabled'} title="${removable ? 'Usuń przy scalaniu' : 'Zablokowana — hex jej używa'}">
+      <span style="flex:1;font-size:0.82rem;color:var(--text)">${_esc(rec.label || '—')}
+        <code style="font-size:0.68rem;color:var(--t3)">${_esc(rec.key)}</code>
+        ${locked ? '<span title="Hex świata używa tej lokacji — nie zostanie usunięta" style="color:#e0b040">🔒 hex</span>' : ''}
+        ${!rec.is_active ? '<span style="color:var(--t3);font-size:0.7rem">(nieaktywna)</span>' : ''}
+      </span>
+    </label>`;
+  }
+
+  function _renderLocDup() {
+    const root = document.getElementById('loc-dup-root');
+    if (!root || !_locDupData) return;
+    const { groups, garbage, excess, garbage_total } = _locDupData;
+
+    const groupsHtml = groups.length ? groups.map((g, gi) => `
+      <div class="card loc-dup-group" data-gi="${gi}" style="padding:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:0.82rem;font-weight:600">${g.match === 'exact' ? '🟰 Dokładne' : '≈ Podobne'}: „${_esc(g.label)}" <span style="color:var(--t3);font-weight:400">(${g.records.length})</span></span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-primary" data-dup-action="merge" data-gi="${gi}">Scal</button>
+            <button class="btn btn-sm btn-secondary" data-dup-action="ignore" data-gi="${gi}" title="To nie duplikat — schowaj grupę">🚫 Nie duplikat</button>
+          </div>
+        </div>
+        <div style="font-size:0.68rem;color:var(--t3);margin-bottom:4px">⦿ = zachowaj · ☑ = usuń (dzieci i sesje przepięte na zachowaną)</div>
+        <div style="display:flex;flex-direction:column;gap:3px">${g.records.map(r => _dupRecordRow(r, gi)).join('')}</div>
+      </div>`).join('') : '<div style="color:var(--t3);font-size:0.82rem;padding:8px">Brak duplikatów ✓</div>';
+
+    const garbageHtml = Object.entries(garbage).map(([kind, rows]) => {
+      const [title, hint] = _GARBAGE_LABELS[kind];
+      if (!rows.length) return '';
+      const list = rows.map(r => `
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:4px;background:var(--bg2,#141414)">
+          <span style="flex:1;font-size:0.8rem">${_esc(r.label || '—')} <code style="font-size:0.66rem;color:var(--t3)">${_esc(r.key)}</code>
+            ${r.hex_locked ? '<span title="Hex świata używa tej lokacji" style="color:#e0b040">🔒</span>' : ''}</span>
+          <button class="btn btn-sm ${r.hex_locked ? 'btn-secondary' : ''}" style="${r.hex_locked ? 'opacity:0.5' : 'background:#7f1d1d;color:#fca5a5'}" data-dup-action="del" data-key="${_esc(r.key)}" ${r.hex_locked ? 'disabled title="Hex jej używa — odepnij w Budowniczym najpierw"' : ''}>Usuń</button>
+        </div>`).join('');
+      return `<div class="card" style="padding:10px;margin-bottom:8px">
+        <div style="font-size:0.82rem;font-weight:600;margin-bottom:2px">${title} <span style="color:var(--t3);font-weight:400">(${rows.length})</span></div>
+        <div style="font-size:0.68rem;color:var(--t3);margin-bottom:6px">${hint}</div>
+        <div style="display:flex;flex-direction:column;gap:3px">${list}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--t3);font-size:0.82rem;padding:8px">Brak śmieci ✓</div>';
+
+    root.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:0.82rem;color:var(--t2)"><strong>${excess}</strong> nadmiarowych duplikatów · <strong>${garbage_total}</strong> śmieci</div>
+        <button class="btn btn-sm btn-secondary" data-dup-action="refresh">↻ Odśwież</button>
+      </div>
+      <div style="font-size:0.78rem;font-weight:700;color:var(--t3);letter-spacing:0.05em;margin:4px 0 8px">DUPLIKATY (ta sama nazwa)</div>
+      ${groupsHtml}
+      <div style="font-size:0.78rem;font-weight:700;color:var(--t3);letter-spacing:0.05em;margin:16px 0 8px">ŚMIECI</div>
+      ${garbageHtml}`;
+  }
+
+  async function _loadLocDuplicates() {
+    const root = document.getElementById('loc-dup-root');
+    if (root) root.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Skanuję lokacje…</div>';
+    try {
+      _locDupData = await apiFetch(_DUP_API);
+      _renderLocDup();
+      _loadLocDupBadge();
+    } catch (e) {
+      if (root) root.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:0.8rem">Błąd: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  async function _locDupMerge(gi) {
+    const group = _locDupData?.groups?.[gi];
+    if (!group) return;
+    const card = document.querySelector(`.loc-dup-group[data-gi="${gi}"]`);
+    const keepEl = card?.querySelector(`input[name="dup-keep-${gi}"]:checked`);
+    if (!keepEl) { _showToast('Wybierz lokację do zachowania (⦿).', 'warn'); return; }
+    const keep = keepEl.value;
+    const removeKeys = [...card.querySelectorAll('.loc-dup-rm:checked')]
+      .map(c => c.dataset.key).filter(k => k !== keep);
+    if (!removeKeys.length) { _showToast('Zaznacz przynajmniej jedną lokację do usunięcia (☑).', 'warn'); return; }
+    if (!confirm(`Scalić ${removeKeys.length} lokacji w „${keep}"? Dzieci i sesje zostaną przepięte, duplikaty usunięte.`)) return;
+    try {
+      const res = await apiFetch(`${_DUP_API}/merge`, { method:'POST', body: JSON.stringify({ keep_key: keep, remove_keys: removeKeys }) });
+      const skipped = res.skipped_hex_locked?.length;
+      _showToast(`Scalono ${res.deleted.length}.` + (skipped ? ` ${skipped} pominięto (hex).` : ''), 'success');
+      _loadLocDuplicates();
+    } catch (e) { _showToast(e.message || 'Błąd scalania.', 'error'); }
+  }
+
+  async function _locDupIgnore(gi) {
+    const group = _locDupData?.groups?.[gi];
+    if (!group) return;
+    const keys = group.records.map(r => r.key);
+    try {
+      await apiFetch(`${_DUP_API}/ignore`, { method:'POST', body: JSON.stringify({ keys }) });
+      _showToast('Oznaczono jako „nie duplikat".', 'success');
+      _loadLocDuplicates();
+    } catch (e) { _showToast(e.message || 'Błąd.', 'error'); }
+  }
+
+  async function _locDupDelete(key) {
+    if (!confirm(`Usunąć lokację „${key}"?`)) return;
+    try {
+      await apiFetch(`/api/locations/${encodeURIComponent(key)}?force=true`, { method:'DELETE' });
+      _showToast('Usunięto.', 'success');
+      _loadLocDuplicates();
+    } catch (e) { _showToast(e.message || 'Błąd usuwania.', 'error'); }
+  }
+
+  function _wireLocDup(panel) {
+    const root = panel.querySelector('#wtab-duplicates');
+    if (!root || root._wired) return;
+    root._wired = true;
+    root.addEventListener('click', e => {
+      const btn = e.target.closest('[data-dup-action]');
+      if (!btn) return;
+      const act = btn.dataset.dupAction;
+      if (act === 'refresh') return _loadLocDuplicates();
+      if (act === 'merge')   return _locDupMerge(+btn.dataset.gi);
+      if (act === 'ignore')  return _locDupIgnore(+btn.dataset.gi);
+      if (act === 'del')     return _locDupDelete(btn.dataset.key);
+    });
   }
 
   function _wireRowActions(tableId) {
@@ -195,7 +346,7 @@ const _ROW_REGISTRY = {
 // ── Tab dispatcher + hexmap generate ───────────────────────────────────────────
   function _loadMapTab(tab) {
     if (_worldLoaded.has(tab)) return Promise.resolve();
-    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats, floating:_loadFloating }[tab];
+    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats, floating:_loadFloating, duplicates:_loadLocDuplicates }[tab];
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('Map tab failed:', tab, err.message); });
@@ -2386,6 +2537,7 @@ function _sectionHtml() {
           <button class="stab" data-mtap="floating">⚓ Floating</button>
           <button class="stab" data-mtap="terrain">Teren</button>
           <button class="stab" data-mtap="review">Do zatwierdzenia</button>
+          <button class="stab" data-mtap="duplicates">🧹 Duplikaty <span class="badge badge-red" id="loc-dup-badge" style="display:none">0</span></button>
         </div>
 
         <!-- Lokacje -->
@@ -2484,6 +2636,13 @@ function _sectionHtml() {
         <!-- Do zatwierdzenia -->
         <div class="stab-panel" id="wtab-review">
           <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>
+        </div>
+
+        <!-- Duplikaty lokacji (#1409) -->
+        <div class="stab-panel" id="wtab-duplicates">
+          <div style="padding:16px" id="loc-dup-root">
+            <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>
+          </div>
         </div>
 
         <!-- Generuj świat -->
@@ -2610,6 +2769,9 @@ export async function init(panel) {
     panel.querySelectorAll('.stab-panel').forEach(p => p.classList.toggle('active', p.id === `wtab-${tab}`));
     _loadMapTab(tab).then(() => { if (tab === 'builder') setTimeout(wbCenter, 80); });
   });
+
+  _wireLocDup(panel);       // #1409 — detektor duplikatów lokacji (delegacja klików)
+  _loadLocDupBadge();       // badge na zakładce od razu po wejściu w sekcję
 
   // Domyślna zakładka: budowniczy (wtab-builder aktywny w HTML)
   _loadMapTab('builder').then(() => setTimeout(wbCenter, 80));
