@@ -2050,13 +2050,22 @@ async function _loadDuplicates() {
       </div></div>
     </details>` : '';
 
+  // #1400: licznik prewencji — ile duplikatów system sam podpiął / oflagował przy tworzeniu
+  const prev = data.prevention || {};
+  const prevHtml = (prev.reused || prev.flagged)
+    ? `<div style="color:var(--t2);font-size:0.8rem;margin-bottom:6px;padding:6px 10px;background:var(--canvas);border:1px solid var(--border);border-radius:6px">
+         🛡 Prewencja: <b>${prev.reused || 0}</b> podpięć do istniejących rekordów (duplikat nie powstał),
+         <b>${prev.flagged || 0}</b> utworzeń oflagowanych jako podejrzane (⚠ na górze listy).
+       </div>`
+    : '';
+
   root.innerHTML = (sections || cross)
-    ? `<div style="color:var(--t2);font-size:0.82rem;margin-bottom:6px">
+    ? `${prevHtml}<div style="color:var(--t2);font-size:0.82rem;margin-bottom:6px">
          Grupy <b>identyczne</b> = ta sama nazwa (pewne duplikaty). Grupy <b>podobne</b> = zbliżona nazwa, oceń ręcznie.
          Zaznacz który rekord zostaje (⦿) i które usunąć (☑) — scalenie przepina ekwipunki, tabele łupów, wypożyczenia i przepisy na ocalałego.
          Fałszywe trafienie? <b>🚫 To nie duplikat</b> chowa grupę na stałe (wróci tylko, gdy dojdzie nowy rekord o tej nazwie).
        </div>${sections}${cross}${ignoredHtml}`
-    : `<div style="text-align:center;padding:36px;color:var(--t3)">✨ Brak duplikatów — czysto!</div>${ignoredHtml}`;
+    : `${prevHtml}<div style="text-align:center;padding:36px;color:var(--t3)">✨ Brak duplikatów — czysto!</div>${ignoredHtml}`;
 
   root.querySelectorAll('.dup-merge-btn').forEach(btn => btn.addEventListener('click', () => _dupMerge(btn)));
   root.querySelectorAll('.dup-ignore-btn').forEach(btn => btn.addEventListener('click', () => _dupIgnore(btn)));
@@ -2142,7 +2151,7 @@ function _dupGroupHtml(table, group, idx) {
     </tr>`).join('');
   return `<div class="card dup-group" data-table="${table}" style="margin-bottom:12px">
     <div class="card-header">
-      <span class="card-title">${exact ? '🟥 identyczne' : '🟨 podobne'}: ${_esc(group.label)}</span>
+      <span class="card-title">${exact ? '🟥 identyczne' : '🟨 podobne'}: ${_esc(group.label)}${group.flagged ? ' <span title="Utworzone mimo podobnej nazwy — oflagowane przez prewencję (#1400)" style="color:var(--amber)">⚠ świeże z Kuźni</span>' : ''}</span>
       <span style="display:flex;gap:6px">
         <button class="btn btn-sm btn-secondary dup-ignore-btn" title="Fałszywe trafienie — schowaj grupę przy kolejnych skanach">🚫 To nie duplikat</button>
         <button class="btn btn-sm btn-primary dup-merge-btn">Scal zaznaczone</button>

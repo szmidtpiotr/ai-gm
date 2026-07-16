@@ -135,6 +135,121 @@ def _group_fully_ignored(keys: list[str], ignored: set[tuple[str, str]]) -> bool
     )
 
 
+# ─── Prewencja przy tworzeniu (#1400) ────────────────────────────────────────
+
+def _ensure_prevention_table(conn: sqlite3.Connection) -> None:
+    # Defensive twin of the migrations_admin.py DDL (same reason as ignores).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_duplicate_preventions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            label TEXT NOT NULL,
+            action TEXT NOT NULL,
+            existing_key TEXT,
+            new_key TEXT,
+            source TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+
+def _reusable_records(conn: sqlite3.Connection, table: str) -> list:
+    """Records eligible for silent reuse: active, global, not template clones.
+
+    Template clones (tpl*) duplicate labels BY DESIGN (per-template reward
+    copies) — reusing or matching against them would break that mechanic.
+    """
+    real = _TABLES[table]
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({real})")}
+    conds = ["is_active = 1"]
+    if "template_id" in cols:
+        conds.append("template_id IS NULL")
+    if "hidden" in cols:
+        conds.append("(hidden IS NULL OR hidden = 0)")
+    if "campaign_id" in cols:
+        conds.append("campaign_id IS NULL")
+    return conn.execute(f"SELECT key, label FROM {real} WHERE {' AND '.join(conds)}").fetchall()
+
+
+def resolve_new_label(conn: sqlite3.Connection, table: str, label: str, source: str = "") -> dict:
+    """Decide what to do before creating a record with this label.
+
+    - exact match (normalized) → {"action": "reuse", "key": <existing>} — logged;
+      caller must NOT create and should use the existing key instead
+    - fuzzy match → {"action": "create_flagged", "similar_to": <closest key>} —
+      caller creates, then calls log_flagged_creation() with the new key
+    - no match → {"action": "create"}
+    """
+    if table not in _TABLES:
+        raise ValueError(f"Nieznana tabela: {table}")
+    norm = normalize_label(label)
+    if not norm:
+        return {"action": "create"}
+
+    best_key, best_ratio = None, 0.0
+    for key, existing_label in _reusable_records(conn, table):
+        existing_norm = normalize_label(existing_label)
+        if existing_norm == norm:
+            _ensure_prevention_table(conn)
+            conn.execute(
+                "INSERT INTO content_duplicate_preventions (table_name, label, action, existing_key, source) "
+                "VALUES (?, ?, 'reuse', ?, ?)",
+                (table, label, key, source),
+            )
+            return {"action": "reuse", "key": key}
+        ratio = SequenceMatcher(None, norm, existing_norm).ratio()
+        if ratio > best_ratio:
+            best_ratio, best_key = ratio, key
+
+    if best_key is not None and best_ratio >= FUZZY_THRESHOLD:
+        return {"action": "create_flagged", "similar_to": best_key}
+    return {"action": "create"}
+
+
+def log_flagged_creation(
+    conn: sqlite3.Connection,
+    table: str,
+    new_key: str,
+    label: str,
+    similar_to: str,
+    source: str = "",
+) -> None:
+    """Record a fuzzy-suspicious creation so the detector surfaces it first."""
+    _ensure_prevention_table(conn)
+    conn.execute(
+        "INSERT INTO content_duplicate_preventions (table_name, label, action, existing_key, new_key, source) "
+        "VALUES (?, ?, 'flagged', ?, ?, ?)",
+        (table, label, similar_to, new_key, source),
+    )
+
+
+def get_prevention_stats(conn: sqlite3.Connection) -> dict:
+    """{'reused': n, 'flagged': n} — ile duplikatów uniknięto / oflagowano."""
+    _ensure_prevention_table(conn)
+    stats = {"reused": 0, "flagged": 0}
+    for action, n in conn.execute(
+        "SELECT action, COUNT(*) FROM content_duplicate_preventions GROUP BY action"
+    ):
+        if action == "reuse":
+            stats["reused"] = n
+        elif action == "flagged":
+            stats["flagged"] = n
+    return stats
+
+
+def _flagged_keys(conn: sqlite3.Connection, table: str) -> set[str]:
+    _ensure_prevention_table(conn)
+    return {
+        r[0]
+        for r in conn.execute(
+            "SELECT new_key FROM content_duplicate_preventions WHERE table_name = ? AND action = 'flagged' AND new_key IS NOT NULL",
+            (table,),
+        )
+    }
+
+
 # ─── Scan ────────────────────────────────────────────────────────────────────
 
 def _fetch_records(conn: sqlite3.Connection, real_table: str) -> list[dict]:
@@ -188,6 +303,7 @@ def _fuzzy_clusters(labels: list[str]) -> list[set[str]]:
 def _scan_table(conn: sqlite3.Connection, logical: str) -> list[dict]:
     records = _fetch_records(conn, _TABLES[logical])
     ignored = _ignored_pairs(conn, logical)
+    flagged = _flagged_keys(conn, logical)
     by_norm: dict[str, list[dict]] = {}
     for rec in records:
         by_norm.setdefault(rec["norm"], []).append(rec)
@@ -203,6 +319,7 @@ def _scan_table(conn: sqlite3.Connection, logical: str) -> list[dict]:
             groups.append({
                 "match": "exact",
                 "label": norm,
+                "flagged": any(r["key"] in flagged for r in recs),
                 "records": [_public(r) for r in recs],
             })
 
@@ -213,10 +330,12 @@ def _scan_table(conn: sqlite3.Connection, logical: str) -> list[dict]:
         groups.append({
             "match": "fuzzy",
             "label": " / ".join(sorted(cluster)),
+            "flagged": any(r["key"] in flagged for r in recs),
             "records": [_public(r) for r in recs],
         })
 
-    groups.sort(key=lambda g: (g["match"] != "exact", -len(g["records"])))
+    # exact przed fuzzy; wewnątrz — oflagowane przez prewencję (#1400) na górze.
+    groups.sort(key=lambda g: (g["match"] != "exact", not g["flagged"], -len(g["records"])))
     return groups
 
 
@@ -259,6 +378,7 @@ def scan_duplicates(conn: sqlite3.Connection) -> dict:
         "tables": tables,
         "cross": visible_cross,
         "excess": count_duplicates(conn),
+        "prevention": get_prevention_stats(conn),
     }
 
 

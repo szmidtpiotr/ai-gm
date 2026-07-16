@@ -95,7 +95,11 @@ def weapons_table_sql() -> str:
       location_tags TEXT,
       price_gp INTEGER,
       durability_base INTEGER,
-      ammo_key TEXT
+      ammo_key TEXT,
+      image_url TEXT,
+      image_gen_prompt TEXT,
+      template_id INTEGER,
+      hidden INTEGER DEFAULT 0
     );
     """
 
@@ -133,7 +137,15 @@ def items_table_sql() -> str:
       min_level INTEGER DEFAULT 1,
       location_tags TEXT,
       price_gp INTEGER,
-      pending_category TEXT
+      pending_category TEXT,
+      image_url TEXT,
+      image_gen_prompt TEXT,
+      template_id INTEGER,
+      hidden INTEGER DEFAULT 0,
+      is_component INTEGER DEFAULT 0,
+      component_type TEXT,
+      created_by TEXT,
+      no_trade INTEGER DEFAULT 0
     );
     """
 
@@ -163,7 +175,11 @@ def consumables_table_sql() -> str:
       min_level INTEGER DEFAULT 1,
       location_tags TEXT,
       price_gp INTEGER,
-      effect_json TEXT
+      effect_json TEXT,
+      image_url TEXT,
+      image_gen_prompt TEXT,
+      template_id INTEGER,
+      hidden INTEGER DEFAULT 0
     );
     """
 

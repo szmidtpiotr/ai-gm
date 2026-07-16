@@ -527,6 +527,20 @@ ADMIN_MIGRATIONS = [
         UNIQUE(table_name, key_a, key_b)
     )
     """,
+    # #1400 — prewencja duplikatów przy tworzeniu: log podpięć (reuse) i oflagowanych
+    # utworzeń (flagged) — licznik uniknięć + priorytet w detektorze (#1399).
+    """
+    CREATE TABLE IF NOT EXISTS content_duplicate_preventions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        label TEXT NOT NULL,
+        action TEXT NOT NULL,
+        existing_key TEXT,
+        new_key TEXT,
+        source TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
     # F2 (#462) — Affix System: affix catalog carrying typed Effect Objects (F1 schema).
     """
     CREATE TABLE IF NOT EXISTS game_config_affixes (

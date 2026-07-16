@@ -309,9 +309,18 @@ def _u11c_sync(conn: sqlite3.Connection, table: str, key: str) -> None:
         pass
 
 
+def _existing_rowid(conn: sqlite3.Connection, table: str, key: str) -> int:
+    return conn.execute(f"SELECT rowid FROM {table} WHERE key = ?", (key,)).fetchone()[0]
+
+
 def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]:
     """Insert hook draft_data into the appropriate game config table.
-    Returns (table_name, new_record_id)."""
+    Returns (table_name, new_record_id).
+
+    #1400: identyczna nazwa (po normalizacji) w katalogu → podpinamy istniejący
+    rekord zamiast tworzyć duplikat; podobna nazwa → tworzymy, ale flagujemy
+    dla detektora duplikatów (#1399)."""
+    from app.services.duplicate_service import log_flagged_creation, resolve_new_label
     raw_d = hook.get("draft_data")
     if isinstance(raw_d, dict):
         d = raw_d
@@ -327,8 +336,11 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
 
     if htype in ("weapon", "armor"):
         table = "game_config_weapons"
-        key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         label = d.get("label") or hook["title"]
+        dup = resolve_new_label(conn, "weapons", label, source="forge_hook")
+        if dup["action"] == "reuse":
+            return table, _existing_rowid(conn, table, dup["key"])
+        key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         cur = conn.execute(
             """INSERT INTO game_config_weapons
                (key, label, damage_die, linked_stat, allowed_classes, description,
@@ -345,13 +357,18 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              json.dumps(d["effect_json"], ensure_ascii=False) if d.get("effect_json") and isinstance(d.get("effect_json"), dict) else (d.get("effect_json") if isinstance(d.get("effect_json"), str) else None),
              now, now),
         )
+        if dup["action"] == "create_flagged":
+            log_flagged_creation(conn, "weapons", key, label, dup["similar_to"], source="forge_hook")
         _u11c_sync(conn, table, key)
         return table, cur.lastrowid
 
     elif htype == "item":
         table = "game_config_items"
-        key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         label = d.get("label") or hook["title"]
+        dup = resolve_new_label(conn, "items", label, source="forge_hook")
+        if dup["action"] == "reuse":
+            return table, _existing_rowid(conn, table, dup["key"])
+        key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         cur = conn.execute(
             """INSERT INTO game_config_items
                (key, label, item_type, description, value_gp, rarity, effect_json,
@@ -364,13 +381,18 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              json.dumps(d["effect_json"], ensure_ascii=False) if d.get("effect_json") and isinstance(d.get("effect_json"), dict) else (d.get("effect_json") if isinstance(d.get("effect_json"), str) else None),
              now, now),
         )
+        if dup["action"] == "create_flagged":
+            log_flagged_creation(conn, "items", key, label, dup["similar_to"], source="forge_hook")
         _u11c_sync(conn, table, key)
         return table, cur.lastrowid
 
     elif htype == "consumable":
         table = "game_config_consumables"
-        key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         label = d.get("label") or hook["title"]
+        dup = resolve_new_label(conn, "consumables", label, source="forge_hook")
+        if dup["action"] == "reuse":
+            return table, _existing_rowid(conn, table, dup["key"])
+        key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         cur = conn.execute(
             """INSERT INTO game_config_consumables
                (key, label, description, effect_type, base_price, rarity,
@@ -385,6 +407,8 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              d.get("effect_target", "self"),
              now, now),
         )
+        if dup["action"] == "create_flagged":
+            log_flagged_creation(conn, "consumables", key, label, dup["similar_to"], source="forge_hook")
         _u11c_sync(conn, table, key)
         return table, cur.lastrowid
 
