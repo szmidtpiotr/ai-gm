@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/toast";
-import type { CombatState, CharacterDetail, DefenseReaction } from "@/lib/types";
+import type { CombatState, CharacterDetail, DefenseReaction, CombatActionResult } from "@/lib/types";
 import type { LogBlock } from "@/lib/game";
 import type { Vitals } from "@/lib/game";
 import {
@@ -222,6 +222,9 @@ export function CombatView({
   const [outcome, setOutcome] = useState<{ reason: string; combat: CombatState } | null>(null);
   const jobSeq = useRef(0);
   const pendingDmgStageRef = useRef<DiceJob | null>(null);
+  // #598 dual-wield: kolejka etapów kości dla ataku gracza (main → obrażenia →
+  // off-hand d20 → obrażenia off-hand). Drenowana w onDiceDone; pusta poza turą gracza.
+  const pendingStagesRef = useRef<DiceJob[]>([]);
   const pendingReactionRef = useRef<ReactionData | null>(null);
   // Kolejne okno reakcji (multiattack) do otwarcia PO animacji testu uniku/bloku.
   const pendingReactionNextRef = useRef<ReactionData | null>(null);
@@ -281,6 +284,45 @@ export function CombatView({
     qc.invalidateQueries({ queryKey: ["character"] });
   }
 
+  // #598 dual-wield: rozbij POJEDYNCZY atak gracza na etapy kości (d20 + ewentualna
+  // kość obrażeń). Ostatni etap ataku ma pushCardOnDone → jego karta wpada do logu.
+  // Reużywane dla ciosu głównego i off-hand, żeby złożyć jedną spójną sekwencję.
+  function stagesForAttack(res: CombatActionResult, cardFull: RollCardData): DiceJob[] {
+    const face = Number(res.player_raw_d20 ?? 1);
+    const crit = !!res.player_nat20 || face === 20;
+    const fumble = !!res.player_nat1 || face === 1;
+    const hasDmg = !!(res.hit && !res.dodged && res.damage_rolls?.length && res.damage_die);
+    const out: DiceJob[] = [];
+    jobSeq.current += 1;
+    out.push({
+      id: jobSeq.current,
+      notation: "1d20",
+      forced: [face],
+      face,
+      // Etap d20 nie zdradza obrażeń, gdy będzie osobna kość obrażeń.
+      card: hasDmg ? toHitStageCard(cardFull, true) : cardFull,
+      actor: "player",
+      stage: "attack",
+      crit,
+      fumble,
+      pushCardOnDone: !hasDmg,
+    });
+    if (hasDmg) {
+      jobSeq.current += 1;
+      out.push({
+        id: jobSeq.current,
+        notation: res.damage_die!,
+        forced: res.damage_rolls!,
+        face: res.damage_rolls![0] ?? 1,
+        card: cardFull,
+        actor: "player",
+        stage: "damage",
+        pushCardOnDone: true,
+      });
+    }
+    return out;
+  }
+
   // ── akcja gracza: atak / czar → rzut 3D → karta ──
   async function doAttack(spellKey?: string, title?: string) {
     if (!view) return;
@@ -322,7 +364,14 @@ export function CombatView({
       const aoeGold = (r.aoe_hits ?? []).reduce((s, h) => s + (Number(h.gold_drop) || 0), 0);
       goldAccumRef.current += (Number(r.gold_drop) || 0) + aoeGold;
       xpAccumRef.current += Number(r.xp_granted) || 0;
-      const face = Number(r.player_raw_d20 ?? d20);
+      // #598 dual-wield: jeśli to DRUGI cios (off-hand) dobił wroga, jego złoto/XP też
+      // musi wpaść do akumulatorów modalu końca — inaczej modal pokazywał +0 (bonus-bug).
+      if (r.offhand) {
+        const off = r.offhand;
+        const offAoe = (off.aoe_hits ?? []).reduce((s, h) => s + (Number(h.gold_drop) || 0), 0);
+        goldAccumRef.current += (Number(off.gold_drop) || 0) + offAoe;
+        xpAccumRef.current += Number(off.xp_granted) || 0;
+      }
       const card = rollFromPlayerAttack(
         r,
         title ?? (spellKey ? `${title ?? "CZAR"}` : "ATAK"),
@@ -347,42 +396,37 @@ export function CombatView({
           });
           return;
         }
-        // Kość obrażeń (k6/k8…) jako drugi etap po d20.
-        if (r.hit && !r.dodged && r.damage_rolls?.length && r.damage_die) {
-          jobSeq.current += 1;
-          pendingDmgStageRef.current = {
-            id: jobSeq.current,
-            notation: r.damage_die,
-            forced: r.damage_rolls,
-            face: r.damage_rolls[0] ?? 1,
-            card,
-            actor: "player",
-            stage: "damage",
-          };
-        } else {
-          pendingDmgStageRef.current = null;
+        // #598 dual-wield: złóż sekwencję kości głównego ciosu (d20 [+ obrażenia]),
+        // a gdy backend rozliczył drugi cios off-hand — doklej jego etapy. onDiceDone
+        // drenuje kolejkę: main d20 → obrażenia → DRUGI CIOS d20 → obrażenia off-hand.
+        pendingDmgStageRef.current = null;
+        const stages = stagesForAttack(r, card);
+        if (r.offhand) {
+          const offLabel = r.offhand.weapon_label
+            ? `DRUGI CIOS · ${r.offhand.weapon_label}`
+            : "DRUGI CIOS";
+          const offCard = rollFromPlayerAttack(r.offhand, offLabel);
+          stages.push(...stagesForAttack(r.offhand, offCard));
         }
-        jobSeq.current += 1;
-        setDiceJob({
-          id: jobSeq.current,
-          notation: "1d20",
-          forced: [face],
-          face,
-          // Etap d20 nie zdradza obrażeń — pełna karta dopiero po kości obrażeń.
-          card: pendingDmgStageRef.current ? toHitStageCard(card, true) : card,
-          actor: "player",
-          stage: "attack",
-          crit: !!r.player_nat20,
-          fumble: !!r.player_nat1,
-        });
+        const [first, ...rest] = stages;
+        pendingStagesRef.current = rest;
+        setDiceJob(first);
       } else {
-        setRolls((p) => [...p, card]);
+        const cards: RollCardData[] = [card];
+        if (r.offhand) {
+          const offLabel = r.offhand.weapon_label
+            ? `DRUGI CIOS · ${r.offhand.weapon_label}`
+            : "DRUGI CIOS";
+          cards.push(rollFromPlayerAttack(r.offhand, offLabel));
+        }
+        setRolls((p) => [...p, ...cards]);
         setBusy(false);
       }
     } catch {
       toast("Błąd akcji.", "danger");
       setHpFreeze(null);
       diceIncomingRef.current = false;
+      pendingStagesRef.current = [];
       setBusy(false);
     }
   }
@@ -394,6 +438,18 @@ export function CombatView({
       pendingDmgStageRef.current = null;
       setDiceJob(dmgStage);
       return; // karta trafi do rolls po zakończeniu etapu obrażeń
+    }
+    // #598 dual-wield: drenuj kolejkę etapów ataku gracza (main → obrażenia →
+    // DRUGI CIOS d20 → obrażenia off-hand). Karta bieżącego etapu wpada do logu
+    // tylko gdy to OSTATNI etap swojego ataku (pushCardOnDone) — inaczej d20 z
+    // pending-obrażeniami zostawiłby zdublowaną, częściową kartę.
+    const stages = pendingStagesRef.current;
+    if (stages.length) {
+      if (diceJob?.pushCardOnDone) setRolls((p) => [...p, diceJob.card]);
+      const [next, ...rest] = stages;
+      pendingStagesRef.current = rest;
+      setDiceJob(next);
+      return;
     }
     // Sprawdź czy po animacji d20 wroga czeka okno reakcji (SF10 + showEnemyDice).
     const pendingReaction = pendingReactionRef.current;

@@ -19,6 +19,10 @@ export interface DiceJob {
   actor?: "player" | "enemy"; // kto rzuca — decyduje czy busy=false po animacji
   // etap rzutu: d20 na trafienie / kość obrażeń / test uniku / test bloku
   stage?: "attack" | "damage" | "dodge" | "block";
+  // #598 dual-wield: w wieloetapowej sekwencji (main + off-hand) ten etap jest
+  // OSTATNIM etapem swojego ataku → jego karta wpada do logu przy przejściu do
+  // kolejnego ataku. Etapy pośrednie (d20 z pending obrażeń) mają to false.
+  pushCardOnDone?: boolean;
 }
 
 const MOUNT_ID = "dice3d-mount";

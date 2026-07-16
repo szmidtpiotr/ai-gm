@@ -431,6 +431,7 @@ export interface CombatActionResult {
   target_name?: string;
   target_id?: string;
   enemy_key?: string;
+  weapon_label?: string;
   // rzut wroga
   raw_d20?: number;
   attack_roll?: number;
@@ -496,6 +497,10 @@ export interface CombatActionResult {
   xp_granted?: number;
   dungeon_boss_loot?: LootItem[] | null;
   aoe_hits?: Array<{ loot?: LootItem[]; gold_drop?: number; xp_granted?: number }>;
+  // #598 dual-wield — drugi atak OFF-HAND rozliczony w tej samej turze (backend:
+  // resolve_offhand_followup). Pełny wynik ataku off-ręką: rzut/unik/obrażenia/łup/XP.
+  // Frontend renderuje osobną kartę „DRUGI CIOS" + drugą sekwencję kości.
+  offhand?: CombatActionResult | null;
   // sterowanie pętlą
   advance_turn?: string | "ended" | "awaiting_reaction";
   combat_state?: CombatState | null;
