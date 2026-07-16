@@ -801,6 +801,18 @@ def build_camp(
     }
     biome = BIOME_FROM_HEX.get((hex_type or "").lower(), None)
 
+    # #1407: recycle — purge this campaign's stale (already deactivated) camps
+    # before making a new one. Each rest used to leave a `temp_camp_*` row behind
+    # forever (deactivate only flips is_active=0, never deletes) → "Obozowisko"
+    # piled up to 59 dup rows. Only touch inactive, non-hex-linked rows so the
+    # PIOTR-OWNED world map (world_hexes) is never affected.
+    conn.execute(
+        """DELETE FROM game_locations
+           WHERE source_campaign_id = ? AND location_subtype = 'camp' AND is_active = 0
+             AND key NOT IN (SELECT location_key FROM world_hexes WHERE location_key IS NOT NULL)""",
+        (campaign_id,),
+    )
+
     key = f"temp_camp_{campaign_id}_{int(time.time())}"
     label = "Obozowisko"
     description = "Twój obóz polowy. Niewielkie ognisko, koce i broń pod ręką. Nasłuchujesz odgłosów w ciemności."

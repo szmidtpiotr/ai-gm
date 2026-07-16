@@ -38,3 +38,55 @@ def _isolate_llm_runtime_state():
         L._runtime_config.clear()
         L._runtime_config.update(saved_runtime)
         L._hydrate_attempted = saved_attempted
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_test_locations():
+    """Delete any ``game_locations`` rows a test creates in the shared DB.
+
+    Root cause of #1407 garbage: the suite has no isolated DB (conftest never
+    monkeypatches the hardcoded ``DB_PATH``), so location tests that POST to
+    ``/api/locations`` or call the validator wrote throwaway rows ("City A",
+    "Parent To Delete", ``dup_test_<time>`` …) straight into ``/data/ai_gm.db``
+    and never cleaned up — ~345 rows accumulated over many CI runs.
+
+    Rather than a risky global path refactor (DB_PATH is imported in a dozen
+    modules and shared with prod), snapshot the location keys before the test and
+    hard-delete whatever is new afterwards. Reads the SAME path the endpoints use
+    (``migrations_admin.DB_PATH``) so it cleans exactly what the test dirtied, and
+    only ever removes rows the test itself introduced — pre-existing seed/canon
+    rows are untouched.
+    """
+    import sqlite3
+
+    try:
+        from app.migrations_admin import DB_PATH
+    except Exception:
+        yield
+        return
+
+    def _keys() -> set:
+        try:
+            con = sqlite3.connect(DB_PATH)
+            try:
+                return {r[0] for r in con.execute("SELECT key FROM game_locations")}
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return set()
+
+    before = _keys()
+    try:
+        yield
+    finally:
+        new = _keys() - before
+        if new:
+            try:
+                con = sqlite3.connect(DB_PATH)
+                try:
+                    con.executemany("DELETE FROM game_locations WHERE key = ?", [(k,) for k in new])
+                    con.commit()
+                finally:
+                    con.close()
+            except sqlite3.Error:
+                pass

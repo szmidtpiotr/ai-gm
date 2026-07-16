@@ -458,10 +458,31 @@ def _create_new_location(
 
         key = _slugify_location_key(intent.target_key or intent.target_label)
 
+        # #1407: reuse an existing same-label location in THIS campaign instead of
+        # spawning a `<slug>_<time.time()>` duplicate. Root cause of cross-campaign
+        # dup pile-up ("Gospoda szlaku" ×13): the plan materializer re-ran and every
+        # key collision became a fresh timestamped row.
+        norm = (intent.target_label or "").strip().lower()
+        if norm and campaign_id is not None:
+            dup = conn.execute(
+                "SELECT id FROM game_locations WHERE LOWER(TRIM(label)) = ? "
+                "AND source_campaign_id = ? AND is_active = 1 LIMIT 1",
+                (norm, campaign_id),
+            ).fetchone()
+            if dup:
+                return _get_location_by_id(dup[0])
+
         # Sprawdź czy klucz już istnieje
         existing = _get_location_by_key(key)
         if existing:
-            key = f"{key}_{int(time.time())}"
+            # Deterministic campaign-scoped key (not time.time()) so re-materializing
+            # the same plan is idempotent — a second run reuses the row instead of
+            # forking a new one. Cross-campaign names stay separate via the suffix.
+            scoped = f"{key}_{campaign_id}" if campaign_id is not None else key
+            scoped_row = _get_location_by_key(scoped)
+            if scoped_row:
+                return _get_location_by_id(scoped_row["id"])
+            key = scoped
 
         # Stage 2B-Schema provenance: GM-driven auto-create vs. admin/explicit create.
         created_by = "gm_runtime" if ai_generated else "admin_manual"
