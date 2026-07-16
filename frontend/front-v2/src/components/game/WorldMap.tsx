@@ -114,10 +114,18 @@ export function WorldMap({
   const restAction = suggested.data?.suggested_actions?.find(
     (a) => (a.action || a.text) === "REST:long",
   );
-  const canRestHere = restAction?.enabled === true;
-  const canCampHere = suggested.data?.suggested_actions?.some(
+  // #1406 — bieżący heks bezpieczny do odpoczynku (osada/karczma) wg autorytatywnego
+  // pola postaci. Na wejściu do osady suggested_actions bywają chwilowo nierozwiązane
+  // (hex jeszcze nielinkowany → backend daje tylko BUILD_CAMP) — safe_for_rest łata ten
+  // transient, żeby bezpieczny hex ZAWSZE oferował „Odpocznij", a obóz był chowany.
+  const hereSafe = character.data?.safe_for_rest === true;
+  const canRestHere = restAction?.enabled === true || hereSafe;
+  const hasCampAction = suggested.data?.suggested_actions?.some(
     (a) => (a.action || a.text) === "BUILD_CAMP",
   ) ?? false;
+  // Obóz to opcja DZICZY — w bezpiecznej osadzie jest zbędny (mylił gracza: „nie mogę
+  // odpocząć bo nie mogę rozbić obozu"). Chowamy go tam, gdzie można normalnie odpocząć.
+  const canCampHere = hasCampAction && !hereSafe;
   const canResume = suggested.data?.suggested_actions?.some(
     (a) => (a.action || a.text) === "TRAVEL_RESUME",
   ) ?? false;
@@ -657,7 +665,9 @@ export function WorldMap({
                   <ModalAction
                     icon={<MoonStars size={18} />}
                     label="Odpocznij"
-                    sub="Długi odpoczynek — pełne HP/mana, +8 h"
+                    sub={hereSafe
+                      ? "Bezpieczne miejsce — pełny odpoczynek (HP/mana), +8 h"
+                      : "Długi odpoczynek — pełne HP/mana, +8 h"}
                     onClick={() => { setSelected(null); onRest(); }}
                   />
                 )}
@@ -668,6 +678,13 @@ export function WorldMap({
                     sub="Tymczasowy obóz pozwoli odpocząć (więcej spotkań)"
                     onClick={() => { setSelected(null); onCamp(); }}
                   />
+                )}
+                {/* #1406 — jasny komunikat, czemu w osadzie nie ma „Rozbij obóz":
+                    tu jest bezpiecznie, obóz (opcja dziczy) jest zbędny. */}
+                {hereSafe && hasCampAction && (
+                  <p className="rounded-md border border-line-soft bg-white/[.02] px-3 py-2 text-center font-ui text-micro text-text-3">
+                    Ten teren jest bezpieczny do odpoczynku — obóz zbędny.
+                  </p>
                 )}
                 {!canResume && !localAvailable && !canRestHere && !canCampHere && (
                   <p className="py-2 text-center font-ui text-body text-text-3">
