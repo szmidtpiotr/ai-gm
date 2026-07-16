@@ -158,7 +158,7 @@
       const b = document.createElement('button');
       b.className = 'nav-item';
       b.dataset.section = s.key;
-      b.innerHTML = `<span class="nav-item-icon">${s.ico}</span><span>${s.label}${s.key === 'world' ? '<span class="nav-badge" id="world-nav-badge" style="display:none">0</span>' : ''}</span>`;
+      b.innerHTML = `<span class="nav-item-icon">${s.ico}</span><span>${s.label}${s.key === 'world' ? '<span class="nav-badge" id="world-nav-badge" style="display:none">0</span>' : ''}${s.key === 'content' ? '<span class="nav-badge" id="content-nav-badge" style="display:none" title="Duplikaty w treści (#1399)">0</span>' : ''}</span>`;
       b.addEventListener('click', () => { location.hash = '#' + s.key; });
       nav.appendChild(b);
     });
@@ -222,7 +222,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=107`);
+        const mod = await import(`./sections/${key}.js?v=108`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)
@@ -339,8 +339,22 @@
       }
     }
 
+    // Load duplicate-content count for Przedmioty badge (#1399)
+    async function _loadDupCount() {
+      try {
+        const d = await apiFetch('/api/admin/duplicates/count');
+        const badge = document.getElementById('content-nav-badge');
+        if (badge) {
+          badge.textContent = d.count || '';
+          badge.style.display = d.count ? '' : 'none';
+        }
+      } catch (e) {
+        // Silent fail if duplicate count can't load
+      }
+    }
+
     // expose shared do debug (sekcje importują własne moduły, to tylko wygoda)
-    window.__adminShell = { apiFetch, showToast, SECTIONS, _loadPendingCount };
+    window.__adminShell = { apiFetch, showToast, SECTIONS, _loadPendingCount, _loadDupCount };
 
     // Przy starcie: brak tokenu → od razu login, nie czekaj na 401.
     const _initToken = localStorage.getItem('aigm_admin_token');
@@ -350,6 +364,7 @@
       const _savedUser = localStorage.getItem(LOGGED_IN_USER_KEY);
       if (_savedUser) _updateUserDisplay(_savedUser);
       _loadPendingCount();
+      _loadDupCount();
       route();
     }
   </script>

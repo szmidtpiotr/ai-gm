@@ -59,6 +59,15 @@ function _sectionHtml() {
         <div class="stat-card"><div class="stat-label">Rozmiar bazy</div><div class="stat-row"><div class="stat-value">—</div></div><div class="stat-sub">plik ai_gm.db</div></div>
       </div>
 
+      <!-- #1399: ostrzeżenie o duplikatach treści (widoczne tylko gdy > 0) -->
+      <div class="card" id="ov-dup-card" style="display:none;margin-bottom:14px;border-color:var(--amber-border)">
+        <div class="card-header"><span class="card-title">⚠️ Duplikaty w treści</span><span class="card-count" id="ov-dup-count">—</span></div>
+        <div style="padding:12px 14px;font-size:0.85rem">
+          Wykryto <b id="ov-dup-n">0</b> nadmiarowych duplikatów wśród przedmiotów, konsumabli i broni (tworzone przez LLM/mechanikę).
+          <a href="#content" style="color:var(--blue);font-weight:600" id="ov-dup-link">Przejdź do Przedmioty → 🔁 Duplikaty</a>
+        </div>
+      </div>
+
       <div class="feeds-grid">
         <div class="card">
           <div class="card-header"><span class="card-title">Ostatnie tury</span><span class="card-count" id="ov-turns-count">—</span></div>
@@ -111,6 +120,16 @@ export async function init(panel) {
   async function loadOverview() {
     const activeAnaTab = document.querySelector('#overview-tabs .stab[data-anatab].active');
     if (activeAnaTab) { loadAnalytics(); if (!anaTabLoaded.has(activeAnaTab.dataset.anatab)) loadAnalyticsTab(activeAnaTab.dataset.anatab); }
+    // #1399: kafelek duplikatów — niezależnie od głównego przeglądu (cichy fail)
+    apiFetch('/api/admin/duplicates/count').then(d => {
+      const card = document.getElementById('ov-dup-card');
+      if (!card) return;
+      card.style.display = d.count ? '' : 'none';
+      const n = document.getElementById('ov-dup-n');
+      if (n) n.textContent = d.count;
+      const c = document.getElementById('ov-dup-count');
+      if (c) c.textContent = d.count;
+    }).catch(() => {});
     try {
       const d = await apiFetch('/api/admin/overview');
       const cards = document.querySelectorAll('#section-overview #ovtab-overview .stat-card');

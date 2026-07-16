@@ -1048,7 +1048,7 @@ async function _loadSpells() {
 
 function _loadTab(tab) {
   if (_loaded.has(tab)) return;
-  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes, recipes:_loadRecipes, sets:_loadSets };
+  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes, recipes:_loadRecipes, sets:_loadSets, duplicates:_loadDuplicates };
   const fn = fns[tab];
   if (!fn) return;
   _loaded.add(tab);
@@ -1799,6 +1799,7 @@ function _sectionHtml() {
       <button class="stab" data-tab="affixes">Afiksy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="recipes">Przepisy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="sets">Sety <span style="font-size:0.7rem;color:var(--t3)"></span></button>
+      <button class="stab" data-tab="duplicates">🔁 Duplikaty <span style="font-size:0.7rem;color:var(--red)"></span></button>
     </div>
 
     <!-- Broń -->
@@ -1988,8 +1989,124 @@ function _sectionHtml() {
         </table>
       </div>
     </div>
+
+    <!-- Duplikaty (#1399) -->
+    <div class="stab-panel" id="stab-duplicates">
+      <div id="dup-root"><div style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</div></div>
+    </div>
   </div>
 </section>`;
+}
+
+// ── Duplikaty (#1399) ──────────────────────────────────────────────────────────
+const DUP_TABLE_LABELS = { items: 'Przedmioty', consumables: 'Konsumable', weapons: 'Broń' };
+// Tabs (w tym 'armor' — zbroje żyją w game_config_items) do odświeżenia po scaleniu.
+const DUP_RELOAD_TABS = { items: ['items', 'armor'], consumables: ['consumables'], weapons: ['weapons'] };
+
+async function _loadDuplicates() {
+  const root = document.getElementById('dup-root');
+  if (!root) return;
+  root.innerHTML = '<div style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Skanowanie…</div>';
+  let data;
+  try {
+    data = await apiFetch('/api/admin/duplicates');
+  } catch (e) {
+    root.innerHTML = `<div style="text-align:center;padding:28px;color:var(--red);font-size:0.8rem">Błąd skanu: ${_esc(e.message)}</div>`;
+    throw e;
+  }
+  _dupUpdateBadges(data.excess);
+
+  const sections = Object.keys(DUP_TABLE_LABELS).map(table => {
+    const groups = data.tables[table] || [];
+    if (!groups.length) return '';
+    return `<h3 style="margin:18px 0 8px;font-size:0.95rem">${DUP_TABLE_LABELS[table]} <span style="color:var(--t3);font-weight:400">(${groups.length} grup)</span></h3>`
+      + groups.map((g, i) => _dupGroupHtml(table, g, i)).join('');
+  }).join('');
+
+  const cross = (data.cross || []).length ? `
+    <h3 style="margin:18px 0 8px;font-size:0.95rem">Przedmioty ↔ Konsumable <span style="color:var(--t3);font-weight:400">(informacyjnie — scal ręcznie)</span></h3>
+    <div class="card"><div style="padding:12px 14px;font-size:0.82rem">
+      ${data.cross.map(c => `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
+        <b>${_esc(c.label)}</b> — w Przedmiotach: ${c.item_keys.map(k=>`<code>${_esc(k)}</code>`).join(', ')},
+        w Konsumablach: ${c.consumable_keys.map(k=>`<code>${_esc(k)}</code>`).join(', ')}
+      </div>`).join('')}
+      <div style="color:var(--t3);margin-top:8px">Ta sama nazwa żyje w dwóch tabelach. Zdecyduj, którym torem ma istnieć, i usuń drugi rekord w jego zakładce.</div>
+    </div></div>` : '';
+
+  root.innerHTML = (sections || cross)
+    ? `<div style="color:var(--t2);font-size:0.82rem;margin-bottom:6px">
+         Grupy <b>identyczne</b> = ta sama nazwa (pewne duplikaty). Grupy <b>podobne</b> = zbliżona nazwa, oceń ręcznie.
+         Zaznacz który rekord zostaje (⦿) i które usunąć (☑) — scalenie przepina ekwipunki, tabele łupów, wypożyczenia i przepisy na ocalałego.
+       </div>${sections}${cross}`
+    : '<div style="text-align:center;padding:36px;color:var(--t3)">✨ Brak duplikatów — czysto!</div>';
+
+  root.querySelectorAll('.dup-merge-btn').forEach(btn => btn.addEventListener('click', () => _dupMerge(btn)));
+}
+
+function _dupUpdateBadges(excess) {
+  const tabBadge = document.querySelector('#content-tabs .stab[data-tab="duplicates"] span');
+  if (tabBadge) tabBadge.textContent = excess ? `(${excess})` : '';
+  const navBadge = document.getElementById('content-nav-badge');
+  if (navBadge) {
+    navBadge.textContent = excess || '';
+    navBadge.style.display = excess ? '' : 'none';
+  }
+}
+
+function _dupGroupHtml(table, group, idx) {
+  const exact = group.match === 'exact';
+  // Pola, w których rekordy grupy się różnią → podświetlenie (pomaga ocenić, czy to naprawdę to samo).
+  const diffCols = ['rarity', 'price_gp', 'description'].filter(
+    col => new Set(group.records.map(r => JSON.stringify(r[col] ?? null))).size > 1
+  );
+  // Domyślny ocalały: najwięcej użyć, remis → najstarszy.
+  const def = [...group.records].sort((a, b) => (b.refs - a.refs) || String(a.created_at || '').localeCompare(String(b.created_at || '')))[0];
+  const rows = group.records.map(r => `
+    <tr>
+      <td style="text-align:center"><input type="radio" name="dup-keep-${table}-${idx}" value="${_esc(r.key)}" ${r.key === def.key ? 'checked' : ''}></td>
+      <td style="text-align:center"><input type="checkbox" class="dup-remove" value="${_esc(r.key)}" ${exact && r.key !== def.key ? 'checked' : ''}></td>
+      <td><code>${_esc(r.key)}</code></td>
+      <td>${_esc(r.label)}</td>
+      <td${diffCols.includes('rarity') ? ' style="background:var(--amber-light)"' : ''}>${_esc(r.rarity ?? '—')}</td>
+      <td${diffCols.includes('price_gp') ? ' style="background:var(--amber-light)"' : ''}>${_esc(r.price_gp ?? '—')}</td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${diffCols.includes('description') ? ';background:var(--amber-light)' : ''}" title="${_esc(r.description || '')}">${_esc((r.description || '—').slice(0, 80))}</td>
+      <td style="text-align:center">${r.refs}</td>
+      <td style="color:var(--t3)">${_esc((r.created_at || '').slice(0, 10))}</td>
+    </tr>`).join('');
+  return `<div class="card dup-group" data-table="${table}" style="margin-bottom:12px">
+    <div class="card-header">
+      <span class="card-title">${exact ? '🟥 identyczne' : '🟨 podobne'}: ${_esc(group.label)}</span>
+      <button class="btn btn-sm btn-primary dup-merge-btn">Scal zaznaczone</button>
+    </div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th title="Który rekord zostaje">Zostaw</th><th title="Które rekordy usunąć">Usuń</th><th>Klucz</th><th>Nazwa</th><th>Rzadkość</th><th>Cena</th><th>Opis</th><th title="Użycia: ekwipunek + loot + wypożyczenia">Użycia</th><th>Utworzono</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+async function _dupMerge(btn) {
+  const card = btn.closest('.dup-group');
+  const table = card.dataset.table;
+  const keep = card.querySelector('input[type="radio"]:checked')?.value;
+  const removes = [...card.querySelectorAll('.dup-remove:checked')].map(c => c.value).filter(k => k !== keep);
+  if (!keep) { showToast('Zaznacz rekord, który ma zostać', 'error'); return; }
+  if (!removes.length) { showToast('Zaznacz co najmniej jeden rekord do usunięcia', 'error'); return; }
+  if (!confirm(`Scalić ${removes.length} rekord(y) w „${keep}"?\nUsunięte: ${removes.join(', ')}\nWszystkie odwołania (ekwipunek, loot, przepisy) zostaną przepięte.`)) return;
+  btn.disabled = true; btn.textContent = 'Scalanie…';
+  try {
+    const res = await apiFetch('/api/admin/duplicates/merge', {
+      method: 'POST',
+      body: JSON.stringify({ table, keep_key: keep, remove_keys: removes }),
+    });
+    const moved = Object.values(res.repointed || {}).reduce((a, b) => a + b, 0);
+    showToast(`Scalono → ${keep} (usunięto ${res.deleted.length}, przepięto ${moved} odwołań)`, 'success');
+    DUP_RELOAD_TABS[table].forEach(t => _loaded.delete(t));
+    await _loadDuplicates();
+  } catch (e) {
+    showToast(`Błąd scalania: ${e.message}`, 'error');
+    btn.disabled = false; btn.textContent = 'Scal zaznaczone';
+  }
 }
 
 // ── Smart-entry-saved handler ──────────────────────────────────────────────────

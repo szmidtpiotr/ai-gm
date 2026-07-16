@@ -69,6 +69,7 @@ from app.routers.admin_analytics import router as admin_analytics_router
 from app.routers.world_review import router as world_review_router
 from app.routers.admin_spectate import router as admin_spectate_router
 from app.routers.smart_entry import router as smart_entry_router
+from app.routers.admin_duplicates import router as admin_duplicates_router
 from app.routers.adventure_forge import router as adventure_forge_router, public_router as campaign_templates_router
 from app.routers.encounter_forge import router as encounter_forge_router
 from app.routers.hex_world import router as hex_world_router
@@ -882,6 +883,7 @@ app.include_router(dungeon_tiles_router, prefix="/api")
 app.include_router(world_review_router)
 app.include_router(admin_spectate_router)
 app.include_router(smart_entry_router)
+app.include_router(admin_duplicates_router)  # #1399 — detektor duplikatów treści
 app.include_router(adventure_forge_router)
 app.include_router(encounter_forge_router)
 app.include_router(campaign_templates_router, prefix="/api")
