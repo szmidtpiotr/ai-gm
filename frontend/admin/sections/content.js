@@ -2007,9 +2007,12 @@ async function _loadDuplicates() {
   const root = document.getElementById('dup-root');
   if (!root) return;
   root.innerHTML = '<div style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Skanowanie…</div>';
-  let data;
+  let data, ignores;
   try {
-    data = await apiFetch('/api/admin/duplicates');
+    [data, ignores] = await Promise.all([
+      apiFetch('/api/admin/duplicates'),
+      apiFetch('/api/admin/duplicates/ignores').catch(() => ({ ignores: [] })),
+    ]);
   } catch (e) {
     root.innerHTML = `<div style="text-align:center;padding:28px;color:var(--red);font-size:0.8rem">Błąd skanu: ${_esc(e.message)}</div>`;
     throw e;
@@ -2026,21 +2029,85 @@ async function _loadDuplicates() {
   const cross = (data.cross || []).length ? `
     <h3 style="margin:18px 0 8px;font-size:0.95rem">Przedmioty ↔ Konsumable <span style="color:var(--t3);font-weight:400">(informacyjnie — scal ręcznie)</span></h3>
     <div class="card"><div style="padding:12px 14px;font-size:0.82rem">
-      ${data.cross.map(c => `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
-        <b>${_esc(c.label)}</b> — w Przedmiotach: ${c.item_keys.map(k=>`<code>${_esc(k)}</code>`).join(', ')},
-        w Konsumablach: ${c.consumable_keys.map(k=>`<code>${_esc(k)}</code>`).join(', ')}
+      ${data.cross.map(c => `<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <span><b>${_esc(c.label)}</b> — w Przedmiotach: ${c.item_keys.map(k=>`<code>${_esc(k)}</code>`).join(', ')},
+        w Konsumablach: ${c.consumable_keys.map(k=>`<code>${_esc(k)}</code>`).join(', ')}</span>
+        <button class="btn btn-sm btn-secondary dup-cross-ignore-btn" data-keys="${encodeURIComponent(JSON.stringify([...c.item_keys, ...c.consumable_keys]))}">🚫 To nie duplikat</button>
       </div>`).join('')}
       <div style="color:var(--t3);margin-top:8px">Ta sama nazwa żyje w dwóch tabelach. Zdecyduj, którym torem ma istnieć, i usuń drugi rekord w jego zakładce.</div>
     </div></div>` : '';
+
+  // #1401: lista zignorowanych par z możliwością przywrócenia
+  const ignoredRows = (ignores.ignores || []);
+  const ignoredHtml = ignoredRows.length ? `
+    <details style="margin-top:18px">
+      <summary style="cursor:pointer;color:var(--t2);font-size:0.85rem">🚫 Ignorowane (${ignoredRows.length} par) — kliknij, aby rozwinąć</summary>
+      <div class="card" style="margin-top:8px"><div style="padding:10px 14px;font-size:0.8rem">
+        ${ignoredRows.map(r => `<div style="padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;align-items:center">
+          <span><span class="badge">${_esc(r.table_name)}</span> <code>${_esc(r.key_a)}</code> ↔ <code>${_esc(r.key_b)}</code> <span style="color:var(--t3)">${_esc((r.created_at || '').slice(0, 10))}</span></span>
+          <button class="btn btn-sm btn-secondary dup-restore-btn" data-id="${r.id}">Przywróć</button>
+        </div>`).join('')}
+      </div></div>
+    </details>` : '';
 
   root.innerHTML = (sections || cross)
     ? `<div style="color:var(--t2);font-size:0.82rem;margin-bottom:6px">
          Grupy <b>identyczne</b> = ta sama nazwa (pewne duplikaty). Grupy <b>podobne</b> = zbliżona nazwa, oceń ręcznie.
          Zaznacz który rekord zostaje (⦿) i które usunąć (☑) — scalenie przepina ekwipunki, tabele łupów, wypożyczenia i przepisy na ocalałego.
-       </div>${sections}${cross}`
-    : '<div style="text-align:center;padding:36px;color:var(--t3)">✨ Brak duplikatów — czysto!</div>';
+         Fałszywe trafienie? <b>🚫 To nie duplikat</b> chowa grupę na stałe (wróci tylko, gdy dojdzie nowy rekord o tej nazwie).
+       </div>${sections}${cross}${ignoredHtml}`
+    : `<div style="text-align:center;padding:36px;color:var(--t3)">✨ Brak duplikatów — czysto!</div>${ignoredHtml}`;
 
   root.querySelectorAll('.dup-merge-btn').forEach(btn => btn.addEventListener('click', () => _dupMerge(btn)));
+  root.querySelectorAll('.dup-ignore-btn').forEach(btn => btn.addEventListener('click', () => _dupIgnore(btn)));
+  root.querySelectorAll('.dup-cross-ignore-btn').forEach(btn => btn.addEventListener('click', () => _dupIgnoreCross(btn)));
+  root.querySelectorAll('.dup-restore-btn').forEach(btn => btn.addEventListener('click', () => _dupRestore(btn)));
+}
+
+async function _dupIgnore(btn) {
+  const card = btn.closest('.dup-group');
+  const keys = [...card.querySelectorAll('input[type="radio"]')].map(r => r.value);
+  if (!confirm(`Oznaczyć grupę (${keys.join(', ')}) jako NIE-duplikat?\nZniknie ze skanu; wróci tylko, gdy pojawi się nowy rekord o tej nazwie.`)) return;
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/admin/duplicates/ignore', {
+      method: 'POST',
+      body: JSON.stringify({ table: card.dataset.table, keys }),
+    });
+    showToast('Grupa oznaczona jako nie-duplikat', 'success');
+    await _loadDuplicates();
+  } catch (e) {
+    showToast(`Błąd: ${e.message}`, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function _dupIgnoreCross(btn) {
+  const keys = JSON.parse(decodeURIComponent(btn.dataset.keys));
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/admin/duplicates/ignore', {
+      method: 'POST',
+      body: JSON.stringify({ table: 'cross', keys }),
+    });
+    showToast('Para oznaczona jako nie-duplikat', 'success');
+    await _loadDuplicates();
+  } catch (e) {
+    showToast(`Błąd: ${e.message}`, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function _dupRestore(btn) {
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/admin/duplicates/ignore/${btn.dataset.id}`, { method: 'DELETE' });
+    showToast('Przywrócono do skanu', 'success');
+    await _loadDuplicates();
+  } catch (e) {
+    showToast(`Błąd: ${e.message}`, 'error');
+    btn.disabled = false;
+  }
 }
 
 function _dupUpdateBadges(excess) {
@@ -2076,7 +2143,10 @@ function _dupGroupHtml(table, group, idx) {
   return `<div class="card dup-group" data-table="${table}" style="margin-bottom:12px">
     <div class="card-header">
       <span class="card-title">${exact ? '🟥 identyczne' : '🟨 podobne'}: ${_esc(group.label)}</span>
-      <button class="btn btn-sm btn-primary dup-merge-btn">Scal zaznaczone</button>
+      <span style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-secondary dup-ignore-btn" title="Fałszywe trafienie — schowaj grupę przy kolejnych skanach">🚫 To nie duplikat</button>
+        <button class="btn btn-sm btn-primary dup-merge-btn">Scal zaznaczone</button>
+      </span>
     </div>
     <div class="table-wrap"><table class="data-table">
       <thead><tr><th title="Który rekord zostaje">Zostaw</th><th title="Które rekordy usunąć">Usuń</th><th>Klucz</th><th>Nazwa</th><th>Rzadkość</th><th>Cena</th><th>Opis</th><th title="Użycia: ekwipunek + loot + wypożyczenia">Użycia</th><th>Utworzono</th></tr></thead>

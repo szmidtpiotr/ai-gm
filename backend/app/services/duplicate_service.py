@@ -45,10 +45,94 @@ _REFS: dict[str, list[tuple[str, str]]] = {
 
 _RECIPE_OUTPUT_TYPE = {"items": "item", "consumables": "consumable", "weapons": "weapon"}
 
+# Logical tables accepting "to nie duplikat" (#1401); 'cross' = para items↔consumables.
+_IGNORABLE = set(_TABLES) | {"cross"}
+
 
 def normalize_label(label: str | None) -> str:
     """Lowercase, trim, collapse inner whitespace. Unicode-aware (Ł→ł)."""
     return re.sub(r"\s+", " ", (label or "").strip()).lower()
+
+
+# ─── Ignorowane fałszywe trafienia (#1401) ───────────────────────────────────
+
+def _ensure_ignore_table(conn: sqlite3.Connection) -> None:
+    # Defensive twin of the migrations_admin.py DDL — keeps old DBs and test
+    # fixtures working without running full migrations.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_duplicate_ignores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            key_a TEXT NOT NULL,
+            key_b TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(table_name, key_a, key_b)
+        )
+        """
+    )
+
+
+def _pair(a: str, b: str) -> tuple[str, str]:
+    return (a, b) if a <= b else (b, a)
+
+
+def ignore_duplicates(conn: sqlite3.Connection, table: str, keys: list[str]) -> int:
+    """Mark every pair within keys as "not a duplicate". Returns pairs stored."""
+    if table not in _IGNORABLE:
+        raise ValueError(f"Nieznana tabela: {table}")
+    uniq = [k for k in dict.fromkeys(keys) if k]
+    if len(uniq) < 2:
+        raise ValueError("Potrzebne co najmniej dwa klucze")
+    _ensure_ignore_table(conn)
+    n = 0
+    for i, a in enumerate(uniq):
+        for b in uniq[i + 1:]:
+            ka, kb = _pair(a, b)
+            n += conn.execute(
+                "INSERT OR IGNORE INTO content_duplicate_ignores (table_name, key_a, key_b) VALUES (?, ?, ?)",
+                (table, ka, kb),
+            ).rowcount
+    conn.commit()
+    return n
+
+
+def list_ignores(conn: sqlite3.Connection) -> list[dict]:
+    _ensure_ignore_table(conn)
+    conn.row_factory = sqlite3.Row
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT id, table_name, key_a, key_b, created_at FROM content_duplicate_ignores ORDER BY id DESC"
+        )
+    ]
+
+
+def unignore(conn: sqlite3.Connection, ignore_id: int) -> None:
+    _ensure_ignore_table(conn)
+    conn.execute("DELETE FROM content_duplicate_ignores WHERE id = ?", (ignore_id,))
+    conn.commit()
+
+
+def _ignored_pairs(conn: sqlite3.Connection, table: str) -> set[tuple[str, str]]:
+    _ensure_ignore_table(conn)
+    return {
+        _pair(r[0], r[1])
+        for r in conn.execute(
+            "SELECT key_a, key_b FROM content_duplicate_ignores WHERE table_name = ?", (table,)
+        )
+    }
+
+
+def _group_fully_ignored(keys: list[str], ignored: set[tuple[str, str]]) -> bool:
+    """True when EVERY pair of the group is ignored — a new member reopens it."""
+    if not ignored:
+        return False
+    return all(
+        _pair(a, b) in ignored
+        for i, a in enumerate(keys)
+        for b in keys[i + 1:]
+    )
 
 
 # ─── Scan ────────────────────────────────────────────────────────────────────
@@ -103,6 +187,7 @@ def _fuzzy_clusters(labels: list[str]) -> list[set[str]]:
 
 def _scan_table(conn: sqlite3.Connection, logical: str) -> list[dict]:
     records = _fetch_records(conn, _TABLES[logical])
+    ignored = _ignored_pairs(conn, logical)
     by_norm: dict[str, list[dict]] = {}
     for rec in records:
         by_norm.setdefault(rec["norm"], []).append(rec)
@@ -114,7 +199,7 @@ def _scan_table(conn: sqlite3.Connection, logical: str) -> list[dict]:
 
     groups: list[dict] = []
     for norm, recs in by_norm.items():
-        if len(recs) > 1:
+        if len(recs) > 1 and not _group_fully_ignored([r["key"] for r in recs], ignored):
             groups.append({
                 "match": "exact",
                 "label": norm,
@@ -123,6 +208,8 @@ def _scan_table(conn: sqlite3.Connection, logical: str) -> list[dict]:
 
     for cluster in _fuzzy_clusters(sorted(by_norm.keys())):
         recs = [r for norm in cluster for r in by_norm[norm]]
+        if _group_fully_ignored([r["key"] for r in recs], ignored):
+            continue
         groups.append({
             "match": "fuzzy",
             "label": " / ".join(sorted(cluster)),
@@ -157,19 +244,38 @@ def scan_duplicates(conn: sqlite3.Connection) -> dict:
         )
         slot["consumable_keys"].extend(entry["consumable_keys"])
 
+    # #1401: wpis cross znika, gdy każda para item↔consumable jest zignorowana.
+    cross_ignored = _ignored_pairs(conn, "cross")
+    visible_cross = [
+        c for c in merged_cross.values()
+        if not cross_ignored or not all(
+            _pair(ik, ck) in cross_ignored
+            for ik in c["item_keys"]
+            for ck in c["consumable_keys"]
+        )
+    ]
+
     return {
         "tables": tables,
-        "cross": list(merged_cross.values()),
+        "cross": visible_cross,
         "excess": count_duplicates(conn),
     }
 
 
 def count_duplicates(conn: sqlite3.Connection) -> int:
-    """Excess exact duplicates across all three tables (badge number)."""
+    """Excess exact duplicates across all three tables (badge number).
+
+    Skips groups fully marked "to nie duplikat" (#1401).
+    """
     total = 0
-    for real in _TABLES.values():
-        labels = [normalize_label(r[0]) for r in conn.execute(f"SELECT label FROM {real}")]
-        total += len(labels) - len(set(labels))
+    for logical, real in _TABLES.items():
+        ignored = _ignored_pairs(conn, logical)
+        by_norm: dict[str, list[str]] = {}
+        for key, label in conn.execute(f"SELECT key, label FROM {real}"):
+            by_norm.setdefault(normalize_label(label), []).append(key)
+        for keys in by_norm.values():
+            if len(keys) > 1 and not _group_fully_ignored(keys, ignored):
+                total += len(keys) - 1
     return total
 
 
@@ -259,6 +365,13 @@ def merge_duplicates(
             pass  # recipes table absent
 
         conn.execute(f"DELETE FROM {real} WHERE key IN ({placeholders})", remove)
+        try:
+            conn.execute(
+                f"DELETE FROM content_duplicate_ignores WHERE key_a IN ({placeholders}) OR key_b IN ({placeholders})",
+                [*remove, *remove],
+            )
+        except sqlite3.OperationalError:
+            pass  # ignore table absent
         conn.commit()
     except Exception:
         conn.rollback()

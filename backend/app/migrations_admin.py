@@ -515,6 +515,18 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_loot_entries_table
     ON game_config_loot_entries(loot_table_key)
     """,
+    # #1401 — detektor duplikatów: pary rekordów oznaczone «to nie duplikat»
+    # (table_name: items/consumables/weapons/cross; key_a<key_b posortowane).
+    """
+    CREATE TABLE IF NOT EXISTS content_duplicate_ignores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        key_a TEXT NOT NULL,
+        key_b TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(table_name, key_a, key_b)
+    )
+    """,
     # F2 (#462) — Affix System: affix catalog carrying typed Effect Objects (F1 schema).
     """
     CREATE TABLE IF NOT EXISTS game_config_affixes (
