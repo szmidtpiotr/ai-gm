@@ -335,6 +335,18 @@ export interface TravelResult {
     atmosphere?: string | null;
   } | null;
   encounter?: { enemy_key?: string | null } | null;
+  /** #1412/#1417 — wynik przeprawy przez bród (test Siły + ewentualne porwanie/przeniesienie). */
+  ford_hazard?: {
+    events: Array<{
+      d20: number; mod: number; total: number; dc: number;
+      success: boolean; nat1: boolean; nat20: boolean; damage: number;
+    }>;
+    damage: number;
+    swept: boolean;
+    wet: boolean;
+    displaced_to?: { q: number; r: number } | null;
+    swept_distance?: number;
+  } | null;
   [k: string]: unknown;
 }
 

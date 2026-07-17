@@ -37,7 +37,7 @@ import {
   hexToPixel,
   terrainIcon,
 } from "@/lib/worldmap";
-import type { WorldHex, MarchBudget } from "@/lib/types";
+import type { WorldHex, MarchBudget, TravelResult } from "@/lib/types";
 import type { TravelNotice } from "@/hooks/useGameData";
 import { cn } from "@/lib/utils";
 import { DayArcModal } from "./DayArcModal";
@@ -228,6 +228,9 @@ export function WorldMap({
     step: number;
     encounterHex: { q: number; r: number } | null;
   } | null>(null);
+  // #1417 — wynik przeprawy przez bród pokazany NA mapie (test Siły + skutek), bo
+  // przeprawa dzieje się na ekranie mapy, a karta rzutu w logu Opowieści była niewidoczna.
+  const [fordResult, setFordResult] = useState<TravelResult["ford_hazard"] | null>(null);
 
   // Klik w heks otwiera modal opcji: bieżący heks → akcje lokalne (osada/odpoczynek/
   // obóz), inny heks → podróż. „w nieznane" (outline) też dozwolone.
@@ -276,6 +279,8 @@ export function WorldMap({
       { characterId, q: destQ, r: destR, deferMap: true },
       {
         onSuccess: (res) => {
+          // #1417 — pokaż wynik przeprawy przez bród na mapie (auto-znika po chwili).
+          if (res.ford_hazard) setFordResult(res.ford_hazard);
           const fullPath = Array.isArray(res.path) ? res.path : [];
           const arr = res.arrived_hex ?? { q: destQ, r: destR };
           // Przytnij trasę do faktycznie przebytego odcinka (origin → arrived_hex).
@@ -333,6 +338,13 @@ export function WorldMap({
   // #1381 — bezpiecznik: jeśli gracz opuści mapę w trakcie animacji, odblokuj modal.
   useEffect(() => () => setTravelAnimating(false), [setTravelAnimating]);
 
+  // #1417 — karta wyniku przeprawy znika po ~6 s (albo po kliknięciu).
+  useEffect(() => {
+    if (!fordResult) return;
+    const t = setTimeout(() => setFordResult(null), 6000);
+    return () => clearTimeout(t);
+  }, [fordResult]);
+
   // Podczas animacji kamera podąża za wędrującym pinem (inaczej trasa mogłaby
   // wyjść poza kadr). Poza animacją: focus „Użyj" mapy skarbu, else pozycja gracza.
   const viewCenter = anim
@@ -342,6 +354,44 @@ export function WorldMap({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+      {/* #1417 — wynik przeprawy przez bród (test Siły + skutek) NA mapie. */}
+      {fordResult && (() => {
+        const ev = fordResult.events?.[fordResult.events.length - 1];
+        const swept = fordResult.swept;
+        const wet = fordResult.wet;
+        const danger = swept || wet;
+        return (
+          <div
+            className="fixed inset-x-0 top-4 z-[60] mx-auto flex max-w-[420px] cursor-pointer justify-center px-4"
+            onClick={() => setFordResult(null)}
+          >
+            <div className={"w-full overflow-hidden rounded-xl border shadow-2xl " + (danger ? "border-line-danger bg-surface" : "border-line-ember bg-surface")}>
+              <div className={"flex items-center gap-2.5 border-b border-line px-4 py-2.5 " + (danger ? "bg-danger/[0.10]" : "bg-ember/[0.08]")}>
+                <span className="text-lg" aria-hidden>🌊</span>
+                <div className="font-serif text-body font-semibold text-text">
+                  Przeprawa przez bród
+                </div>
+              </div>
+              {ev && (
+                <div className="flex items-stretch px-2 pt-3">
+                  <TravelStat k="k20" v={String(ev.d20)} />
+                  <TravelStat k="Siła" v={(ev.mod >= 0 ? "+" : "") + ev.mod} />
+                  <TravelStat k="Suma" v={String(ev.total)} />
+                  <TravelStat k="Próg" v={String(ev.dc)} />
+                  <TravelStat k="Wynik" v={ev.success ? "sukces" : ev.nat1 ? "pech" : "porażka"} warn={!ev.success} last />
+                </div>
+              )}
+              <div className="px-4 py-3 text-center font-ui text-label text-text-2">
+                {swept
+                  ? `Nurt cię porwał — zniesiony ${fordResult.swept_distance ?? 0} pól w dół rzeki, −${fordResult.damage} HP, przemoczony.`
+                  : wet
+                    ? "Przemoczony (−1 do testów fizycznych, aż wyschniesz przy ogniu)."
+                    : "Przeprawa czysta — suchą stopą na drugi brzeg."}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Nagłówek: zegar+pora+lokacja + zamknij (mobile pełna szer.) */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header
