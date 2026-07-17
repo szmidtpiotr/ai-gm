@@ -2,6 +2,7 @@
 // karty postaci (F-21/F-54..F-58). Mobile używa dolnego tabbara + górnego scrolla.
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
+import { useUnreadRumors } from "@/hooks/useUnreadRumors";
 import {
   JOURNAL_TAB,
   MAP_TAB,
@@ -13,6 +14,7 @@ import {
 export function GameRail({ hasMana, hasRecipes = false }: { hasMana: boolean; hasRecipes?: boolean }) {
   const active = useAppStore((s) => s.gameTab);
   const setGameTab = useAppStore((s) => s.setGameTab);
+  const unreadRumors = useUnreadRumors();
   const tabs: GameTabDef[] = [
     STORY_TAB,
     ...visibleSheetTabs(hasMana, hasRecipes),
@@ -42,6 +44,9 @@ export function GameRail({ hasMana, hasRecipes = false }: { hasMana: boolean; ha
           >
             <Icon size={17} weight={on ? "fill" : "regular"} />
             {t.label}
+            {t.key === "collections" && unreadRumors && !on && (
+              <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-ember" title="Nowa plotka" />
+            )}
           </button>
         );
       })}

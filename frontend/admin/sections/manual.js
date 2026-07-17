@@ -86,25 +86,33 @@ startowe — będą strojone po obserwacji rozgrywki.</p>`,
       },
       {
         id: 'plotki',
-        title: 'Zakładka Plotki (kierowanie graczem)',
+        title: 'Zakładka Plotki (kierowanie graczami)',
         body: `
-<p>W sekcji <b>Świat</b> zakładka <b>Plotki</b> pokazuje plotki krążące w danej kampanii.
-Plotka to zasłyszana w karczmie wskazówka — kieruje gracza do lochu, skarbu, wydarzenia
-albo nieodkrytej lokacji, <b>bez</b> łamania immersji przez „deus ex machina" w narracji.</p>
+<p>W sekcji <b>Świat</b> zakładka <b>Plotki</b> to <b>pula plotek dla całego regionu</b> — nie dla
+jednej kampanii. Plotki, które tu dodasz, może usłyszeć <b>każdy bohater</b> przebywający w tym
+regionie, gdy nadstawi ucha w karczmie. To kanał dystrybucji hooków (lochy, skarby, wydarzenia,
+nieodkryte lokacje) <b>bez</b> łamania immersji przez „deus ex machina" w narracji.</p>
 <p>Gracz zdobywa plotki sam: w karczmie pisze <b>„nadstawiam ucha"</b> (za darmo, plotka nie zawsze
 się trafia) albo <b>„stawiam kolejkę"</b> (kosztuje kilka złotych, plotka gwarantowana i łatwiej
-wyczuć fałsz).</p>
+wyczuć fałsz). System najpierw sięga po Twoje plotki z puli regionu, a dopiero potem generuje
+zastępczą plotkę dobraną pod danego bohatera.</p>
 <h4>Prawda i fałsz</h4>
 <p>Świat nie jest wiarygodny w 100% — część plotek to <b>bujda</b>. Prawdziwa plotka <b>potwierdza się</b>,
 gdy gracz dotrze do celu; fałszywa <b>demaskuje się</b> („okazała się bujdą") i zostaje przekreślona
 w dzienniku gracza. Udany test wyczucia (WIS/CHA) oznacza plotkę jako <b>podejrzaną</b>, ale nie zdradza
 wprost prawdy.</p>
-<h4>Ręczna plotka</h4>
-<p>Wybierz <b>kampanię</b> u góry, potem <b>+ Dodaj ręcznie</b>. Podaj treść i zdecyduj, czy jest
-prawdziwa (potwierdzi się przy wizycie) czy fałszywa (zdemaskuje się). To najdelikatniejsze narzędzie
-do naprowadzania gracza. Plotki błędnie wstawione usuwasz przyciskiem 🗑.</p>
-<p class="muted">Koszt kolejki, szansa na plotkę, proporcja prawda/fałsz i DC wyczucia to wartości
-startowe — będą strojone po obserwacji rozgrywki.</p>`,
+<h4>Jak dodać plotkę</h4>
+<p>Najpierw wybierz <b>region</b> z listy u góry. Potem:</p>
+<ul>
+  <li><b>+ Dodaj ręcznie</b> — podaj treść i zdecyduj (OK = prawdziwa, Anuluj = fałszywa).
+      Najdelikatniejsze narzędzie do naprowadzania graczy.</li>
+  <li><b>🤖 Generuj plotki AI</b> — podaj ile (1–12). LLM bierze fakty tego regionu
+      (lokacje, lochy, aktywne wydarzenie) i tworzy plotki, część <b>celowo fałszywych</b>.
+      Plotki, które nie pasują, po prostu usuń przyciskiem 🗑.</li>
+</ul>
+<p>Kolumna <b>Źródło</b> pokazuje, czy plotka jest 🤖 AI czy ✋ ręczna. Plotki błędne usuwasz 🗑.</p>
+<p class="muted">Generator AI korzysta z profilu <b>content-LLM</b> (Ustawienia). Koszt kolejki, szansa
+na plotkę, proporcja prawda/fałsz i DC wyczucia to wartości startowe — będą strojone po obserwacji.</p>`,
       },
     ],
   },

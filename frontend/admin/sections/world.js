@@ -1861,14 +1861,15 @@ function _sectionHtml() {
         <div id="world-events-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div></div>
       </div>
 
-      <!-- Plotki (#1190) -->
+      <!-- Plotki (#1190 R2) — pula per REGION -->
       <div class="stab-panel" id="wtab-rumors">
-        <div class="section-sub" style="margin-bottom:8px">Plotki krążące w karczmach — kanał dystrybucji hooków (lochy, skarby, wydarzenia). Ręczna plotka = delikatne kierowanie gracza bez łamania immersji. Fałszywki demaskują się, gdy gracz dotrze do celu.</div>
+        <div class="section-sub" style="margin-bottom:8px">Plotki krążące w karczmach danego <b>regionu</b> — kanał dystrybucji hooków (lochy, skarby, wydarzenia). Każdy bohater w regionie może usłyszeć te plotki, nadstawiając ucha w karczmie. Ręczna/AI plotka = delikatne kierowanie graczy bez łamania immersji; fałszywki demaskują się, gdy gracz dotrze do celu.</div>
         <div class="toolbar" style="gap:8px;flex-wrap:wrap">
-          <select id="rumor-campaign" class="input input-sm" onchange="window._worldLoadRumors()"><option value="">— wybierz kampanię —</option></select>
+          <select id="rumor-region" class="input input-sm" onchange="window._worldLoadRumors()"><option value="">— wybierz region —</option></select>
           <button class="btn btn-primary btn-sm" onclick="window._worldAddRumor()">+ Dodaj ręcznie</button>
+          <button class="btn btn-secondary btn-sm" onclick="window._worldGenRumors()" title="LLM generuje plotki z faktów regionu (część celowo fałszywych)">🤖 Generuj plotki AI</button>
         </div>
-        <div id="world-rumors-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Wybierz kampanię, aby zobaczyć plotki.</div></div>
+        <div id="world-rumors-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Wybierz region, aby zobaczyć plotki.</div></div>
       </div>
 
       <!-- Oczekujące -->
@@ -1892,53 +1893,46 @@ const _TAB_LOADERS = {
   pending: () => { if (!_loaded.has('pending')) { _loaded.add('pending'); _loadBestiaryPending().catch(()=>_loaded.delete('pending')); } },
 };
 
-// ── Plotki (#1190) ───────────────────────────────────────────────────────────
-let _rumorCampaignsLoaded = false;
+// ── Plotki (#1190 R2) — pula per REGION ──────────────────────────────────────
+let _rumorRegionsLoaded = false;
 
 async function _initRumorTab() {
-  if (_rumorCampaignsLoaded) return;
-  const sel = document.getElementById('rumor-campaign');
+  if (_rumorRegionsLoaded) return;
+  const sel = document.getElementById('rumor-region');
   if (!sel) return;
   try {
-    const d = await apiFetch('/api/admin/campaigns');
-    const items = d.items || d.campaigns || d || [];
-    sel.innerHTML = '<option value="">— wybierz kampanię —</option>' +
-      items.map(c => `<option value="${c.id}">${_esc(c.name || ('#' + c.id))}</option>`).join('');
-    _rumorCampaignsLoaded = true;
+    const d = await apiFetch('/api/admin/world-rumors');
+    const regions = d.regions || [];
+    sel.innerHTML = '<option value="">— wybierz region —</option>' +
+      regions.map(r => `<option value="${_esc(r)}">${_esc(r.replace(/_/g, ' '))}</option>`).join('');
+    _rumorRegionsLoaded = true;
   } catch (e) {
-    showToast('Nie udało się wczytać kampanii', 'error');
+    showToast('Nie udało się wczytać regionów', 'error');
   }
 }
 
-const _RUMOR_STATUS_BADGE = {
-  heard:     '<span class="td-muted">• niepotwierdzona</span>',
-  confirmed: '<span style="color:var(--ok,#4caf50)">✓ potwierdzona</span>',
-  debunked:  '<span style="color:var(--t3)">✗ fałszywa</span>',
-};
-
 async function _loadRumors() {
-  const sel = document.getElementById('rumor-campaign');
+  const sel = document.getElementById('rumor-region');
   const container = document.getElementById('world-rumors-container');
   if (!sel || !container) return;
-  const cid = sel.value;
-  if (!cid) {
-    container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Wybierz kampanię, aby zobaczyć plotki.</div>';
+  const region = sel.value;
+  if (!region) {
+    container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Wybierz region, aby zobaczyć plotki.</div>';
     return;
   }
   container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3)">Ładowanie…</div>';
   try {
-    const d = await apiFetch(`/api/admin/campaigns/${cid}/rumors`);
+    const d = await apiFetch(`/api/admin/world-rumors?region=${encodeURIComponent(region)}`);
     const items = d.items || [];
     if (!items.length) {
-      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3)">Brak plotek w tej kampanii.</div>';
+      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3)">Brak plotek w tym regionie. Dodaj ręcznie albo wygeneruj AI.</div>';
       return;
     }
     const rows = items.map(r => `<tr>
       <td data-label="Plotka">${_esc(r.rumor_text)}</td>
-      <td data-label="Prawda">${r.truth_flag ? '✅ prawda' : '❌ fałsz'}${r.suspected ? ' <span class="td-muted">(podejrzana)</span>' : ''}</td>
+      <td data-label="Prawda">${r.truth_flag ? '✅ prawda' : '❌ fałsz'}</td>
       <td data-label="Cel"><span class="td-muted">${_esc(r.target_type || '—')}${r.target_key ? ':' + _esc(r.target_key) : ''}</span></td>
-      <td data-label="Status">${_RUMOR_STATUS_BADGE[r.status] || _esc(r.status)}</td>
-      <td data-label="Źródło"><span class="td-muted">${_esc(r.source_type || '')}</span></td>
+      <td data-label="Źródło"><span class="td-muted">${r.created_by === 'ai' ? '🤖 AI' : '✋ ręczna'}</span></td>
       <td style="text-align:right"><button class="btn-icon danger" title="Usuń" onclick="window._worldDeleteRumor(${r.id},this)">🗑</button></td>
     </tr>`).join('');
     container.innerHTML = `<div class="data-table--cards table-wrap"><table class="data-table">
@@ -1946,7 +1940,6 @@ async function _loadRumors() {
         <th><div class="th-inner">Plotka</div></th>
         <th><div class="th-inner">Prawda/fałsz</div></th>
         <th><div class="th-inner">Cel</div></th>
-        <th><div class="th-inner">Status</div></th>
         <th><div class="th-inner">Źródło</div></th>
         <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -1956,16 +1949,16 @@ async function _loadRumors() {
 }
 
 async function _addRumorManual() {
-  const sel = document.getElementById('rumor-campaign');
-  if (!sel || !sel.value) { showToast('Najpierw wybierz kampanię', 'error'); return; }
-  const cid = sel.value;
-  const text = prompt('Treść plotki (widzi ją gracz w dzienniku):');
+  const sel = document.getElementById('rumor-region');
+  if (!sel || !sel.value) { showToast('Najpierw wybierz region', 'error'); return; }
+  const region = sel.value;
+  const text = prompt('Treść plotki (usłyszy ją gracz w karczmie tego regionu):');
   if (!text || !text.trim()) return;
   const isTrue = confirm('OK = plotka PRAWDZIWA (potwierdzi się przy wizycie).\nAnuluj = FAŁSZYWA (zdemaskuje się przy wizycie).');
   try {
-    await apiFetch(`/api/admin/campaigns/${cid}/rumors`, {
+    await apiFetch('/api/admin/world-rumors', {
       method: 'POST',
-      body: JSON.stringify({ rumor_text: text.trim(), truth_flag: isTrue ? 1 : 0 }),
+      body: JSON.stringify({ region, rumor_text: text.trim(), truth_flag: isTrue ? 1 : 0 }),
     });
     showToast('Plotka dodana', 'success');
     _loadRumors();
@@ -1974,12 +1967,29 @@ async function _addRumorManual() {
   }
 }
 
+async function _generateRumorsAI() {
+  const sel = document.getElementById('rumor-region');
+  if (!sel || !sel.value) { showToast('Najpierw wybierz region', 'error'); return; }
+  const region = sel.value;
+  const n = parseInt(prompt('Ile plotek wygenerować? (1–12)', '5') || '0', 10);
+  if (!n || n < 1) return;
+  showToast('Generuję plotki AI…', 'info');
+  try {
+    const d = await apiFetch('/api/admin/world-rumors/generate', {
+      method: 'POST',
+      body: JSON.stringify({ region, count: Math.min(n, 12) }),
+    });
+    showToast(`Dodano ${d.created || 0} plotek AI`, 'success');
+    _loadRumors();
+  } catch (e) {
+    showToast('Generator AI nie odpowiedział (sprawdź profil content-LLM)', 'error');
+  }
+}
+
 async function _deleteRumor(id, btn) {
-  const sel = document.getElementById('rumor-campaign');
-  if (!sel || !sel.value) return;
   if (!confirm('Usunąć tę plotkę?')) return;
   try {
-    await apiFetch(`/api/admin/campaigns/${sel.value}/rumors/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/admin/world-rumors/${id}`, { method: 'DELETE' });
     btn.closest('tr')?.remove();
     showToast('Usunięto', 'success');
   } catch (e) {
@@ -2023,8 +2033,9 @@ export async function init(panel) {
   window._worldRollEvent       = () => _rollWorldEvent();
   window._worldEndEvent        = (id, btn) => _endWorldEvent(id, btn);
   window._worldToggleAutoRoll  = (chk) => _toggleAutoRoll(chk);
-  window._worldLoadRumors      = () => _loadRumors();            // #1190
+  window._worldLoadRumors      = () => _loadRumors();            // #1190 R2
   window._worldAddRumor        = () => _addRumorManual();
+  window._worldGenRumors       = () => _generateRumorsAI();
   window._worldDeleteRumor     = (id, btn) => _deleteRumor(id, btn);
   window.rowCheck   = rowCheck;
   window.toggleAll  = toggleAll;

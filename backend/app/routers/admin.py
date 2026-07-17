@@ -2939,95 +2939,82 @@ def admin_get_campaign_turns(
         conn.close()
 
 
-@router.get("/admin/campaigns/{campaign_id}/rumors")
-def admin_list_campaign_rumors(
-    campaign_id: int,
+@router.get("/admin/world-rumors")
+def admin_list_world_rumors(
+    region: str | None = Query(default=None),
     _: None = Depends(require_admin_token),
 ):
-    """#1190 — plotki krążące w kampanii (admin monitor + ręczne wstrzykiwanie)."""
+    """#1190 R2 — plotki z puli świata (per region). Bez region → wszystkie + lista regionów."""
+    from app.services import world_rumor_service as wrs
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            """SELECT r.id, r.character_id, r.rumor_text, r.target_type, r.target_key,
-                      r.status, r.truth_flag, r.source_type, r.region, r.suspected,
-                      r.heard_at, r.confirmed_at, c.name AS character_name
-               FROM character_rumors r
-               LEFT JOIN characters c ON c.id = r.character_id
-               WHERE r.campaign_id = ?
-               ORDER BY r.id DESC""",
-            (campaign_id,),
-        ).fetchall()
-        return {"items": [dict(r) for r in rows]}
-    except sqlite3.OperationalError:
-        return {"items": []}
+        return {
+            "items": wrs.list_world_rumors(region, conn=conn),
+            "regions": wrs.list_regions(conn=conn),
+        }
     finally:
         conn.close()
 
 
-class AdminRumorCreateReq(BaseModel):
+class AdminWorldRumorCreateReq(BaseModel):
+    region: str
     rumor_text: str
     truth_flag: int = 1
-    region: str | None = None
     target_type: str | None = None
     target_key: str | None = None
-    character_id: int | None = None  # None → wstrzyknij aktywnemu bohaterowi kampanii
 
 
-@router.post("/admin/campaigns/{campaign_id}/rumors")
-def admin_create_campaign_rumor(
-    campaign_id: int,
-    req: AdminRumorCreateReq,
+@router.post("/admin/world-rumors")
+def admin_create_world_rumor(
+    req: AdminWorldRumorCreateReq,
     _: None = Depends(require_admin_token),
 ):
-    """#1190 — ręczna plotka: najlepsze narzędzie do delikatnego kierowania gracza
-    bez łamania immersji. source_type='manual'. target_* opcjonalne (zamknięta pula)."""
-    from datetime import datetime, timezone
+    """#1190 R2 — ręczna plotka do puli regionu. Delikatne kierowanie gracza bez
+    łamania immersji — każdy bohater w regionie może ją usłyszeć w karczmie."""
+    from app.services import world_rumor_service as wrs
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        cid = req.character_id
-        if cid is None:
-            row = conn.execute(
-                "SELECT id FROM characters WHERE campaign_id = ? "
-                "AND COALESCE(is_active,1)=1 ORDER BY id LIMIT 1",
-                (campaign_id,),
-            ).fetchone()
-            if not row:
-                raise HTTPException(404, "Brak bohatera w tej kampanii")
-            cid = int(row["id"])
-        now = datetime.now(timezone.utc).isoformat()
-        cur = conn.execute(
-            "INSERT INTO character_rumors "
-            "(character_id, campaign_id, rumor_text, target_type, target_key, status, "
-            " heard_at, truth_flag, source_type, region, suspected) "
-            "VALUES (?, ?, ?, ?, ?, 'heard', ?, ?, 'manual', ?, 0)",
-            (cid, campaign_id, req.rumor_text, req.target_type or None,
-             req.target_key or None, now, 1 if req.truth_flag else 0, req.region),
-        )
+        rid = wrs.create_world_rumor(
+            req.region, req.rumor_text, req.truth_flag,
+            req.target_type, req.target_key, created_by="manual", conn=conn)
+        if rid is None:
+            raise HTTPException(400, "Nie udało się dodać plotki (brak regionu/treści)")
         conn.commit()
-        return {"ok": True, "id": int(cur.lastrowid)}
+        return {"ok": True, "id": rid}
     finally:
         conn.close()
 
 
-@router.delete("/admin/campaigns/{campaign_id}/rumors/{rumor_id}")
-def admin_delete_campaign_rumor(
-    campaign_id: int,
+class AdminWorldRumorGenReq(BaseModel):
+    region: str
+    count: int = 5
+
+
+@router.post("/admin/world-rumors/generate")
+def admin_generate_world_rumors(
+    req: AdminWorldRumorGenReq,
+    _: None = Depends(require_admin_token),
+):
+    """#1190 R3 — AI generuje plotki z faktów regionu (część celowo fałszywych)."""
+    from app.services import world_rumor_service as wrs
+    n = max(1, min(int(req.count or 5), 12))
+    res = wrs.generate_ai_rumors(req.region, n)
+    if res.get("error") and not res.get("created"):
+        raise HTTPException(502, res["error"])
+    return res
+
+
+@router.delete("/admin/world-rumors/{rumor_id}")
+def admin_delete_world_rumor(
     rumor_id: int,
     _: None = Depends(require_admin_token),
 ):
-    """#1190 — usuń plotkę (np. błędnie wstrzykniętą)."""
-    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
-    try:
-        conn.execute(
-            "DELETE FROM character_rumors WHERE id = ? AND campaign_id = ?",
-            (rumor_id, campaign_id),
-        )
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
+    """#1190 R2 — usuń plotkę z puli świata."""
+    from app.services import world_rumor_service as wrs
+    wrs.delete_world_rumor(rumor_id)
+    return {"ok": True}
 
 
 @router.post("/admin/campaigns/{campaign_id}/run-command")

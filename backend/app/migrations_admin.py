@@ -6564,6 +6564,9 @@ def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
             ("source_type", "TEXT NOT NULL DEFAULT 'encounter'"),
             ("region", "TEXT"),
             ("suspected", "INTEGER NOT NULL DEFAULT 0"),
+            # #1190 R2 — provenance from the region world-pool (world_rumors.id) so a
+            # hero never hears the same authored/AI rumor twice. NULL = auto-generated.
+            ("world_rumor_id", "INTEGER"),
         ):
             try:
                 conn.execute(f"ALTER TABLE character_rumors ADD COLUMN {col} {decl}")
@@ -6573,6 +6576,36 @@ def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
         conn.commit()
     except sqlite3.OperationalError as e:
         logger.warning("rumor_schema_skipped", error=str(e))
+
+
+def _ensure_world_rumors_schema(conn: sqlite3.Connection) -> None:
+    """#1190 R2 — region world-rumor pool. Admin- and AI-authored ambient rumors
+    scoped to a REGION (not a campaign). When a hero eavesdrops in a tavern, the
+    pool for their current region feeds `character_rumors` (copied on hear, so
+    confirm/debunk still works per-hero). Idempotent."""
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS world_rumors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                region TEXT NOT NULL,
+                rumor_text TEXT NOT NULL,
+                truth_flag INTEGER NOT NULL DEFAULT 1,
+                target_type TEXT,
+                target_key TEXT,
+                created_by TEXT NOT NULL DEFAULT 'manual',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_rumors_region "
+            "ON world_rumors(region, is_active)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("world_rumors_schema_skipped", error=str(e))
 
 
 def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
@@ -7573,6 +7606,7 @@ def run_admin_migrations() -> None:
         _drop_legacy_content_columns_1202(conn)  # #1202 B — DEV↔PROD schema align
         _ensure_bestiary_schema(conn)  # #1191 E1 — Bestiariusz kill counters
         _ensure_rumor_schema(conn)  # #1191 E4 — Atlas plotki
+        _ensure_world_rumors_schema(conn)  # #1190 R2 — pula plotek per region
         _ensure_treasure_schema(conn)  # #1196 E1 — Mapy skarbów
         _seed_enemy_rank_multipliers(conn)  # #1332 BL-A6 — rangi wariantów wroga
         _ensure_item_component_columns(conn)  # #1335 BL-B3 — komponenty rzemieślnicze

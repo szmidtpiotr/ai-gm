@@ -309,13 +309,38 @@ class _AlwaysTrueRNG:
 _ALWAYS_TRUE_RNG = _AlwaysTrueRNG()
 
 
+# #1190 R2 — jak często karczemne ucho wyławia AUTOROWANĄ plotkę z puli regionu
+# (admin/AI) zamiast auto-generowanej per-bohater. Pula ma pierwszeństwo treści.
+_WORLD_POOL_WEIGHT = 0.6
+
+
+def _insert_world_rumor(c: sqlite3.Connection, cid: int, camp: int,
+                        world_row: dict[str, Any]) -> dict[str, Any]:
+    """Skopiuj plotkę z puli regionu (world_rumors) do character_rumors bohatera,
+    zachowując truth/target i wiążąc world_rumor_id (dedup na przyszłość)."""
+    now = _now_iso()
+    cur = c.execute(
+        "INSERT INTO character_rumors "
+        "(character_id, campaign_id, rumor_text, target_type, target_key, status, "
+        " heard_at, truth_flag, source_type, region, suspected, world_rumor_id) "
+        "VALUES (?, ?, ?, ?, ?, 'heard', ?, ?, 'world', ?, 0, ?)",
+        (cid, camp, world_row["rumor_text"], world_row.get("target_type"),
+         world_row.get("target_key"), now, 1 if world_row.get("truth_flag", 1) else 0,
+         world_row.get("region"), int(world_row["id"])),
+    )
+    return {"rumor_id": int(cur.lastrowid), "rumor_text": world_row["rumor_text"],
+            "target_type": world_row.get("target_type"),
+            "target_key": world_row.get("target_key"),
+            "truth_flag": 1 if world_row.get("truth_flag", 1) else 0}
+
+
 def eavesdrop_rumor(campaign_id: Any, character_id: Any, paid: bool = False,
                     conn: sqlite3.Connection | None = None,
                     rng=random) -> Optional[dict[str, Any]]:
-    """#1190 — a deliberate tavern eavesdrop / bought round. Records a rumor that
-    may be false (60/40 for place-type targets). `paid` only tags the source
-    (round vs eavesdrop); the caller handles gold + the suspicion test. Returns the
-    rumor dict {rumor_id, rumor_text, target_type, target_key, truth_flag} or None."""
+    """#1190 — a deliberate tavern eavesdrop / bought round. First tries the REGION
+    world-pool (admin/AI-authored, #1190 R2); otherwise auto-generates a per-hero
+    rumor (may be false, 60/40 for place targets). `paid` only tags the source; the
+    caller handles gold + the suspicion test. Returns the rumor dict or None."""
     try:
         cid = int(character_id)
         camp = int(campaign_id)
@@ -324,6 +349,19 @@ def eavesdrop_rumor(campaign_id: Any, character_id: Any, paid: bool = False,
     own = conn is None
     c = conn or _conn()
     try:
+        # 1 — pula regionu ma pierwszeństwo (autorowana treść realnie się pojawia)
+        try:
+            from app.services import world_rumor_service as _wrs
+            region = _region_for(c, camp)
+            world = _wrs.draw_for_region(c, cid, region)
+            if world and rng.random() < _WORLD_POOL_WEIGHT:
+                res = _insert_world_rumor(c, cid, camp, world)
+                if own:
+                    c.commit()
+                return res
+        except Exception as _we:
+            logger.warning("world_pool_draw_failed", error=str(_we))
+        # 2 — auto-generacja per-bohater (dotychczasowe zachowanie)
         res = _insert_rumor(c, cid, camp,
                             source_type="round" if paid else "eavesdrop", rng=rng)
         if own:

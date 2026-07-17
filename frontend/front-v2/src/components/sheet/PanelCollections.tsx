@@ -2,7 +2,8 @@
 // cross-kampanijne per bohater). Bestiariusz: siatka kart wrogów, zamknięte jako
 // sylwetki „???"; klik → modal z opisem/lore. Atlas: kafle eksploracji (heksy,
 // lokacje, plotki) + rozbicie na krainy. Progresja wiedzy łowcy: 1/5/15 zabójstw.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { markRumorsSeen } from "@/hooks/useUnreadRumors";
 import { CircleNotch, Eye, Skull, Sword, MapPin, Scroll, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { SecHead, PanelScroll } from "./sheetUi";
@@ -316,6 +317,11 @@ function BestiaryModal({
 
 function Atlas({ characterId }: { characterId: number | undefined }) {
   const { data, isLoading } = useAtlas(characterId);
+  // #1190 — otwarcie Atlasu = „przeczytane": zgaś kropkę powiadomienia na Kolekcjach.
+  const rumorCount = data?.rumors.entries.length ?? 0;
+  useEffect(() => {
+    if (characterId && data) markRumorsSeen(characterId, rumorCount);
+  }, [characterId, data, rumorCount]);
   if (isLoading) return <Loading />;
   if (!data) return null;
   const { hexes, locations, rumors } = data;
@@ -344,6 +350,16 @@ function Atlas({ characterId }: { characterId: number | undefined }) {
       )}
 
       <SecHead>Plotki</SecHead>
+      {/* #1190 — legenda statusów: bez niej gracz nie wie, co znaczą ikony/kolory. */}
+      <div className="mb-2.5 flex flex-wrap gap-x-3 gap-y-1 rounded-md border border-line-soft bg-bg/30 px-3 py-2 text-[11px] text-label">
+        <span><span className="text-ember">✓</span> potwierdzona</span>
+        <span className="line-through decoration-label/50">✗ fałszywa</span>
+        <span>• niepewna</span>
+        <span><span className="rounded bg-gold/15 px-1 py-0.5 font-bold uppercase tracking-wide text-gold">podejrzana</span> — coś śmierdzi</span>
+      </div>
+      <p className="mb-2.5 text-[11.5px] italic text-label">
+        Plotki zbierasz w karczmach: napisz „nadstawiam ucha" (za darmo) lub „stawiam kolejkę" (kilka złotych, pewniejsza wieść).
+      </p>
       {rumors.entries.length === 0 ? (
         <p className="text-[13px] text-label">Jeszcze nie zebrałeś żadnych plotek. Zaglądaj do karczm.</p>
       ) : (

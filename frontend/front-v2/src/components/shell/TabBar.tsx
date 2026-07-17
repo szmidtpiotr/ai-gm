@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import { useCharacter } from "@/hooks/useGameData";
 import { useCharacterRecipes } from "@/hooks/useCrafting";
+import { useUnreadRumors } from "@/hooks/useUnreadRumors";
 import { readVitals } from "@/lib/game";
 import { readConditions } from "@/lib/sheet";
 import { VitalBars } from "@/components/game/Vitals";
@@ -25,6 +26,7 @@ export function TabBar({ inGame }: { inGame: boolean }) {
   if (!inGame) return null;
 
   const vitals = readVitals(character.data?.sheet_json);
+  const unreadRumors = useUnreadRumors();
   const scrollable = [
     ...visibleSheetTabs(vitals.hasMana, !!recipes.data?.has_any),
     MAP_TAB,
@@ -55,6 +57,7 @@ export function TabBar({ inGame }: { inGame: boolean }) {
               key={t.key}
               tab={t}
               active={active === t.key}
+              dot={t.key === "collections" && unreadRumors && active !== t.key}
               onClick={() => setGameTab(t.key)}
             />
           ))}
@@ -68,23 +71,28 @@ function TabButton({
   tab,
   active,
   onClick,
+  dot = false,
 }: {
   tab: GameTabDef;
   active: boolean;
   onClick: () => void;
+  dot?: boolean;
 }) {
   const Icon = tab.icon;
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex min-w-[68px] flex-col items-center justify-center gap-0.5 px-3 py-2 transition-colors",
+        "relative flex min-w-[68px] flex-col items-center justify-center gap-0.5 px-3 py-2 transition-colors",
         active ? "text-ember" : "text-text-3 hover:text-text-2",
       )}
       aria-current={active ? "page" : undefined}
     >
       <Icon weight={active ? "fill" : "regular"} size={22} />
       <span className="font-ui text-micro">{tab.label}</span>
+      {dot && (
+        <span className="absolute right-2.5 top-1.5 h-1.5 w-1.5 rounded-full bg-ember" title="Nowa plotka" />
+      )}
     </button>
   );
 }
