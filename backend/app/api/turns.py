@@ -2698,6 +2698,109 @@ _DIG_INTENT_RE = re.compile(
 )
 
 
+# #1413 Model C — narracyjna przeprawa łodzią. Wymaga CZASOWNIKA (szukam/buduję/…)
+# przy rzeczowniku łódź/tratwa/prom/czółno, albo jawnej frazy „przeprawiam się …".
+# Sam rzeczownik (opis „widzę łódź") NIE triggeruje — jak person-guard w #1394.
+_BOAT_INTENT_RE = re.compile(
+    r"(szukam|buduj\w*|sklec\w*|klec\w*|robi\w*|majstruj\w*|potrzebuj\w*|znajd\w*|"
+    r"chc\w*\s+\w*\s*(zbudowa|znale|przepraw)|wsiadam|odbijam)\b[^.!?]{0,40}"
+    r"(łod(zi|zia|ką|ź|ka)\w*|łódk\w*|tratw\w*|prom\w*|czółn\w*)"
+    r"|przepraw\w*\s+(si\w+\s+)?(łodzi\w*|tratw\w*|przez\s+rzek\w*|na\s+drugi\s+brzeg|na\s+drug\w+\s+stron)",
+    re.IGNORECASE,
+)
+
+
+def _boat_narrate(conn: sqlite3.Connection, campaign_id: int, character_id: int,
+                  success: bool) -> str:
+    """#1413 — krótka proza LLM o szukaniu/budowie łodzi (1–2 zdania). Fallback do
+    szablonu, gdy LLM padnie. Łódź to element NARRACYJNY (nie przedmiot w plecaku)."""
+    _fallback = (
+        "Po chwili poszukiwań znajdujesz przy brzegu starą, ale trzymającą się kupy łódź. "
+        "Możesz przeprawić się na drugą stronę." if success else
+        "Brzeg jest pusty — ani łodzi, ani drewna na tratwę. Rzeka pozostaje nie do przebycia tędy."
+    )
+    try:
+        from app.services.user_llm_settings import get_user_llm_settings_full
+        from app.services.llm_service import generate_chat
+        _row = conn.execute("SELECT user_id FROM characters WHERE id=?", (character_id,)).fetchone()
+        _uid = int(_row["user_id"]) if _row and _row["user_id"] is not None else 0
+        _cfg = get_user_llm_settings_full(_uid)
+        _outcome = ("Bohater ZNAJDUJE lub buduje łódź/tratwę i może przeprawić się przez rzekę."
+                    if success else
+                    "Bohaterowi NIE udaje się zdobyć łodzi — nie ma czym się przeprawić.")
+        _prompt = (
+            f"Bohater szuka nad rzeką sposobu na przeprawę (łódź/tratwa). Wynik: {_outcome}\n\n"
+            "Opisz krótko prozą (1–2 zdania) tę scenę nad brzegiem, po polsku, klimat dark fantasy. "
+            "NIE podawaj liczb ani kości, NIE używaj tagów mechanicznych, NIE decyduj za gracza, "
+            "NIE wszczynaj walki."
+        )
+        prose = (generate_chat(messages=[{"role": "user", "content": _prompt}], llm_config=_cfg,
+                               call_type="boat_search", campaign_id=campaign_id) or "").strip()
+        return prose or _fallback
+    except Exception as _bn_err:
+        logger.warning("boat_narrate_failed", error=str(_bn_err), campaign_id=campaign_id)
+        return _fallback
+
+
+def _maybe_boat_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
+                         text: str) -> dict | None:
+    """#1413 Model C — gracz na hexie sąsiadującym z rzeką szuka/buduje łódź lub deklaruje
+    przeprawę → test survival (WIS) DC 12; sukces → flaga `river_crossing` (jednorazowa
+    przeprawa przez wodę w następnej podróży) + proza LLM; porażka → proza LLM bez flagi.
+    Łódź NIE jest przedmiotem — czysto narracyjno/silnikowa. Gdy nie ma wody obok → None
+    (normalna narracja)."""
+    if not _BOAT_INTENT_RE.search(text or ""):
+        return None
+    gs_row = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+    ).fetchone()
+    sf = json.loads(gs_row["session_flags"] or "{}") if gs_row else {}
+    ch = sf.get("current_hex")
+    if not ch:
+        return None
+    from app.services.hex_travel_service import hex_neighbors
+    cq, cr = int(ch["q"]), int(ch["r"])
+    river_adj = any(
+        (conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
+            (nq, nr),
+        ).fetchone() or {"hex_type": None})["hex_type"] in ("river", "water", "lake")
+        for (nq, nr) in hex_neighbors(cq, cr)
+    )
+    if not river_adj:
+        return None  # brak wody obok — niech LLM narruje normalnie
+
+    import random as _rnd
+    from app.services.skill_service import calc_skill_modifier_info
+    sheet = json.loads(character["sheet_json"] or "{}")
+    _mod = int(calc_skill_modifier_info(sheet, "survival", conn=conn,
+                                        character_id=int(character["id"])).get("total", 0))
+    d20 = _rnd.randint(1, 20)
+    nat1, nat20 = d20 == 1, d20 == 20
+    total = d20 + _mod
+    _DC = 12
+    success = (not nat1) and (nat20 or total >= _DC)
+
+    prose = _boat_narrate(conn, campaign_id, int(character["id"]), success)
+    if success:
+        sf["river_crossing"] = {"available": True, "from_hex": {"q": cq, "r": cr}}
+        conn.execute("UPDATE game_sessions SET session_flags=? WHERE id=?",
+                     (json.dumps(sf, ensure_ascii=False), gs_row["id"]))
+    _tag = (f" [Przeprawa — test przetrwania: k20 {d20}{'+' if _mod >= 0 else ''}{_mod} = {total} "
+            f"vs {_DC} → {'sukces' if success else 'porażka'}.]")
+    _tn = conn.execute(
+        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?", (campaign_id,)
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at) "
+        "VALUES (?,?,?,?,?,?,datetime('now'))",
+        (campaign_id, int(character["id"]), int(_tn), text,
+         json.dumps({"narrative": prose + _tag}, ensure_ascii=False), "boat"),
+    )
+    conn.commit()
+    return {"prose": prose + _tag, "route": "boat", "turn_number": int(_tn), "boat_found": success}
+
+
 def _maybe_herb_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
                          text: str) -> dict | None:
     """#1337 BL-C2 — deterministyczne zbieranie ziół w podróży.
@@ -6007,6 +6110,11 @@ def create_turn(
             _herb_sc = _maybe_herb_shortcut(conn, campaign_id, character, text)
             if _herb_sc is not None:
                 return _with_turn_trace(_herb_sc, turn_id)
+
+            # #1413 Model C — narracyjna przeprawa łodzią (hex sąsiadujący z rzeką).
+            _boat_sc = _maybe_boat_shortcut(conn, campaign_id, character, text)
+            if _boat_sc is not None:
+                return _with_turn_trace(_boat_sc, turn_id)
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 

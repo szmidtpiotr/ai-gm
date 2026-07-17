@@ -761,6 +761,38 @@ def resolve_chain_travel(
             _oh["teleport_edges"] = []
             hexes[from_hex] = _oh
 
+    # #1413 Model C — łódź: jednorazowa przeprawa przez WODĘ. Gdy `session_flags.river_crossing`
+    # aktywne (ustawione przez _maybe_boat_shortcut po znalezieniu łodzi), wpuść hexy wodne
+    # (river/water/lake) do grafu na TĘ jedną podróż i skonsumuj flagę. Bez flagi woda dalej
+    # jest barierą (#1411). Rzeki są żeglowne łodzią, więc dopuszczamy całą sieć wodną na ten ruch.
+    try:
+        _gs_boat = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+        ).fetchone()
+        _sf_boat = json.loads(_gs_boat["session_flags"] or "{}") if _gs_boat else {}
+        _rc = _sf_boat.get("river_crossing")
+        if isinstance(_rc, dict) and _rc.get("available"):
+            for _wr in conn.execute(
+                "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key, region "
+                "FROM world_hexes WHERE is_active = 1 AND map_level = 0 AND hex_type IN ('river','water','lake')"
+            ).fetchall():
+                _wk = (int(_wr["q"]), int(_wr["r"]))
+                if _wk not in hexes:
+                    _wh = dict(_wr)
+                    try:
+                        _wh["encounter_pool"] = json.loads(_wh.get("encounter_pool") or "[]")
+                    except Exception:
+                        _wh["encounter_pool"] = []
+                    _wh["teleport_edges"] = []
+                    hexes[_wk] = _wh
+            _sf_boat.pop("river_crossing", None)  # jednorazowa
+            conn.execute("UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                         (json.dumps(_sf_boat, ensure_ascii=False), _gs_boat["id"]))
+            conn.commit()
+            logger.info("river_crossing_boat_used", campaign_id=campaign_id)
+    except Exception as _rc_err:
+        logger.warning("river_crossing_inject_failed", error=str(_rc_err), campaign_id=campaign_id)
+
     # PT7 #1117: Load daily march budget from session_flags
     _gs_budget = conn.execute(
         "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
