@@ -1,29 +1,49 @@
 /**
  * Sekcja „Instrukcja" — podręcznik administratora gry (#1407).
  *
- * Living document: rozdziały w ROZDZIALY[] poniżej, spis treści generowany
- * automatycznie. Konwencja treści:
+ * Living document: treść pogrupowana wg GŁÓWNYCH zakładek panelu (GRUPY[] —
+ * ikona+nazwa 1:1 z nawigacją w index.html), w każdej grupie rozdziały.
+ * Spis treści generowany automatycznie. Konwencja treści:
  *  - nazwy sekcji / zakładek / przycisków DOKŁADNIE jak w UI (kopiuj z kodu,
  *    razem z emoji) — admin nie może zgadywać, o który przycisk chodzi;
  *  - żadnych wzmianek o historii prac / commitach / issue — to manual, nie
  *    changelog;
- *  - nowa funkcjonalność w adminie ⇒ dopisz/zmień rozdział w tym pliku.
+ *  - nowa funkcjonalność w adminie ⇒ dopisz/zmień rozdział w tej grupie,
+ *    której zakładki dotyczy.
  */
 
-const ROZDZIALY = [
+const STUB = `<p style="color:var(--t3)">Rozdział w przygotowaniu.</p>`;
+
+const GRUPY = [
   {
-    id: 'wstep',
-    title: 'Jak korzystać z instrukcji',
-    body: `
+    ico: '🧭', label: 'Wstęp',
+    chapters: [
+      {
+        id: 'wstep',
+        title: 'Jak korzystać z instrukcji',
+        body: `
 <p>Ten podręcznik opisuje, jak zarządzać światem gry z poziomu panelu administratora.
-Wszystkie nazwy sekcji, zakładek i przycisków są pisane <b>dokładnie tak, jak w panelu</b>
-(razem z ikonami), np. przycisk <b>★ Kanon</b> w zakładce <b>Do zatwierdzenia</b> sekcji <b>Mapa</b>.</p>
-<p>Rozdziały są niezależne — możesz czytać tylko ten, którego potrzebujesz. Spis treści po lewej.</p>`,
+Treść jest pogrupowana według głównych zakładek panelu (lewa nawigacja): <b>Gracze</b>,
+<b>Kampanie</b>, <b>Mapa</b> itd. Wszystkie nazwy sekcji, zakładek i przycisków są pisane
+<b>dokładnie tak, jak w panelu</b> (razem z ikonami), np. przycisk <b>★ Kanon</b>
+w zakładce <b>Do zatwierdzenia</b> sekcji <b>Mapa</b>.</p>
+<p>Rozdziały są niezależne — czytaj ten, którego potrzebujesz. Spis treści po lewej.</p>`,
+      },
+    ],
   },
+  { ico: '▦', label: 'Przegląd',  chapters: [{ id: 'przeglad',  title: 'Pulpit i statystyki', body: STUB }] },
+  { ico: '◉', label: 'Gracze',    chapters: [{ id: 'gracze',    title: 'Konta graczy i ustawienia LLM', body: STUB }] },
+  { ico: '⛺', label: 'Kampanie',  chapters: [{ id: 'kampanie',  title: 'Monitor kampanii i Plan GM', body: STUB }] },
+  { ico: '🧍', label: 'Bohaterowie', chapters: [{ id: 'bohaterowie', title: 'Zarządzanie bohaterami', body: STUB }] },
+  { ico: '⚔', label: 'Przedmioty', chapters: [{ id: 'przedmioty', title: 'Bronie, przedmioty i tabele łupów', body: STUB }] },
+  { ico: '⊕', label: 'Świat',     chapters: [{ id: 'swiat',     title: 'NPC, wrogowie i zasady świata', body: STUB }] },
   {
-    id: 'cykl-lokacji',
-    title: 'Skąd biorą się lokacje',
-    body: `
+    ico: '🗺', label: 'Mapa',
+    chapters: [
+      {
+        id: 'cykl-lokacji',
+        title: 'Skąd biorą się lokacje',
+        body: `
 <p>Lokacje w bazie powstają czterema drogami. Trzy z nich to twórczość AI — takie lokacje
 zawsze trafiają do kolejki <b>Mapa → Do zatwierdzenia</b>, gdzie decydujesz o ich losie.</p>
 
@@ -37,7 +57,7 @@ Takie wpisy mają w kolumnie autora <code>gm_runtime</code>.</p>
 <p>Plan przygody wspomina jakieś miejsce (np. „chata zielarki"), ale nikt go nie założył.
 Gdy gracz tam rusza i narrator potwierdza, system sam zakłada lokację — i gracz
 <b>od razu do niej wchodzi</b>, zanim ją zobaczysz w kolejce (patrz rozdział
-„Jak narrator korzysta z lokacji").</p>
+„Jak narrator (AI) korzysta z lokacji").</p>
 
 <h4>3. Kuźnia — szablony przygód</h4>
 <p>Gdy w sekcji <b>Kuźnia</b> generujesz szablon przygody, wszystkie kluczowe miejsca z planu
@@ -52,11 +72,11 @@ Też trafiają do kolejki, ale <b>z jedną różnicą: od razu dostają hex na m
 <h4>Lokacje zakładane ręcznie</h4>
 <p>To, co dodasz sam przyciskiem <b>+ Dodaj lokację</b>, NIE przechodzi przez kolejkę —
 od razu jest pełnoprawną częścią świata.</p>`,
-  },
-  {
-    id: 'do-zatwierdzenia',
-    title: 'Mapa → Do zatwierdzenia',
-    body: `
+      },
+      {
+        id: 'do-zatwierdzenia',
+        title: 'Zakładka Do zatwierdzenia',
+        body: `
 <p>Kolejka lokacji stworzonych przez AI. Czerwona plakietka <b>N oczekujące</b> u góry sekcji
 <b>Mapa</b> pokazuje, ile wpisów czeka. Przy każdej pozycji masz cztery przyciski:</p>
 
@@ -96,11 +116,11 @@ do hexa — hex dalej na niego wskazuje. Żeby naprawdę usunąć, przejdź do z
 (albo <b>↺ Regen</b> / <b>✎ Edytuj</b>, jeśli podmapa już istnieje).
 Uwaga przy <b>↺ Regen</b>: jeśli podmapa zawiera osadzone lokacje, system poprosi
 o potwierdzenie — regeneracja usuwa układ sub-hexów.</p>`,
-  },
-  {
-    id: 'floating',
-    title: 'Mapa → ⚓ Floating',
-    body: `
+      },
+      {
+        id: 'floating',
+        title: 'Zakładka ⚓ Floating',
+        body: `
 <p>Lokacje, które istnieją w bazie, ale <b>nie stoją na żadnym hexie mapy świata</b>.
 Najczęściej: świeżo zatwierdzone wpisy z <b>Do zatwierdzenia</b> (drogi 1–3 z rozdziału
 „Skąd biorą się lokacje").</p>
@@ -111,16 +131,16 @@ Najczęściej: świeżo zatwierdzone wpisy z <b>Do zatwierdzenia</b> (drogi 1–
 <li>Jeden hex = jedna lokacja. Jeśli hex jest zajęty, system odmówi.</li>
 <li><b>Osadzenie nie zmienia terenu hexa.</b> „Święty gaj" osadzony na bagnie zostanie na
 bagnie — dobierz hex pasujący do charakteru miejsca (teren malujesz osobno w zakładce
-<b>Mapa</b>, patrz rozdział „Budowniczy świata").</li>
+<b>Mapa</b>, patrz rozdział „Zakładka Mapa (budowniczy świata)").</li>
 <li>Współrzędne hexa podejrzysz klikając hex w budowniczym.</li>
 </ul>
 <h4>👁 Podgląd</h4>
 <p>Pełne dane lokacji przed osadzeniem.</p>`,
-  },
-  {
-    id: 'lokacje',
-    title: 'Mapa → Lokacje',
-    body: `
+      },
+      {
+        id: 'lokacje',
+        title: 'Zakładka Lokacje',
+        body: `
 <p>Pełna lista lokacji świata w formie drzewa (osada → podlokacje). Filtry: wyszukiwarka,
 typy (<b>Wszystkie / Loch / Miasto / Dzikość</b>) i lista krain (<b>Wszystkie krainy</b>).</p>
 <h4>Akcje na pojedynczym wierszu</h4>
@@ -138,11 +158,11 @@ Pojawi się przycisk <b>🗑 Usuń zaznaczone (N)</b>. Po potwierdzeniu usuwa ws
 zaznaczone wpisy; na końcu toast pokaże, ile się udało, a ile nie.</p>
 <h4>+ Dodaj lokację</h4>
 <p>Ręczne dodanie lokacji — taki wpis nie przechodzi przez kolejkę zatwierdzania.</p>`,
-  },
-  {
-    id: 'duplikaty',
-    title: 'Mapa → 🧹 Duplikaty',
-    body: `
+      },
+      {
+        id: 'duplikaty',
+        title: 'Zakładka 🧹 Duplikaty',
+        body: `
 <p>Detektor porządkowy: znajduje lokacje o tej samej (lub prawie tej samej) nazwie oraz
 cztery rodzaje śmieci. Czerwona plakietka na zakładce pokazuje liczbę nadmiarowych duplikatów.</p>
 
@@ -171,11 +191,11 @@ usunięta</b> przy scalaniu. Jeśli chcesz się jej pozbyć: wybierz ją jako za
 <p>Przy każdym wpisie przycisk <b>Usuń</b> — kasuje trwale. <b>↻ Odśwież</b> ponawia skan.</p>
 <p><b>Ważne:</b> nieaktywne lokacje nie są liczone jako duplikaty (nie ma ich w grze) —
 znajdziesz je wyłącznie w kuble <b>💤 Nieaktywne</b>.</p>`,
-  },
-  {
-    id: 'budowniczy',
-    title: 'Mapa → Mapa (budowniczy świata)',
-    body: `
+      },
+      {
+        id: 'budowniczy',
+        title: 'Zakładka Mapa (budowniczy świata)',
+        body: `
 <p>Edytor siatki hexów świata. Tu — i tylko tu — zmienia się <b>teren</b>. Żadna akcja
 zatwierdzania, osadzania ani kanonu lokacji nie modyfikuje terenu hexa.</p>
 <h4>Narzędzia (lewy pasek)</h4>
@@ -200,11 +220,11 @@ wzorca śmieciem.</li>
 </ul>
 <p>Dla porównania: <b>★ Kanon</b> (w <b>Do zatwierdzenia</b>) oznacza JEDNĄ lokację jako
 kanoniczną (drogowskaz, pula startów). <b>💾 Zapisz mapę (kanon)</b> zabezpiecza CAŁY teren świata.</p>`,
-  },
-  {
-    id: 'narrator',
-    title: 'Jak narrator (AI) korzysta z lokacji',
-    body: `
+      },
+      {
+        id: 'narrator',
+        title: 'Jak narrator (AI) korzysta z lokacji',
+        body: `
 <p>Przy każdej turze narrator dostaje opis okolicy — lokacje wokół miejsca, w którym stoi
 gracz (rodzic, podlokacje, sąsiedztwo). Do tego opisu wchodzą lokacje <b>aktywne
 i zatwierdzone</b>, z jednym wyjątkiem: <b>miejsce, w którym gracz aktualnie stoi, wchodzi
@@ -225,11 +245,11 @@ startowa nowych kampanii, cele podróży.</li>
 </ul>
 <p>Na mapie gracza lokacje nie mają osobnej „ikony oczekiwania" — hex wygląda normalnie.
 Jedyną różnicę robi kanon (etykieta widoczna przed odkryciem).</p>`,
-  },
-  {
-    id: 'sciaga',
-    title: 'Ściąga decyzyjna',
-    body: `
+      },
+      {
+        id: 'sciaga',
+        title: 'Ściąga decyzyjna',
+        body: `
 <p>Otwierasz <b>Mapa → Do zatwierdzenia</b>, przykładowe pozycje:</p>
 <table class="data-table" style="font-size:0.82rem">
 <thead><tr><th>Sytuacja</th><th>Decyzja</th></tr></thead>
@@ -255,22 +275,14 @@ i <b>⚓ Osadź</b> na pasującym terenie</td></tr>
 <li>Zatwierdzone ≠ na mapie: <b>⚓ Floating</b> → <b>⚓ Osadź</b>.</li>
 <li>Teren zmieniasz tylko w budowniczym; po dobrej edycji <b>💾 Zapisz mapę (kanon)</b>.</li>
 </ul>`,
+      },
+    ],
   },
-  {
-    id: 'przedmioty',
-    title: 'Przedmioty i tabele łupów',
-    body: `<p style="color:var(--t3)">Rozdział w przygotowaniu.</p>`,
-  },
-  {
-    id: 'kampanie',
-    title: 'Kampanie i Plan GM',
-    body: `<p style="color:var(--t3)">Rozdział w przygotowaniu.</p>`,
-  },
-  {
-    id: 'kuznia',
-    title: 'Kuźnia — szablony przygód',
-    body: `<p style="color:var(--t3)">Rozdział w przygotowaniu.</p>`,
-  },
+  { ico: '⚙', label: 'Mechanika',  chapters: [{ id: 'mechanika',  title: 'Statystyki, umiejętności, DC', body: STUB }] },
+  { ico: '⛓', label: 'Lochy',      chapters: [{ id: 'lochy',      title: 'Ziarna lochów i przebiegi', body: STUB }] },
+  { ico: '⚒', label: 'Kuźnia',     chapters: [{ id: 'kuznia',     title: 'Szablony przygód', body: STUB }] },
+  { ico: '🛠', label: 'Narzędzia',  chapters: [{ id: 'narzedzia',  title: 'Test Runner i narzędzia bazy', body: STUB }] },
+  { ico: '⎔', label: 'System',     chapters: [{ id: 'system',     title: 'Presety LLM i konfiguracja', body: STUB }] },
 ];
 
 function _esc(s) {
@@ -278,16 +290,24 @@ function _esc(s) {
 }
 
 export async function init(panel) {
-  const toc = ROZDZIALY.map(r =>
-    `<a href="#" class="man-toc-link" data-target="man-${r.id}"
-        style="display:block;padding:6px 10px;border-radius:5px;color:var(--t2);text-decoration:none;font-size:0.82rem;line-height:1.3">${_esc(r.title)}</a>`
+  const toc = GRUPY.map(g => `
+    <div style="font-size:0.7rem;font-weight:700;color:var(--t3);letter-spacing:0.06em;padding:10px 10px 3px">${_esc(g.ico)} ${_esc(g.label.toUpperCase())}</div>
+    ${g.chapters.map(r =>
+      `<a href="#" class="man-toc-link" data-target="man-${r.id}"
+          style="display:block;padding:4px 10px 4px 22px;border-radius:5px;color:var(--t2);text-decoration:none;font-size:0.8rem;line-height:1.3">${_esc(r.title)}</a>`
+    ).join('')}`
   ).join('');
 
-  const chapters = ROZDZIALY.map(r => `
-    <section id="man-${r.id}" class="card" style="padding:18px 22px;margin-bottom:14px;scroll-margin-top:12px">
-      <h3 style="margin:0 0 10px;font-size:1.02rem">${_esc(r.title)}</h3>
-      <div class="man-body" style="font-size:0.86rem;line-height:1.55;color:var(--t1)">${r.body}</div>
-    </section>`
+  const content = GRUPY.map(g => `
+    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+      <span style="font-size:1.1rem">${_esc(g.ico)}</span>
+      <span style="font-size:0.95rem;font-weight:700;letter-spacing:0.02em">${_esc(g.label)}</span>
+    </div>
+    ${g.chapters.map(r => `
+      <section id="man-${r.id}" class="card" style="padding:18px 22px;margin-bottom:14px;scroll-margin-top:12px">
+        <h3 style="margin:0 0 10px;font-size:1.02rem">${_esc(r.title)}</h3>
+        <div class="man-body" style="font-size:0.86rem;line-height:1.55;color:var(--t1)">${r.body}</div>
+      </section>`).join('')}`
   ).join('');
 
   panel.innerHTML = `
@@ -298,11 +318,11 @@ export async function init(panel) {
       </div>
     </div>
     <div style="display:flex;gap:16px;align-items:flex-start">
-      <nav class="card" style="width:230px;flex-shrink:0;padding:10px;position:sticky;top:12px;max-height:calc(100vh - 40px);overflow-y:auto">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--t3);letter-spacing:0.08em;padding:2px 10px 8px">SPIS TREŚCI</div>
+      <nav class="card" style="width:240px;flex-shrink:0;padding:6px 8px 12px;position:sticky;top:12px;max-height:calc(100vh - 40px);overflow-y:auto">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--t3);letter-spacing:0.08em;padding:8px 10px 2px">SPIS TREŚCI</div>
         ${toc}
       </nav>
-      <div style="flex:1;min-width:0" id="man-content">${chapters}</div>
+      <div style="flex:1;min-width:0" id="man-content">${content}</div>
     </div>`;
 
   // Styl treści rozdziałów (h4, listy, tabele) — lokalny, bez dotykania layout.css.
