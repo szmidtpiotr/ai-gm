@@ -2318,7 +2318,12 @@ def maybe_narrate_arrival(
 def _sweep_along_river(conn: sqlite3.Connection, start: tuple[int, int], distance: int):
     """#1417 — nurt niesie bohatera `distance` hexów wzdłuż rzeki od hexa brodu, po czym
     wyrzuca na LOSOWY przyległy przechodni brzeg. Śledzi linię rzeki (preferuje kontynuację
-    kierunku, nie zawraca). Zwraca (q, r) brzegu albo None (brak rzeki / brak lądu)."""
+    kierunku, nie zawraca).
+
+    Zwraca {"bank": (q,r), "river_path": [(q,r)...]} — river_path to hexy RZEKI przez które
+    spływasz (bez hexa brodu; kończy na hexie rzeki przy brzegu), bank = losowy przyległy
+    ląd. None gdy brak rzeki obok brodu / brak lądu przy rzece (→ fallback bez przeniesienia).
+    """
     _WATER = ("river", "water", "lake", "sea", "ocean")
 
     def _htype(q, r):
@@ -2344,6 +2349,7 @@ def _sweep_along_river(conn: sqlite3.Connection, start: tuple[int, int], distanc
         return None
     prev = start
     cur = random.choice(riv)
+    river_path = [cur]
     last_dir = (cur[0] - start[0], cur[1] - start[1])
     for _ in range(max(0, distance - 1)):
         cands = [h for h in _river_nb(*cur) if h != prev]
@@ -2353,11 +2359,12 @@ def _sweep_along_river(conn: sqlite3.Connection, start: tuple[int, int], distanc
         nxt = cands[0]
         last_dir = (nxt[0] - cur[0], nxt[1] - cur[1])
         prev, cur = cur, nxt
-    # wyrzut na losowy brzeg: spróbuj końcowy hex rzeki, potem cofaj wzdłuż trasy
-    for h in (cur, prev, start):
-        lands = _land_nb(*h)
+        river_path.append(nxt)
+    # wyrzut na losowy brzeg: od końcowego hexa rzeki cofaj wzdłuż trasy aż znajdziesz ląd
+    for i in range(len(river_path) - 1, -1, -1):
+        lands = _land_nb(*river_path[i])
         if lands:
-            return random.choice(lands)
+            return {"bank": random.choice(lands), "river_path": river_path[:i + 1]}
     return None
 
 
@@ -2438,10 +2445,12 @@ def maybe_ford_hazard(
         # przechodni brzeg → PRZENIESIENIE PINA (bardziej narracyjne niż same obrażenia).
         displaced_to = None
         swept_distance = 0
+        sweep_path: list[dict] | None = None
         if swept and swept_hex is not None:
             swept_distance = random.randint(1, FORD_SWEEP_DISTANCE_DIE)
-            bank = _sweep_along_river(conn, swept_hex, swept_distance)
-            if bank is not None:
+            sweep = _sweep_along_river(conn, swept_hex, swept_distance)
+            if sweep is not None:
+                bank = sweep["bank"]
                 from app.services.location_state_service import set_position
                 set_position(conn, campaign_id, current_hex={"q": bank[0], "r": bank[1]},
                              clear_location_id=True, clear_local_hex=True, character_id=character_id)
@@ -2451,7 +2460,12 @@ def maybe_ford_hazard(
                     (campaign_id, bank[0], bank[1]),
                 )
                 displaced_to = {"q": bank[0], "r": bank[1]}
-                # pin/travel-result kieruj na miejsce wyrzucenia (front animuje tam)
+                # #1417 — ścieżka SPŁYWU dla animacji na mapie: bród → hexy rzeki → brzeg
+                # (front zatrzymuje podróż na brodzie, po kliknięciu animuje spływ tą trasą).
+                sweep_path = ([{"q": swept_hex[0], "r": swept_hex[1]}]
+                              + [{"q": q, "r": r} for (q, r) in sweep["river_path"]]
+                              + [{"q": bank[0], "r": bank[1]}])
+                # pin/travel-result kieruj na miejsce wyrzucenia
                 result["arrived_hex"] = {"q": bank[0], "r": bank[1]}
                 _bt = conn.execute(
                     "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
@@ -2473,6 +2487,8 @@ def maybe_ford_hazard(
         result["ford_hazard"] = {
             "events": events, "damage": total_dmg, "swept": swept, "wet": wet,
             "displaced_to": displaced_to, "swept_distance": swept_distance,
+            "swept_hex": ({"q": swept_hex[0], "r": swept_hex[1]} if swept_hex else None),
+            "sweep_path": sweep_path,
         }
 
         # narracja mechaniczna (bez LLM) — proza skutku

@@ -227,6 +227,9 @@ export function WorldMap({
     route: Array<{ q: number; r: number }>;
     step: number;
     encounterHex: { q: number; r: number } | null;
+    // #1417 — gdy ustawione: po dojściu na bród animacja ZAMRAŻA (pin na brodzie), czeka
+    // na klik w overlay; wtedy rusza 2. etap „spływu rzeką" tą ścieżką do brzegu.
+    fordSweep?: Array<{ q: number; r: number }> | null;
   } | null>(null);
   // #1417 — wynik przeprawy przez bród pokazany NA mapie (test Siły + skutek), bo
   // przeprawa dzieje się na ekranie mapy, a karta rzutu w logu Opowieści była niewidoczna.
@@ -279,9 +282,23 @@ export function WorldMap({
       { characterId, q: destQ, r: destR, deferMap: true },
       {
         onSuccess: (res) => {
-          // #1417 — pokaż wynik przeprawy przez bród na mapie (auto-znika po chwili).
-          if (res.ford_hazard) setFordResult(res.ford_hazard);
           const fullPath = Array.isArray(res.path) ? res.path : [];
+          const fh = res.ford_hazard;
+          // #1417 — PORWANIE z przeniesieniem: 2-etapowa animacja. Etap 1: dojdź DO brodu
+          // (punkt testu) i ZAMROŹ; overlay pokazuje wynik. Klik → etap 2: spływ rzeką do
+          // brzegu (fordSweep). Bez tego pin szedł całą trasą, a potem „teleportował" na brzeg.
+          if (fh?.swept && fh.swept_hex && Array.isArray(fh.sweep_path) && fh.sweep_path.length >= 2) {
+            setFordResult(fh);
+            const sh = fh.swept_hex;
+            const idx = fullPath.findIndex((h) => h.q === sh.q && h.r === sh.r);
+            const route1 = idx >= 0 ? fullPath.slice(0, idx + 1) : [sh];
+            setSelected(null);
+            setTravelAnimating(true);
+            setAnim({ route: route1, step: 0, encounterHex: null, fordSweep: fh.sweep_path });
+            return;
+          }
+          // #1417 — przeprawa bez porwania (czysto / przemoczony): overlay auto-znika.
+          if (fh) setFordResult(fh);
           const arr = res.arrived_hex ?? { q: destQ, r: destR };
           // Przytnij trasę do faktycznie przebytego odcinka (origin → arrived_hex).
           const arrIdx = fullPath.findIndex(
@@ -315,6 +332,9 @@ export function WorldMap({
   useEffect(() => {
     if (!anim) return;
     if (anim.step >= anim.route.length - 1) {
+      // #1417 — dotarto DO brodu, a czeka spływ: ZAMROŹ (pin na brodzie), overlay-gate
+      // czeka na klik gracza. Nie invaliduj mapy, nie czyść anim (etap 2 rusza z klika).
+      if (anim.fordSweep) return;
       const t = setTimeout(
         () => {
           setAnim(null);
@@ -338,9 +358,11 @@ export function WorldMap({
   // #1381 — bezpiecznik: jeśli gracz opuści mapę w trakcie animacji, odblokuj modal.
   useEffect(() => () => setTravelAnimating(false), [setTravelAnimating]);
 
-  // #1417 — karta wyniku przeprawy znika po ~6 s (albo po kliknięciu).
+  // #1417 — karta wyniku przeprawy: przy PORWANIU (jest sweep_path) to GATE — czeka na
+  // klik (odpala spływ), nie auto-znika. Przy czystej/mokrej przeprawie znika po ~6 s.
   useEffect(() => {
     if (!fordResult) return;
+    if (fordResult.swept && Array.isArray(fordResult.sweep_path) && fordResult.sweep_path.length >= 2) return;
     const t = setTimeout(() => setFordResult(null), 6000);
     return () => clearTimeout(t);
   }, [fordResult]);
@@ -360,10 +382,19 @@ export function WorldMap({
         const swept = fordResult.swept;
         const wet = fordResult.wet;
         const danger = swept || wet;
+        const gated = swept && Array.isArray(fordResult.sweep_path) && fordResult.sweep_path.length >= 2;
+        const onOverlayClick = () => {
+          setFordResult(null);
+          // #1417 — porwanie: klik uruchamia ETAP 2 — spływ rzeką ścieżką sweep_path do brzegu.
+          const drift = anim?.fordSweep;
+          if (drift && drift.length >= 2) {
+            setAnim({ route: drift, step: 0, encounterHex: null });
+          }
+        };
         return (
           <div
             className="fixed inset-x-0 top-4 z-[60] mx-auto flex max-w-[420px] cursor-pointer justify-center px-4"
-            onClick={() => setFordResult(null)}
+            onClick={onOverlayClick}
           >
             <div className={"w-full overflow-hidden rounded-xl border shadow-2xl " + (danger ? "border-line-danger bg-surface" : "border-line-ember bg-surface")}>
               <div className={"flex items-center gap-2.5 border-b border-line px-4 py-2.5 " + (danger ? "bg-danger/[0.10]" : "bg-ember/[0.08]")}>
@@ -383,11 +414,16 @@ export function WorldMap({
               )}
               <div className="px-4 py-3 text-center font-ui text-label text-text-2">
                 {swept
-                  ? `Nurt cię porwał — zniesiony ${fordResult.swept_distance ?? 0} pól w dół rzeki, −${fordResult.damage} HP, przemoczony.`
+                  ? `Nurt cię porwał — ${fordResult.swept_distance ?? 0} pól w dół rzeki, −${fordResult.damage} HP, przemoczony.`
                   : wet
                     ? "Przemoczony (−1 do testów fizycznych, aż wyschniesz przy ogniu)."
                     : "Przeprawa czysta — suchą stopą na drugi brzeg."}
               </div>
+              {gated && (
+                <div className="border-t border-line bg-danger/[0.06] px-4 py-2 text-center font-ui text-micro font-semibold text-danger-glow">
+                  Kliknij, by popłynąć z nurtem →
+                </div>
+              )}
             </div>
           </div>
         );

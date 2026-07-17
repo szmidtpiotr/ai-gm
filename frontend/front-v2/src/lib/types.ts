@@ -346,6 +346,9 @@ export interface TravelResult {
     wet: boolean;
     displaced_to?: { q: number; r: number } | null;
     swept_distance?: number;
+    /** #1417 — hex brodu (punkt testu) i ścieżka spływu bród→rzeka→brzeg (animacja mapy). */
+    swept_hex?: { q: number; r: number } | null;
+    sweep_path?: Array<{ q: number; r: number }> | null;
   } | null;
   [k: string]: unknown;
 }

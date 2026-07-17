@@ -37,12 +37,15 @@ def test_sweep_carries_along_river_to_bank():
         (1, 0, "river"), (2, 0, "river"), (3, 0, "river"),
         (1, 1, "plains"), (2, 1, "plains"), (3, 1, "plains"),  # brzeg południowy
     ])
-    bank = _sweep_along_river(conn, (0, 0), 3)
+    res = _sweep_along_river(conn, (0, 0), 3)
     conn.close()
-    assert bank is not None, "musi wyrzucić na brzeg"
-    assert bank in [(1, 1), (2, 1), (3, 1), (1, 0)] or bank not in [(1, 0), (2, 0), (3, 0)]
+    assert res is not None, "musi wyrzucić na brzeg"
+    bank = res["bank"]
     # brzeg to LĄD, nie rzeka
     assert bank not in [(1, 0), (2, 0), (3, 0)]
+    # river_path to hexy RZEKI (spływ)
+    assert all(h in [(1, 0), (2, 0), (3, 0)] for h in res["river_path"])
+    assert len(res["river_path"]) >= 1
 
 
 def test_sweep_no_river_returns_none():
@@ -67,6 +70,7 @@ def test_sweep_river_no_land_returns_none():
 def test_sweep_distance_one_still_finds_bank():
     """Dystans 1 — pierwszy hex rzeki, brzeg tuż obok."""
     conn = _conn([(0, 0, "brod"), (1, 0, "river"), (1, 1, "forest")])
-    bank = _sweep_along_river(conn, (0, 0), 1)
+    res = _sweep_along_river(conn, (0, 0), 1)
     conn.close()
-    assert bank == (1, 1)
+    assert res is not None and res["bank"] == (1, 1)
+    assert res["river_path"] == [(1, 0)]
