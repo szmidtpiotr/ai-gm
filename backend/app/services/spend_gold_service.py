@@ -218,21 +218,27 @@ def apply_spend_gold_to_narrative(
 # mirrors skill_check_safety_net: on an *explicit* purchase phrase, when the hero
 # can afford it and the narrator did NOT already charge this turn, deduct the price.
 
+# #1420 — wzorce ODdiakrytyzowane + wejście normalizowane (gracze piszą bez ogonków:
+# "zamowic", "place", "prosze o", "posilek", "sniadanie", "gorzala").
+from app.core.text_utils import strip_pl_diacritics as _sd
+
+
+def _c(pattern: str) -> re.Pattern:
+    return re.compile(_sd(pattern), re.IGNORECASE)
+
+
 # Explicit purchase verbs (imperative / present — avoids subjunctive "chciałbym").
-_FOOD_ORDER_VERB_RE = re.compile(
+_FOOD_ORDER_VERB_RE = _c(
     r"\b(zamawiam|zamówi[ćeęą]\w*|kupuj[ęe]|kupi[ćeęą]\w*|płac[ęe]|zapłac\w*|"
-    r"proszę o|biorę|bierz[ee])\b",
-    re.IGNORECASE,
+    r"proszę o|biorę|bierz[ee])\b"
 )
-_FOOD_NOUN_RE = re.compile(
+_FOOD_NOUN_RE = _c(
     r"\b(straw[aęy]\w*|jedzeni\w*|posił\w*|obiad\w*|kolacj\w*|śniadani\w*|"
-    r"gulasz\w*|zup[aęy]\w*|chleb\w*|miski\w*|miskę)\b",
-    re.IGNORECASE,
+    r"gulasz\w*|zup[aęy]\w*|chleb\w*|miski\w*|miskę)\b"
 )
-_DRINK_NOUN_RE = re.compile(
+_DRINK_NOUN_RE = _c(
     r"\b(piw[aoęy]\w*|kufel\w*|kufl\w*|napój\w*|napoj\w*|wina?\b|winem|"
-    r"miód\w*|miod\w*|gorzał\w*|trunk\w*|kielisz\w*)\b",
-    re.IGNORECASE,
+    r"miód\w*|miod\w*|gorzał\w*|trunk\w*|kielisz\w*)\b"
 )
 
 
@@ -257,10 +263,11 @@ def food_purchase_safety_net(
     if already_charged or not player_text:
         return False
     try:
-        if not _FOOD_ORDER_VERB_RE.search(player_text):
+        _pt = _sd(player_text)  # #1420 — dopasowanie bez polskich znaków
+        if not _FOOD_ORDER_VERB_RE.search(_pt):
             return False
-        has_food = bool(_FOOD_NOUN_RE.search(player_text))
-        has_drink = bool(_DRINK_NOUN_RE.search(player_text))
+        has_food = bool(_FOOD_NOUN_RE.search(_pt))
+        has_drink = bool(_DRINK_NOUN_RE.search(_pt))
         if not (has_food or has_drink):
             return False
         # Food (with or without drink) → meal; drink only → drink.

@@ -15,6 +15,7 @@ from typing import Any, Optional
 import structlog
 
 from app.core.constants import DEFAULT_REGION
+from app.core.text_utils import strip_pl_diacritics as _sd  # #1420 — intent bez polskich znaków
 from app.services.movement_service import (
     MovementProfile,
     MovementStep,
@@ -359,8 +360,10 @@ def detect_named_destination_hex(
 # are ALWAYS paired with a destination preposition (do/ku/w stronę/w kierunku)
 # by the caller, so they never fire on their own → no false move-intent.
 _PT3_MOVE_VERB_RE = re.compile(
-    r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy|"
-    r"szukam|kieruj|udaj|chc[ęe]|prob[uó]j|próbuj|pod[ąa]ż|maszeruj|wychodz)\w*\b",
+    _sd(
+        r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy|"
+        r"szukam|kieruj|udaj|chc[ęe]|prob[uó]j|próbuj|pod[ąa]ż|maszeruj|wychodz)\w*\b"
+    ),
     re.IGNORECASE | re.UNICODE,
 )
 _PT3_DEST_RE = re.compile(
@@ -397,7 +400,7 @@ def resolve_player_text_to_location_key(
 
     Handles Polish inflection via prefix matching: 'Vilnogradu' starts with 'Vilnograd'.
     """
-    if not _PT3_MOVE_VERB_RE.search(player_text):
+    if not _PT3_MOVE_VERB_RE.search(_sd(player_text)):
         return None
 
     m = _PT3_DEST_RE.search(player_text)
@@ -497,7 +500,7 @@ def resolve_player_text_to_known_hex(
     # TODO (#1222 pt.5): LLM fallback for target extraction when the regex/fuzzy
     # path misses a paraphrased destination. turn_intent.py has no target
     # classifier yet — see to_do_ideas.md. No dedicated extra LLM call for now.
-    if not _PT3_MOVE_VERB_RE.search(player_text):
+    if not _PT3_MOVE_VERB_RE.search(_sd(player_text)):
         return None
     m = _KNOWN_HEX_DEST_RE.search(player_text)
     if not m:
@@ -583,7 +586,7 @@ def resolve_declared_move_target(
 
     Returns ``(location_key, label)`` or None.
     """
-    if not _PT3_MOVE_VERB_RE.search(player_text):
+    if not _PT3_MOVE_VERB_RE.search(_sd(player_text)):
         return None
     m = _PT3_DEST_RE.search(player_text) or _KNOWN_HEX_DEST_RE.search(player_text)
     if not m:
@@ -2105,17 +2108,17 @@ def _record_travel_turn(
 # Road-choice cue words in the player's answer. "road" → follow the trakt;
 # "direct" → cut straight across the wilds.
 _ROUTE_ROAD_RE = re.compile(
-    r"\b(trakt\w*|drog[aąęio]\w*|gośćc\w*|gościńc\w*|bezpieczn\w*|dłuż\w*|okrężn\w*)\b",
+    _sd(r"\b(trakt\w*|drog[aąęio]\w*|gośćc\w*|gościńc\w*|bezpieczn\w*|dłuż\w*|okrężn\w*)\b"),
     re.IGNORECASE | re.UNICODE,
 )
 _ROUTE_DIRECT_RE = re.compile(
-    r"\b(prosto|wprost|przełaj|przelaj|na\s+skróty|skrót\w*|skroty|dzicz\w*|"
-    r"bezpośredni\w*|bezposredni\w*|krótsz\w*|krotsz\w*|najkrótsz\w*)\b",
+    _sd(r"\b(prosto|wprost|przełaj|przelaj|na\s+skróty|skrót\w*|skroty|dzicz\w*|"
+        r"bezpośredni\w*|bezposredni\w*|krótsz\w*|krotsz\w*|najkrótsz\w*)\b"),
     re.IGNORECASE | re.UNICODE,
 )
 _ROUTE_CANCEL_RE = re.compile(
-    r"\b(rezygnuj\w*|zostaj\w*|zostan\w*|anuluj\w*|odwołuj\w*|nie\s+podróżuj\w*|"
-    r"nie\s+ide\w*|nie\s+idę|nie\s+wyruszam|zostań|zostaję|nie\s+teraz)\b",
+    _sd(r"\b(rezygnuj\w*|zostaj\w*|zostan\w*|anuluj\w*|odwołuj\w*|nie\s+podróżuj\w*|"
+        r"nie\s+ide\w*|nie\s+idę|nie\s+wyruszam|zostań|zostaję|nie\s+teraz)\b"),
     re.IGNORECASE | re.UNICODE,
 )
 
@@ -2128,10 +2131,11 @@ def detect_route_choice(player_text: str) -> str | None:
     """
     if not player_text:
         return None
-    if _ROUTE_CANCEL_RE.search(player_text):
+    _pt = _sd(player_text)  # #1420 — dopasowanie bez polskich znaków
+    if _ROUTE_CANCEL_RE.search(_pt):
         return "cancel"
-    road = bool(_ROUTE_ROAD_RE.search(player_text))
-    direct = bool(_ROUTE_DIRECT_RE.search(player_text))
+    road = bool(_ROUTE_ROAD_RE.search(_pt))
+    direct = bool(_ROUTE_DIRECT_RE.search(_pt))
     if road and not direct:
         return "road"
     if direct and not road:

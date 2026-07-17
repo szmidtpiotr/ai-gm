@@ -115,45 +115,32 @@ def validate_action(
 
 # ── Keyword stub classifier ───────────────────────────────────────────────────
 
+# #1420 — gracze na mobilnych piszą bez polskich znaków. Kompilujemy wzorce w formie
+# ODdiakrytyzowanej i dopasowujemy do znormalizowanego wejścia → łapiemy oba warianty.
+from app.core.text_utils import strip_pl_diacritics as _sd
+
+
+def _c(pattern: str) -> re.Pattern:
+    return re.compile(_sd(pattern), re.IGNORECASE)
+
+
 # Negation bypass: "nie <attack_verb>" → do NOT classify as ATTACK.
-# Catches: "nie atakuję", "nie walczę", "nie strzelam", "nic nie atakuję", etc.
-_NEGATION_ATTACK_PATTERN = re.compile(
-    r"\bnie\s+(atakuj[ęe]?|uderz[ae][jm]?|\buderz\b|strzelam|walczę|walcz)",
-    re.IGNORECASE,
+_NEGATION_ATTACK_PATTERN = _c(
+    r"\bnie\s+(atakuj[ęe]?|uderz[ae][jm]?|\buderz\b|strzelam|walczę|walcz)"
 )
 
 # (Polish keyword → action_type). F0-4 replaces this with a full LLM parser.
 _KEYWORD_MAP: list[tuple[re.Pattern, str]] = [
-    # ATTACK — must come before FLEE to catch "walka"
-    # Note: Polish inflections end in "ę"/"am" — avoid \b after Unicode tails
-    (re.compile(
-        r"(atakuj[ęe]?|uderz[ae][jm]?|\buderz\b|strzelam|rzucam zaklęcie|spell|cast|\batak\b|walczę|walcz)",
-        re.IGNORECASE
-    ), "ATTACK"),
-    # FLEE
-    (re.compile(r"\b(uciekam|uciekaj|odwrót|cofam się)\b", re.IGNORECASE), "FLEE"),
-    # DIALOGUE
-    (re.compile(
-        r"\b(rozmawiam|porozmawiać|mówię|pytam|zagaduję|rozmawiaj|mów|powiedz|zapytaj)\b",
-        re.IGNORECASE
-    ), "DIALOGUE"),
-    # MOVEMENT
-    (re.compile(
-        r"\b(idę|biegnę|przechodzę|wchodzę|wychodzę|przemieszczam|poruszam|ruszam|idź|biegnij)\b",
-        re.IGNORECASE
-    ), "MOVEMENT"),
-    # REST
-    (re.compile(r"\b(odpoczywam|odpoczywa|śpię|śpij|obozujemy|obóz)\b", re.IGNORECASE), "REST"),
-    # SEARCH
-    (re.compile(r"\b(szukam|przeszukuję|sprawdzam|badam|przetrząsam|szukaj)\b", re.IGNORECASE), "SEARCH"),
-    # ITEM_USE
-    (re.compile(r"\b(używam|wypiję|pij|zużywam|aktywuję)\b", re.IGNORECASE), "ITEM_USE"),
-    # EXAMINE
-    (re.compile(r"\b(oglądam|patrzę na|przyglą|observe|rozglądam)\b", re.IGNORECASE), "EXAMINE"),
-    # SHOP
-    (re.compile(r"\b(kupuję|sprzedam|handel|sklep|kupię|sprzedaj)\b", re.IGNORECASE), "SHOP"),
-    # SKILL_ATTEMPT
-    (re.compile(r"\b(próbuję|staram się|testuję|sprawdzam umiejęt)\b", re.IGNORECASE), "SKILL_ATTEMPT"),
+    (_c(r"(atakuj[ęe]?|uderz[ae][jm]?|\buderz\b|strzelam|rzucam zaklęcie|spell|cast|\batak\b|walczę|walcz)"), "ATTACK"),
+    (_c(r"\b(uciekam|uciekaj|odwrót|cofam się)\b"), "FLEE"),
+    (_c(r"\b(rozmawiam|porozmawiać|mówię|pytam|zagaduję|rozmawiaj|mów|powiedz|zapytaj)\b"), "DIALOGUE"),
+    (_c(r"\b(idę|biegnę|przechodzę|wchodzę|wychodzę|przemieszczam|poruszam|ruszam|idź|biegnij)\b"), "MOVEMENT"),
+    (_c(r"\b(odpoczywam|odpoczywa|śpię|śpij|obozujemy|obóz)\b"), "REST"),
+    (_c(r"\b(szukam|przeszukuję|sprawdzam|badam|przetrząsam|szukaj)\b"), "SEARCH"),
+    (_c(r"\b(używam|wypiję|pij|zużywam|aktywuję)\b"), "ITEM_USE"),
+    (_c(r"\b(oglądam|patrzę na|przyglą|observe|rozglądam)\b"), "EXAMINE"),
+    (_c(r"\b(kupuję|sprzedam|handel|sklep|kupię|sprzedaj)\b"), "SHOP"),
+    (_c(r"\b(próbuję|staram się|testuję|sprawdzam umiejęt)\b"), "SKILL_ATTEMPT"),
 ]
 
 
@@ -163,7 +150,7 @@ def classify_intent_stub(player_input: str) -> dict:
     Returns dict with at minimum {"action_type": "<TYPE>"}.
     F0-4 (full LLM intent parser) will replace this in a later phase.
     """
-    text = (player_input or "").strip()
+    text = _sd((player_input or "").strip())  # #1420 — normalizuj diakrytyki
     for pattern, action_type in _KEYWORD_MAP:
         if pattern.search(text):
             # Skip ATTACK when preceded by negation ("nie atakuję", "nic nie strzelam", etc.)

@@ -123,13 +123,19 @@ def _inactive_combat_tag_reminder(user_text: str | None) -> str:
 
 
 import re as _re_skill
+from app.core.text_utils import strip_pl_diacritics as _sd_skill
+
+# #1420 — wzorzec ODdiakrytyzowany (gracze na mobilnych piszą bez ogonków), dopasowanie
+# do znormalizowanego wejścia (patrz _skill_test_tag_instruction).
 _SKILL_VERB_HINT = _re_skill.compile(
-    r"\b(próbuj|próbować|spróbuj|staram|chcę|zamiarzam|usiłuj|"
-    r"skrad|przekrad|przekonaj|perswad|oszuk|zastraszy|przeszuk|spost|zauważ|"
-    r"wytrop|przetrwaj|wylecz|zidentyfik|zbadaj|ident|użyj|kradnę|włamuj|wyważam|"
-    r"skaczę|wspinaj|bieg|uciekam|uchylam|unikam|"
-    r"kuj|wykuj|wykuć|oceniam|oszacuj|napraw|naprawiam|konstruuj|tworzę|robię|"
-    r"rzemiosł|kowalstwo|alchemi|leczę|badan|tropię|ukryj|ukrywam|szpieg)\b",
+    _sd_skill(
+        r"\b(próbuj|próbować|spróbuj|staram|chcę|zamiarzam|usiłuj|"
+        r"skrad|przekrad|przekonaj|perswad|oszuk|zastraszy|przeszuk|spost|zauważ|"
+        r"wytrop|przetrwaj|wylecz|zidentyfik|zbadaj|ident|użyj|kradnę|włamuj|wyważam|"
+        r"skaczę|wspinaj|bieg|uciekam|uchylam|unikam|"
+        r"kuj|wykuj|wykuć|oceniam|oszacuj|napraw|naprawiam|konstruuj|tworzę|robię|"
+        r"rzemiosł|kowalstwo|alchemi|leczę|badan|tropię|ukryj|ukrywam|szpieg)\b"
+    ),
     _re_skill.IGNORECASE,
 )
 
@@ -137,8 +143,9 @@ import unicodedata as _unicodedata
 
 
 def _normalize_risk_text(text: str) -> str:
-    """Lowercase + strip accents for keyword matching."""
-    nfkd = _unicodedata.normalize("NFKD", text.lower())
+    """Lowercase + strip accents. #1420: najpierw `strip_pl_diacritics`, bo NFKD NIE
+    rozkłada `ł`/`Ł` (osobny codepoint) — bez tego 'przeplyw' vs 'przepływ' pudłowało."""
+    nfkd = _unicodedata.normalize("NFKD", _sd_skill(text).lower())
     return "".join(c for c in nfkd if not _unicodedata.combining(c))
 
 
@@ -182,7 +189,7 @@ def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -
     """
     if not user_text:
         return None
-    if not _SKILL_VERB_HINT.search(user_text):
+    if not _SKILL_VERB_HINT.search(_sd_skill(user_text)):  # #1420 — bez polskich znaków
         return None
 
     # Load skills from DB with descriptions — crucial so LLM knows WHEN to use custom skills

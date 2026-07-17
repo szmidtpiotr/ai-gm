@@ -21,44 +21,25 @@ class PlayerIntent:
 
 # ── Keyword patterns (stage 1) ─────────────────────────────────────────────────
 
+# #1420 — dopasowanie odporne na brak polskich znaków: wzorce ODdiakrytyzowane,
+# wejście też normalizowane (patrz parse_intent).
+from app.core.text_utils import strip_pl_diacritics as _sd
+
+
+def _c(pattern: str) -> re.Pattern:
+    return re.compile(_sd(pattern), re.IGNORECASE)
+
+
 _KEYWORD_PATTERNS: list[tuple[re.Pattern, str]] = [
-    # ATTACK — must come first to avoid false matches
-    (re.compile(
-        r"(atakuj[ęe]?|uderz[ae][jm]?|strzelam|rzucam zaklęcie|czar|walczę|walcz|atak)",
-        re.IGNORECASE
-    ), "attack"),
-    # TALK
-    (re.compile(
-        r"(mówię|mów|pytam|rozmawiam|porozmawiać|pytaj|zagaduję|rozmawiaj|powiedz|podchodzę)",
-        re.IGNORECASE
-    ), "talk"),
-    # MOVE
-    (re.compile(
-        r"(idę|biegnę|wchodzę|wychodzę|przechodzę|przemieszczam|poruszam|ruszam|idź|biegnij)",
-        re.IGNORECASE
-    ), "move"),
-    # FLEE
-    (re.compile(
-        r"(uciekam|uciekaj|wycofuję|odwrót|cofam się)",
-        re.IGNORECASE
-    ), "flee"),
-    # USE_ITEM
-    (re.compile(
-        # #1181: anchored drink/use verbs — bare "pię" fragment removed, so
-        # "pięścią"/"pięknie" no longer false-match use_item (piję/wypiję/pij cover drinking).
-        r"(używam|piję|wypiję|\bpij\b|zakładam|zakladam|zużywam|aktywuję)",
-        re.IGNORECASE
-    ), "use_item"),
-    # SKILL_TEST
-    (re.compile(
-        r"(sprawdzam|rzucam test|test umiejętności|próbuję|staram się)",
-        re.IGNORECASE
-    ), "skill_test"),
-    # EXPLORE
-    (re.compile(
-        r"(odkrywam|szukam|przeszukuję|badam|przetrząsam|oglą|patrzę)",
-        re.IGNORECASE
-    ), "explore"),
+    (_c(r"(atakuj[ęe]?|uderz[ae][jm]?|strzelam|rzucam zaklęcie|czar|walczę|walcz|atak)"), "attack"),
+    (_c(r"(mówię|mów|pytam|rozmawiam|porozmawiać|pytaj|zagaduję|rozmawiaj|powiedz|podchodzę)"), "talk"),
+    (_c(r"(idę|biegnę|wchodzę|wychodzę|przechodzę|przemieszczam|poruszam|ruszam|idź|biegnij)"), "move"),
+    (_c(r"(uciekam|uciekaj|wycofuję|odwrót|cofam się)"), "flee"),
+    # #1181: anchored drink/use verbs — bare "pię" fragment removed, so
+    # "pięścią"/"pięknie" no longer false-match use_item.
+    (_c(r"(używam|piję|wypiję|\bpij\b|zakładam|zużywam|aktywuję)"), "use_item"),
+    (_c(r"(sprawdzam|rzucam test|test umiejętności|próbuję|staram się)"), "skill_test"),
+    (_c(r"(odkrywam|szukam|przeszukuję|badam|przetrząsam|oglą|patrzę)"), "explore"),
 ]
 
 
@@ -77,10 +58,11 @@ def parse_intent(player_input: str, campaign_id: int | None = None) -> PlayerInt
     """
     text = (player_input or "").strip()
     raw_input = text
+    norm = _sd(text)  # #1420 — dopasowanie bez polskich znaków
 
     # Stage 1: keyword match
     for pattern, action_type in _KEYWORD_PATTERNS:
-        if pattern.search(text):
+        if pattern.search(norm):
             return PlayerIntent(
                 action_type=action_type,
                 target=None,  # Target extraction from keywords TBD
