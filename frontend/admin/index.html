@@ -148,6 +148,7 @@
       { key: 'system',     label: 'System',     ico: '⎔' },
       { key: 'analytics', label: 'Statystyki',  ico: '📊' },
       { key: 'showcase',  label: 'Wizytówka',   ico: '🪟' },
+      { key: 'manual',    label: 'Instrukcja',  ico: '🧭' },
     ];
     const KEYS = SECTIONS.map(s => s.key);
     const LABELS = Object.fromEntries(SECTIONS.map(s => [s.key, s.label]));
@@ -222,7 +223,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=112`);
+        const mod = await import(`./sections/${key}.js?v=113`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)
