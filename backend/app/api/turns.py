@@ -2701,13 +2701,45 @@ _DIG_INTENT_RE = re.compile(
 # #1413 Model C — narracyjna przeprawa łodzią. Wymaga CZASOWNIKA (szukam/buduję/…)
 # przy rzeczowniku łódź/tratwa/prom/czółno, albo jawnej frazy „przeprawiam się …".
 # Sam rzeczownik (opis „widzę łódź") NIE triggeruje — jak person-guard w #1394.
+# #1418 — szeroki intent przeprawy przez rzekę: czasownik przeprawy + rzeczownik wody,
+# ALBO szukam/buduję + przeprawa/bród/łódź/tratwa/most, ALBO „na drugą stronę/brzeg".
 _BOAT_INTENT_RE = re.compile(
-    r"(szukam|buduj\w*|sklec\w*|klec\w*|robi\w*|majstruj\w*|potrzebuj\w*|znajd\w*|"
-    r"chc\w*\s+\w*\s*(zbudowa|znale|przepraw)|wsiadam|odbijam)\b[^.!?]{0,40}"
-    r"(łod(zi|zia|ką|ź|ka)\w*|łódk\w*|tratw\w*|prom\w*|czółn\w*)"
-    r"|przepraw\w*\s+(si\w+\s+)?(łodzi\w*|tratw\w*|przez\s+rzek\w*|na\s+drugi\s+brzeg|na\s+drug\w+\s+stron)",
+    r"(przekracz\w*|przechodz\w*|przepraw\w*|przebywa\w*|brn[ieę]\w*|brodz\w*|forsuj\w*|"
+    r"pokonuj\w*|płyn[ieę]\w*|przepływa\w*|przeprawia\w*)\b[^.!?]{0,30}"
+    r"(rzek\w*|wod[aeęy]\w*|nurt\w*|brzeg\w*|bród|brod\w*|łod(zi|zia|ką|ź|ka)\w*|łódk\w*|"
+    r"tratw\w*|prom\w*|czółn\w*|na\s+drug\w+\s+(stron|brzeg))"
+    r"|(szukam|znajd\w*|buduj\w*|sklec\w*|klec\w*|majstruj\w*|robi\w*|potrzebuj\w*|wsiadam|odbijam)\b[^.!?]{0,45}"
+    r"(przepraw\w*|bród|brod\w*|łod(zi|zia|ką|ź|ka)\w*|łódk\w*|tratw\w*|prom\w*|czółn\w*|most\w*|"
+    r"miejsc\w*\s+\w*\s*(przej|przepraw|przekrocz))"
+    r"|na\s+drug\w+\s+(brzeg|stron)",
     re.IGNORECASE,
 )
+
+
+def _river_cross_target(conn: sqlite3.Connection, cq: int, cr: int):
+    """#1418 — hex na PRZECIWNYM brzegu rzeki: sąsiad hexa-rzeki obok gracza, który jest
+    lądem, NIE jest bieżącym hexem ani jego sąsiadem (czyli druga strona). None gdy brak."""
+    from app.services.hex_travel_service import hex_neighbors
+    _W = ("river", "water", "lake", "sea", "ocean")
+
+    def ht(q, r):
+        row = conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
+            (q, r),
+        ).fetchone()
+        return row["hex_type"] if row else None
+
+    near = set(hex_neighbors(cq, cr))
+    for (rq, rr) in hex_neighbors(cq, cr):
+        if ht(rq, rr) != "river":
+            continue
+        for (oq, orr) in hex_neighbors(rq, rr):
+            if (oq, orr) == (cq, cr) or (oq, orr) in near:
+                continue  # tylko DRUGI brzeg (nie ta sama strona)
+            t = ht(oq, orr)
+            if t and t not in _W and t != "brod":
+                return (oq, orr)
+    return None
 
 
 def _boat_narrate(conn: sqlite3.Connection, campaign_id: int, character_id: int,
@@ -2744,11 +2776,11 @@ def _boat_narrate(conn: sqlite3.Connection, campaign_id: int, character_id: int,
 
 def _maybe_boat_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
                          text: str) -> dict | None:
-    """#1413 Model C — gracz na hexie sąsiadującym z rzeką szuka/buduje łódź lub deklaruje
-    przeprawę → test survival (WIS) DC 12; sukces → flaga `river_crossing` (jednorazowa
-    przeprawa przez wodę w następnej podróży) + proza LLM; porażka → proza LLM bez flagi.
-    Łódź NIE jest przedmiotem — czysto narracyjno/silnikowa. Gdy nie ma wody obok → None
-    (normalna narracja)."""
+    """#1413/#1418 Model C — gracz na hexie przy rzece deklaruje przeprawę (przekraczam/
+    przeprawiam się/szukam brodu/buduję tratwę/łódź, „na drugi brzeg") → test przetrwania
+    (WIS) DC 12. **SUKCES → FAKTYCZNIE PRZENOSI PIN na przeciwny brzeg** (set_position) +
+    przemoczony + czas. Porażka → przemoczony, zostajesz na brzegu. Gdy nie ma wody obok →
+    None (normalna narracja). Wcześniej narracja opisywała przeprawę, ale pin nie ruszał."""
     if not _BOAT_INTENT_RE.search(text or ""):
         return None
     gs_row = conn.execute(
@@ -2770,6 +2802,8 @@ def _maybe_boat_shortcut(conn: sqlite3.Connection, campaign_id: int, character: 
     if not river_adj:
         return None  # brak wody obok — niech LLM narruje normalnie
 
+    target = _river_cross_target(conn, cq, cr)  # hex na drugim brzegu (None gdy brak)
+
     import random as _rnd
     from app.services.skill_service import calc_skill_modifier_info
     sheet = json.loads(character["sheet_json"] or "{}")
@@ -2779,26 +2813,62 @@ def _maybe_boat_shortcut(conn: sqlite3.Connection, campaign_id: int, character: 
     nat1, nat20 = d20 == 1, d20 == 20
     total = d20 + _mod
     _DC = 12
-    success = (not nat1) and (nat20 or total >= _DC)
+    success = (not nat1) and (nat20 or total >= _DC) and target is not None
 
-    prose = _boat_narrate(conn, campaign_id, int(character["id"]), success)
+    # SUKCES: przenieś pin na drugi brzeg (+ przemoczony, + czas). PORAŻKA / brak brzegu:
+    # zostajesz, przemoczony (chlupiesz w wodzie).
+    if success and target is not None:
+        from app.services.location_state_service import set_position
+        set_position(conn, campaign_id, current_hex={"q": target[0], "r": target[1]},
+                     clear_location_id=True, clear_local_hex=True, character_id=int(character["id"]))
+        conn.execute(
+            "INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered) VALUES (?,?,?,1) "
+            "ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1",
+            (campaign_id, target[0], target[1]),
+        )
+        conn.commit()
+        try:
+            from app.services.clock_service import advance_clock
+            advance_clock(campaign_id, 1.5, "river_crossing", conn=conn)
+            conn.commit()
+        except Exception:
+            pass
+    # przemoczony w obu przypadkach (moczysz się w nurcie) — po commicie pozycji (#1390 lock)
+    try:
+        from app.services.combat_service import add_condition_to_character
+        add_condition_to_character(conn, int(character["id"]), campaign_id, "przemoczony")
+        conn.commit()
+    except Exception as _cw:
+        logger.warning("river_cross_wet_failed", error=str(_cw))
+
     if success:
-        sf["river_crossing"] = {"available": True, "from_hex": {"q": cq, "r": cr}}
-        conn.execute("UPDATE game_sessions SET session_flags=? WHERE id=?",
-                     (json.dumps(sf, ensure_ascii=False), gs_row["id"]))
-    _tag = (f" [Przeprawa — test przetrwania: k20 {d20}{'+' if _mod >= 0 else ''}{_mod} = {total} "
-            f"vs {_DC} → {'sukces' if success else 'porażka'}.]")
-    _tn = conn.execute(
+        _prose = ("Brniesz w lodowaty nurt, walcząc z prądem — i wychodzisz przemoczony na "
+                  "drugim brzegu. Rzeka została za tobą.")
+    elif target is None:
+        _prose = ("Brzeg jest stromy, a nurt zbyt rwący, by przejść tędy. Musisz poszukać "
+                  "mostu albo brodu.")
+    else:
+        _prose = ("Nurt zwala cię z nóg i spycha z powrotem na brzeg. Przemoczony i bez "
+                  "tchu rezygnujesz z tej przeprawy.")
+    _outcome = ("naturalny 20" if nat20 else "naturalny 1" if nat1
+                else "sukces" if success else "porażka")
+    _rzut = (f"[Rzut: Przeprawa (Przetrwanie) — {d20} {'+' if _mod >= 0 else '-'}{abs(_mod)} "
+             f"= {total} vs {_DC} — {_outcome}]")
+    # tura 1: dymek gracza; tura 2: karta rzutu + proza skutku
+    _log = create_turn_log(conn=conn, campaign_id=campaign_id, character_id=int(character["id"]),
+                           user_text=text, assistant_text=None, route="river_cross")
+    _tn2 = conn.execute(
         "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?", (campaign_id,)
     ).fetchone()[0]
     conn.execute(
         "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at) "
         "VALUES (?,?,?,?,?,?,datetime('now'))",
-        (campaign_id, int(character["id"]), int(_tn), text,
-         json.dumps({"narrative": prose + _tag}, ensure_ascii=False), "boat"),
+        (campaign_id, int(character["id"]), int(_tn2), _rzut,
+         json.dumps({"narrative": _prose}, ensure_ascii=False), "river_cross"),
     )
     conn.commit()
-    return {"prose": prose + _tag, "route": "boat", "turn_number": int(_tn), "boat_found": success}
+    return {"prose": _prose, "route": "river_cross", "turn_number": int(_log["turn_number"]),
+            "crossed": success, "moved_to": ({"q": target[0], "r": target[1]} if success and target else None)}
 
 
 def _maybe_herb_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,

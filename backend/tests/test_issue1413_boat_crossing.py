@@ -23,6 +23,12 @@ from app.api.turns import _BOAT_INTENT_RE
     "przeprawiam się na drugi brzeg",
     "potrzebuję łodzi żeby przejść",
     "wsiadam do łódki",
+    # #1418 — naturalne frazy przeprawy (wcześniej gubione → flavor bez ruchu pina)
+    "przekraczam rzeke",
+    "szukam miejsca w który moge przekroczyc rzeke na druga strone",
+    "buduję prowizoryczną przeprawę",
+    "brodzę przez rzekę",
+    "idę na drugą stronę",
 ])
 def test_boat_intent_matches(text):
     assert _BOAT_INTENT_RE.search(text) is not None, f"powinno złapać: {text}"
