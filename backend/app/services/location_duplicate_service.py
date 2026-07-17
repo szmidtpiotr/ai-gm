@@ -98,7 +98,11 @@ def _fetch(conn: sqlite3.Connection) -> list[dict]:
 def _duplicate_groups(records: list[dict], ignored: set[tuple[str, str]], hex_keys: set[str]) -> list[dict]:
     by_norm: dict[str, list[dict]] = {}
     for rec in records:
-        if rec["norm"]:
+        # #1407: only ACTIVE rows count as live duplicates. Soft-deleted rows
+        # (is_active=0) already left the Lokacje tab — surfacing them as
+        # "duplicates" here confused admins ("deleted it, why is it still a dup?").
+        # They belong solely in the 💤 Nieaktywne garbage bucket (hard-purge).
+        if rec["norm"] and rec["is_active"]:
             by_norm.setdefault(rec["norm"], []).append(rec)
 
     def _public(rec: dict) -> dict:
@@ -184,7 +188,8 @@ def count_location_duplicates(conn: sqlite3.Connection) -> int:
     conn.row_factory = sqlite3.Row
     ignored = _ignored_pairs(conn)
     by_norm: dict[str, list[str]] = {}
-    for r in conn.execute(f"SELECT key, label FROM {_TABLE}"):
+    # #1407: badge counts ACTIVE duplicates only (inactive rows aren't live dups).
+    for r in conn.execute(f"SELECT key, label FROM {_TABLE} WHERE is_active = 1"):
         n = normalize_label(r["label"])
         if n:
             by_norm.setdefault(n, []).append(r["key"])

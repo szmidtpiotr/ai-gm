@@ -131,6 +131,21 @@ def test_ignore_hides_group_from_next_scan(conn):
     assert not [g for g in report["groups"] if g["match"] == "exact"]
 
 
+def test_inactive_rows_excluded_from_dup_groups_and_count(conn):
+    """#1407: soft-deleted rows aren't live duplicates — only in inactive bucket."""
+    _add(conn, "active_1", "Create Test Location")
+    _add(conn, "dead_1", "Create Test Location", is_active=0)
+    _add(conn, "dead_2", "Create Test Location", is_active=0)
+
+    report = svc.scan_location_duplicates(conn)
+    # 1 active + 2 inactive same label → NOT a duplicate group (only 1 active)
+    assert not [g for g in report["groups"] if g["match"] == "exact"]
+    assert report["excess"] == 0
+    # but the two dead rows show up in the inactive garbage bucket
+    dead_keys = {r["key"] for r in report["garbage"]["inactive"]}
+    assert {"dead_1", "dead_2"} <= dead_keys
+
+
 def test_merge_rejects_keep_in_remove(conn):
     _add(conn, "x", "X")
     with pytest.raises(ValueError):

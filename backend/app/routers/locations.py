@@ -489,14 +489,14 @@ async def delete_location(
     _admin: None = Depends(require_admin_token),
 ):
     """
-    Soft-delete lokalizacji (is_active = 0).
+    Usuwa lokalizację.
 
-    Nie usuwa fizycznie - tylko deaktywuje.
-    Blokowane jeśli lokalizacja ma aktywne dzieci (chyba że force=true, wtedy deaktywujemy też dzieci).
-
-    force=true also hard-deletes a row that was already soft-deleted (is_active=0),
-    so admins can purge ghost rows the validator left behind. Session pointers
-    that referenced the row are cleared first to avoid FK orphans.
+    - Bez `force`: bezpieczny soft-delete (is_active=0). Blokowane 422, jeśli ma
+      aktywne podlokalizacje; 404, jeśli już nieaktywna.
+    - `force=true`: TWARDE usunięcie (#1407) — kasuje wiersz i całe poddrzewo z
+      DB (nie tylko is_active=0), czyszcząc wskaźniki sesji. Wyjątek: wiersz, na
+      który wskazuje hex świata (world_hexes.location_key — PIOTR-OWNED mapa),
+      jest tylko deaktywowany, nie kasowany, by nie osierocić mapy.
     """
     conn = get_db_connection()
     try:
@@ -519,47 +519,72 @@ async def delete_location(
         location_id = location["id"]
         already_inactive = not location["is_active"]
 
-        if already_inactive:
-            if not force:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Lokalizacja '{key}' jest już nieaktywna (use force=true to purge)"
+        # ── force=true → HARD PURGE (#1407) ──────────────────────────────────
+        # Root cause of "deleted from Lokacje but still in Duplikaty": the old
+        # delete only soft-deleted active rows (is_active=0), so they lingered in
+        # the DB and the duplicate detector (scans all rows) kept showing them as
+        # "(nieaktywna)" duplicates. Admin delete is explicit intent to remove —
+        # force purges the row + its whole subtree for real. Never touches a row a
+        # world hex points at (world_hexes.location_key = PIOTR-OWNED map): those
+        # fall back to soft-delete so the map is never orphaned.
+        if force:
+            subtree = conn.execute(
+                """
+                WITH RECURSIVE sub(id) AS (
+                    SELECT id FROM game_locations WHERE id = ?
+                    UNION
+                    SELECT g.id FROM game_locations g JOIN sub ON g.parent_id = sub.id
                 )
-            # Hard purge: clear any session pointer that references this row, then DELETE.
-            conn.execute(
-                "UPDATE game_sessions SET current_location_id = NULL WHERE current_location_id = ?",
+                SELECT gl.id AS id, gl.key AS key FROM game_locations gl
+                WHERE gl.id IN (SELECT id FROM sub)
+                """,
                 (location_id,)
-            )
-            conn.execute("DELETE FROM game_locations WHERE id = ?", (location_id,))
+            ).fetchall()
+            hex_locked = {
+                r[0] for r in conn.execute(
+                    "SELECT location_key FROM world_hexes WHERE location_key IS NOT NULL"
+                )
+            }
+            purge_ids = [r["id"] for r in subtree if r["key"] not in hex_locked]
+            soft_ids = [r["id"] for r in subtree if r["key"] in hex_locked]
+
+            if purge_ids:
+                ph = ",".join("?" * len(purge_ids))
+                conn.execute(
+                    f"UPDATE game_sessions SET current_location_id = NULL WHERE current_location_id IN ({ph})",
+                    purge_ids,
+                )
+                conn.execute(f"DELETE FROM game_locations WHERE id IN ({ph})", purge_ids)
+            for sid in soft_ids:  # hex-linked → can't purge, deactivate instead
+                conn.execute(
+                    "UPDATE game_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (sid,),
+                )
             conn.commit()
             return None
 
-        # Sprawdź czy ma aktywne dzieci
+        # ── no force → safe soft-delete (default) ────────────────────────────
+        if already_inactive:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Lokalizacja '{key}' jest już nieaktywna (use force=true to purge)"
+            )
+
         children = conn.execute(
             "SELECT key FROM game_locations WHERE parent_id = ? AND is_active = 1",
             (location_id,)
         ).fetchall()
-
         if children:
-            if not force:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Nie można usunąć lokalizacji '{key}' - ma aktywne podlokalizacje: {[c['key'] for c in children]}. Użyj force=true aby usunąć razem z dziećmi."
-                )
-            # Force=true: deaktywujemy też wszystkie dzieci
-            for child in children:
-                conn.execute(
-                    "UPDATE game_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
-                    (child["key"],)
-                )
+            raise HTTPException(
+                status_code=422,
+                detail=f"Nie można usunąć lokalizacji '{key}' - ma aktywne podlokalizacje: {[c['key'] for c in children]}. Użyj force=true aby usunąć razem z dziećmi."
+            )
 
-        # Soft delete
         conn.execute(
             "UPDATE game_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
             (key,)
         )
         conn.commit()
-
         return None
     finally:
         conn.close()
