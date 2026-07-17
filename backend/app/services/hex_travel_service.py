@@ -207,8 +207,9 @@ NIGHT_ENCOUNTER_MULT = 1.5  # encounter chance multiplier when night_march=True
 # #1412 — „porwanie przez nurt": przeprawa przez BRÓD to test Obrony (SIŁA) na rzut.
 # Numbers Policy — wartości STARTOWE, tunable. Za każdy przebyty hex 'brod' 1 rzut.
 FORD_CROSS_DC = 12            # próg testu (Medium); d20 + SIŁA_mod ≥ DC = czysta przeprawa
-FORD_SWEEP_MARGIN = 5        # pudło o ≥5 (albo Nat 1) → porwanie przez nurt (obrażenia)
-FORD_SWEEP_DAMAGE_DIE = 6    # 1d6 obrażeń przy porwaniu
+FORD_SWEEP_MARGIN = 5        # pudło o ≥5 (albo Nat 1) → porwanie przez nurt
+FORD_SWEEP_DAMAGE_DIE = 4    # 1d4 obrażeń przy porwaniu (potłuczenie o kamienie)
+FORD_SWEEP_DISTANCE_DIE = 4  # #1417 — nurt niesie 1d4 hexów wzdłuż rzeki i wyrzuca na brzeg
 
 # #1390 — częstotliwość spotkań w podróży (Numbers Policy — Sandbox-tunable STARTING).
 # Skumulowana szansa spotkania na CAŁĄ podróż jest capowana: bez tego długa trasa
@@ -2314,6 +2315,52 @@ def maybe_narrate_arrival(
         logger.warning("arrival_narration_failed", error=str(_arr_err), campaign_id=campaign_id)
 
 
+def _sweep_along_river(conn: sqlite3.Connection, start: tuple[int, int], distance: int):
+    """#1417 — nurt niesie bohatera `distance` hexów wzdłuż rzeki od hexa brodu, po czym
+    wyrzuca na LOSOWY przyległy przechodni brzeg. Śledzi linię rzeki (preferuje kontynuację
+    kierunku, nie zawraca). Zwraca (q, r) brzegu albo None (brak rzeki / brak lądu)."""
+    _WATER = ("river", "water", "lake", "sea", "ocean")
+
+    def _htype(q, r):
+        row = conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
+            (q, r),
+        ).fetchone()
+        return row["hex_type"] if row else None
+
+    def _river_nb(q, r):
+        return [(nq, nr) for (nq, nr) in hex_neighbors(q, r) if _htype(nq, nr) == "river"]
+
+    def _land_nb(q, r):
+        out = []
+        for (nq, nr) in hex_neighbors(q, r):
+            t = _htype(nq, nr)
+            if t and t not in _WATER and t != "brod":
+                out.append((nq, nr))
+        return out
+
+    riv = _river_nb(*start)
+    if not riv:
+        return None
+    prev = start
+    cur = random.choice(riv)
+    last_dir = (cur[0] - start[0], cur[1] - start[1])
+    for _ in range(max(0, distance - 1)):
+        cands = [h for h in _river_nb(*cur) if h != prev]
+        if not cands:
+            break
+        cands.sort(key=lambda h: 0 if (h[0] - cur[0], h[1] - cur[1]) == last_dir else 1)
+        nxt = cands[0]
+        last_dir = (nxt[0] - cur[0], nxt[1] - cur[1])
+        prev, cur = cur, nxt
+    # wyrzut na losowy brzeg: spróbuj końcowy hex rzeki, potem cofaj wzdłuż trasy
+    for h in (cur, prev, start):
+        lands = _land_nb(*h)
+        if lands:
+            return random.choice(lands)
+    return None
+
+
 def maybe_ford_hazard(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -2359,6 +2406,7 @@ def maybe_ford_hazard(
         total_dmg = 0
         swept = False
         wet = False
+        swept_hex: tuple[int, int] | None = None
         for (q, r) in ford_hexes:
             d20 = random.randint(1, 20)
             nat1, nat20 = d20 == 1, d20 == 20
@@ -2374,6 +2422,7 @@ def maybe_ford_hazard(
                     ev["damage"] = dmg
                     total_dmg += dmg
                     swept = True
+                    swept_hex = (q, r)
             events.append(ev)
 
         # skutki: obrażenia + przemoczony
@@ -2384,18 +2433,55 @@ def maybe_ford_hazard(
             _sh["current_hp"] = max(0, _cur - total_dmg)
             conn.execute("UPDATE characters SET sheet_json=? WHERE id=?",
                          (json.dumps(_sh, ensure_ascii=False), character_id))
+
+        # #1417 — PORWANIE: nurt niesie bohatera 1d4 hexów wzdłuż rzeki i wyrzuca na LOSOWY
+        # przechodni brzeg → PRZENIESIENIE PINA (bardziej narracyjne niż same obrażenia).
+        displaced_to = None
+        swept_distance = 0
+        if swept and swept_hex is not None:
+            swept_distance = random.randint(1, FORD_SWEEP_DISTANCE_DIE)
+            bank = _sweep_along_river(conn, swept_hex, swept_distance)
+            if bank is not None:
+                from app.services.location_state_service import set_position
+                set_position(conn, campaign_id, current_hex={"q": bank[0], "r": bank[1]},
+                             clear_location_id=True, clear_local_hex=True, character_id=character_id)
+                conn.execute(
+                    "INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered) VALUES (?,?,?,1) "
+                    "ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1",
+                    (campaign_id, bank[0], bank[1]),
+                )
+                displaced_to = {"q": bank[0], "r": bank[1]}
+                # pin/travel-result kieruj na miejsce wyrzucenia (front animuje tam)
+                result["arrived_hex"] = {"q": bank[0], "r": bank[1]}
+                _bt = conn.execute(
+                    "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
+                    (bank[0], bank[1]),
+                ).fetchone()
+                result["hex_data"] = {"q": bank[0], "r": bank[1],
+                                      "hex_type": (_bt["hex_type"] if _bt else "plains")}
+        conn.commit()  # utrwal HP + przeniesienie pina PRZED add_condition (nested conn →
+        # inaczej „database is locked" gubił zapis pozycji, klasa #1390).
+
         if wet:
             try:
                 from app.services.combat_service import add_condition_to_character
                 add_condition_to_character(conn, character_id, campaign_id, "przemoczony")
+                conn.commit()
             except Exception as _cond_err:
                 logger.warning("ford_wet_condition_failed", error=str(_cond_err))
-        conn.commit()
 
-        result["ford_hazard"] = {"events": events, "damage": total_dmg, "swept": swept, "wet": wet}
+        result["ford_hazard"] = {
+            "events": events, "damage": total_dmg, "swept": swept, "wet": wet,
+            "displaced_to": displaced_to, "swept_distance": swept_distance,
+        }
 
         # narracja mechaniczna (bez LLM) — proza skutku
-        if swept:
+        if swept and displaced_to is not None:
+            _msg = (f"Rwący nurt zrywa ci grunt spod nóg i porywa cię {swept_distance} "
+                    f"{'pole' if swept_distance == 1 else 'pola' if swept_distance < 5 else 'pól'} "
+                    f"w dół rzeki (−{total_dmg} HP). Wyrzuca cię wreszcie na brzeg — przemoczonego "
+                    f"i posiniaczonego, z dala od miejsca, gdzie wszedłeś do wody.")
+        elif swept:
             _msg = (f"Rwący nurt brodu porywa cię i ciska o kamienie (−{total_dmg} HP). "
                     f"Wygrzebujesz się na brzeg przemoczony i posiniaczony.")
         elif wet:
