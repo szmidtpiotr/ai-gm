@@ -734,11 +734,27 @@ export default function Game() {
   // #1291 WAIT-4 — dodaj chip Czekaj gdy safe_for_rest i nie ma walki (deterministyczny,
   // nie pochodzi z LLM — zawsze obecny w bezpiecznej lokacji).
   const shownChips = useMemo(() => {
+    let base = baseChips;
+    // #1415 — gdy backend WYMAGA obozu (REST:long wyłączony) a BUILD_CAMP dostępny,
+    // pokaż „Rozbij obóz" PRZED „Odpocznij". Rząd chipów przewija się poziomo, więc
+    // obóz jako ostatni (kolejność backendu) bywał poza ekranem — gracz widział tylko
+    // wyłączony „Odpocznij" i utykał („brak przycisku rozbij obóz").
+    const restDisabled = base.some((c) => (c.action ?? c.text) === "REST:long" && c.enabled === false);
+    const campEnabled = base.some((c) => (c.action ?? c.text) === "BUILD_CAMP" && c.enabled !== false);
+    if (restDisabled && campEnabled) {
+      const isCamp = (c: Chip) => (c.action ?? c.text) === "BUILD_CAMP";
+      const isRest = (c: Chip) => (c.action ?? c.text) === "REST:long";
+      base = [
+        ...base.filter(isCamp),
+        ...base.filter((c) => !isCamp(c) && !isRest(c)),
+        ...base.filter(isRest),
+      ];
+    }
     const safeHere = character.data?.safe_for_rest === true && !activeCombat;
-    if (!safeHere) return baseChips;
-    const hasWait = baseChips.some((c) => (c.action ?? c.text ?? "").startsWith("WAIT"));
-    if (hasWait) return baseChips;
-    return [...baseChips, { label: "⏳ Czekaj…", text: "WAIT:open", action: "WAIT:open", enabled: true }];
+    if (!safeHere) return base;
+    const hasWait = base.some((c) => (c.action ?? c.text ?? "").startsWith("WAIT"));
+    if (hasWait) return base;
+    return [...base, { label: "⏳ Czekaj…", text: "WAIT:open", action: "WAIT:open", enabled: true }];
   }, [baseChips, character.data?.safe_for_rest, activeCombat]);
   const vitals = useMemo(
     () => readVitals(character.data?.sheet_json),
