@@ -41,9 +41,16 @@ def try_place_location_on_hex(
     if rng.random() > spawn_chance:
         return None
 
+    # #1408: only TOP-LEVEL locations may become standalone overworld POIs.
+    # `location_type='sub'` rows are CHILDREN of a hub (e.g. "Brzezino: Święta
+    # Polanka" under the village Brzezino) and belong to the parent's LOCAL map,
+    # not the world map. Without this guard a floating sub with a matching
+    # terrain_tag (a forest shrine) was stamped onto a random overworld forest
+    # hex far from its parent, showing a settlement-style POI label in the wild.
     candidates = conn.execute(
         "SELECT key, terrain_tags FROM game_locations"
         " WHERE approved=1 AND placement='floating' AND is_active=1"
+        " AND COALESCE(location_type, '') != 'sub'"
         " AND (region = ? OR region IS NULL)",
         (region,),
     ).fetchall()

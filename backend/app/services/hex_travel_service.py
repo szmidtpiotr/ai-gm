@@ -1097,6 +1097,16 @@ def resolve_chain_travel(
                 except Exception:
                     _hex_location_key = None
 
+            # #1408: keep the returned `hex_data` snapshot in sync with a location
+            # placed/replaced JUST-IN-TIME on arrival. `hexes` was loaded at travel
+            # start (before this placement), so its arrived-hex row still carries the
+            # stale `location_key=None` — and the returned result["hex_data"] is that
+            # same snapshot (see final return). Without this, maybe_narrate_arrival
+            # sees no location_key and silently skips the LLM arrival scene, so moving
+            # onto a freshly-named hex produced only the green travel pill, no prose.
+            if _hex_location_key:
+                arrived_data["location_key"] = _hex_location_key
+
             # Resolve location_id from key (if any)
             _loc_id: int | None = None
             if _hex_location_key:
@@ -2164,7 +2174,15 @@ def maybe_narrate_arrival(
         return  # tylko nazwane lokacje — dzicz zostaje przy zielonym pillu
     if result.get("encounter"):
         return
-    label = hd.get("label") or str(loc_key)
+    # #1408: an unnamed wilderness hex carries no `label`; fall back to the linked
+    # location's human label (not its raw key) so the arrival prose reads well.
+    label = hd.get("label")
+    if not label:
+        _lbl_row = conn.execute(
+            "SELECT label FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
+            (loc_key,),
+        ).fetchone()
+        label = (_lbl_row["label"] if _lbl_row and _lbl_row["label"] else None) or str(loc_key)
     try:
         from app.services.user_llm_settings import get_user_llm_settings_full
         from app.services.llm_service import generate_chat
