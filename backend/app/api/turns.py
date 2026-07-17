@@ -9051,11 +9051,31 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             "SELECT hex_type, label, map_color, map_icon FROM hex_type_config WHERE is_active = 1"
         ).fetchall()}
 
+        # #1193 — aktywne wydarzenie regionalne (żywy świat): badge + etykieta na
+        # mapie ŻAR. Świat komunikuje event także narracją i cenami; tu wizualny
+        # znacznik. Defensywne — brak eventu/tabel → None.
+        active_event = None
+        try:
+            from app.services import world_event_service as _wes
+            from app.services.reputation_service import resolve_region as _rr
+            _region = _rr(conn, int(campaign_id))
+            _ev = _wes.get_active_event(conn, _region)
+            if _ev:
+                active_event = {
+                    "type": _ev.get("type"),
+                    "label": _ev.get("label"),
+                    "badge": (_ev.get("modifiers") or {}).get("badge"),
+                    "region": _ev.get("region"),
+                }
+        except Exception:
+            active_event = None
+
         return {
             "hexes": result_hexes,
             "teleport_connections": visible_teleports,
             "current_hex": current_hex,
             "hex_types": hex_types,
+            "active_event": active_event,
         }
     finally:
         conn.close()

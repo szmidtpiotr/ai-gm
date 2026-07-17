@@ -372,6 +372,20 @@ export function WorldMap({
               {locationLabel}
             </div>
           </div>
+          {/* #1193 — znacznik aktywnego wydarzenia regionalnego (żywy świat) */}
+          {map.data?.active_event && (
+            <div
+              title={map.data.active_event.label ?? "Wydarzenie w regionie"}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-line-ember bg-ember/[0.08] px-2.5 font-ui text-label text-ember-glow"
+            >
+              <span className="text-body leading-none">
+                {map.data.active_event.badge ?? "✦"}
+              </span>
+              <span className="hidden truncate sm:inline">
+                {map.data.active_event.label}
+              </span>
+            </div>
+          )}
           {localAvailable && onOpenLocal && (
             <button
               onClick={onOpenLocal}

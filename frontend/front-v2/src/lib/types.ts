@@ -311,6 +311,13 @@ export interface WorldMapResponse {
   teleport_connections: unknown[];
   current_hex: { q: number; r: number } | null;
   hex_types: Record<string, HexTypeCfg>;
+  /** #1193 — aktywne wydarzenie regionalne (żywy świat); null gdy brak. */
+  active_event?: {
+    type: string | null;
+    label: string | null;
+    badge: string | null;
+    region: string | null;
+  } | null;
 }
 
 // Odpowiedź POST /campaigns/{id}/travel (podzbiór — cinematyka + advance).

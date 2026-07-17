@@ -36,7 +36,40 @@ w zakładce <b>Do zatwierdzenia</b> sekcji <b>Mapa</b>.</p>
   { ico: '⛺', label: 'Kampanie',  chapters: [{ id: 'kampanie',  title: 'Monitor kampanii i Plan GM', body: STUB }] },
   { ico: '🧍', label: 'Bohaterowie', chapters: [{ id: 'bohaterowie', title: 'Zarządzanie bohaterami', body: STUB }] },
   { ico: '⚔', label: 'Przedmioty', chapters: [{ id: 'przedmioty', title: 'Bronie, przedmioty i tabele łupów', body: STUB }] },
-  { ico: '⊕', label: 'Świat',     chapters: [{ id: 'swiat',     title: 'NPC, wrogowie i zasady świata', body: STUB }] },
+  {
+    ico: '⊕', label: 'Świat',
+    chapters: [
+      { id: 'swiat', title: 'NPC, wrogowie i zasady świata', body: STUB },
+      {
+        id: 'wydarzenia',
+        title: 'Zakładka Wydarzenia (żywy świat)',
+        body: `
+<p>W sekcji <b>Świat</b> zakładka <b>Wydarzenia</b> steruje „żywym światem" — region co jakiś czas
+dostaje wydarzenie, które realnie zmienia grę, nawet gdy gracz nic nie robi:</p>
+<ul>
+  <li><b>🎪 Jarmark</b> — ceny w sklepach niższe (−20%), gwar w osadzie.</li>
+  <li><b>☠ Zaraza</b> — mikstury droższe (+50%), a odpoczynek w osadzie regionu grozi
+      chorobą (bohater rzuca na odporność; przy porażce łapie kondycję <b>Chory</b> — kara do testów,
+      leczona u zielarza/uzdrowiciela lub miksturą).</li>
+  <li><b>⚔ Rajdy bandytów</b> — częstsze spotkania na traktach regionu, ale lepszy łup z bandytów.</li>
+  <li><b>❄ Surowa zima / 🌵 Susza</b> — podróż między osadami trwa dłużej.</li>
+</ul>
+<p>Gracz dowiaduje się o wydarzeniu z <b>narracji</b>, <b>cen w sklepie</b> i <b>znacznika na mapie</b>
+(ŻAR) — nie ma osobnego ekranu.</p>
+<h4>Sterowanie</h4>
+<p>Na dole zakładki: wybierz <b>region</b> i <b>szablon</b>, opcjonalnie liczbę dni, i kliknij
+<b>+ Dodaj wydarzenie</b>. Przycisk <b>🎲 Wylosuj</b> dobiera wydarzenie losowo dla regionu.
+Aktywne wydarzenie kończysz przyciskiem <b>⏹</b> w wierszu. W jednym regionie może trwać
+najwyżej jedno wydarzenie naraz.</p>
+<h4>Automatyczne losowanie</h4>
+<p>Przełącznik u góry (<b>Automatyczne losowanie przy zmianie dnia gry</b>) jest domyślnie
+<b>wyłączony</b>. Włączony — świat sam losuje wydarzenia (mała szansa dziennie na region).
+Ręczne sterowanie działa zawsze, niezależnie od przełącznika.</p>
+<p class="muted">Wszystkie liczby (szansa, czas trwania, mnożniki cen, DC choroby) to wartości
+startowe — będą strojone po obserwacji rozgrywki.</p>`,
+      },
+    ],
+  },
   {
     ico: '🗺', label: 'Mapa',
     chapters: [
