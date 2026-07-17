@@ -2701,19 +2701,28 @@ _DIG_INTENT_RE = re.compile(
 # #1413 Model C — narracyjna przeprawa łodzią. Wymaga CZASOWNIKA (szukam/buduję/…)
 # przy rzeczowniku łódź/tratwa/prom/czółno, albo jawnej frazy „przeprawiam się …".
 # Sam rzeczownik (opis „widzę łódź") NIE triggeruje — jak person-guard w #1394.
-# #1418 — szeroki intent przeprawy przez rzekę: czasownik przeprawy + rzeczownik wody,
-# ALBO szukam/buduję + przeprawa/bród/łódź/tratwa/most, ALBO „na drugą stronę/brzeg".
+# #1419 — gracze często piszą BEZ polskich znaków („przeplywam", „rzeke", „lodz").
+# Normalizujemy diakrytyki PRZED matchem, a wzorzec trzymamy w ASCII → łapie oba warianty.
+_PL_STRIP = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+
+# #1418/#1419 — szeroki intent przeprawy przez rzekę (ASCII): czasownik przeprawy + rzeczownik
+# wody, ALBO szukam/buduje + przeprawa/brod/lodz/tratwa/most, ALBO „na druga strone/brzeg".
 _BOAT_INTENT_RE = re.compile(
-    r"(przekracz\w*|przechodz\w*|przepraw\w*|przebywa\w*|brn[ieę]\w*|brodz\w*|forsuj\w*|"
-    r"pokonuj\w*|płyn[ieę]\w*|przepływa\w*|przeprawia\w*)\b[^.!?]{0,30}"
-    r"(rzek\w*|wod[aeęy]\w*|nurt\w*|brzeg\w*|bród|brod\w*|łod(zi|zia|ką|ź|ka)\w*|łódk\w*|"
-    r"tratw\w*|prom\w*|czółn\w*|na\s+drug\w+\s+(stron|brzeg))"
+    r"(przekracz\w*|przechodz\w*|przepraw\w*|przebywa\w*|brn[ie]\w*|brodz\w*|forsuj\w*|"
+    r"pokonuj\w*|plyn[ie]\w*|przeplywa\w*|przeprawia\w*)\b[^.!?]{0,30}"
+    r"(rzek\w*|wod[aey]\w*|nurt\w*|brzeg\w*|brod\w*|lod(zi|zia|ka|z)\w*|lodk\w*|"
+    r"tratw\w*|prom\w*|czoln\w*|na\s+drug\w+\s+(stron|brzeg))"
     r"|(szukam|znajd\w*|buduj\w*|sklec\w*|klec\w*|majstruj\w*|robi\w*|potrzebuj\w*|wsiadam|odbijam)\b[^.!?]{0,45}"
-    r"(przepraw\w*|bród|brod\w*|łod(zi|zia|ką|ź|ka)\w*|łódk\w*|tratw\w*|prom\w*|czółn\w*|most\w*|"
+    r"(przepraw\w*|brod\w*|lod(zi|zia|ka|z)\w*|lodk\w*|tratw\w*|prom\w*|czoln\w*|most\w*|"
     r"miejsc\w*\s+\w*\s*(przej|przepraw|przekrocz))"
     r"|na\s+drug\w+\s+(brzeg|stron)",
     re.IGNORECASE,
 )
+
+
+def _is_river_cross_intent(text: str) -> bool:
+    """#1419 — intent przeprawy przez rzekę, ODPORNY na brak polskich znaków."""
+    return bool(_BOAT_INTENT_RE.search((text or "").translate(_PL_STRIP)))
 
 
 def _river_cross_target(conn: sqlite3.Connection, cq: int, cr: int):
@@ -2781,7 +2790,7 @@ def _maybe_boat_shortcut(conn: sqlite3.Connection, campaign_id: int, character: 
     (WIS) DC 12. **SUKCES → FAKTYCZNIE PRZENOSI PIN na przeciwny brzeg** (set_position) +
     przemoczony + czas. Porażka → przemoczony, zostajesz na brzegu. Gdy nie ma wody obok →
     None (normalna narracja). Wcześniej narracja opisywała przeprawę, ale pin nie ruszał."""
-    if not _BOAT_INTENT_RE.search(text or ""):
+    if not _is_river_cross_intent(text):
         return None
     gs_row = conn.execute(
         "SELECT id, session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)

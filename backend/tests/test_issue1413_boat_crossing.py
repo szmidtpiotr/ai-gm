@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, "/app")
 
-from app.api.turns import _BOAT_INTENT_RE
+from app.api.turns import _is_river_cross_intent
 
 
 @pytest.mark.parametrize("text", [
@@ -29,9 +29,15 @@ from app.api.turns import _BOAT_INTENT_RE
     "buduję prowizoryczną przeprawę",
     "brodzę przez rzekę",
     "idę na drugą stronę",
+    # #1419 — BEZ polskich znaków (gracze tak piszą)
+    "przeplywam przez rzeke",
+    "przeplywam przez rzeke na druga strone",
+    "buduje tratwe zeby sie przeprawic",
+    "szukam brodu",
+    "przechodze na drugi brzeg",
 ])
 def test_boat_intent_matches(text):
-    assert _BOAT_INTENT_RE.search(text) is not None, f"powinno złapać: {text}"
+    assert _is_river_cross_intent(text), f"powinno złapać: {text}"
 
 
 @pytest.mark.parametrize("text", [
@@ -40,6 +46,7 @@ def test_boat_intent_matches(text):
     "Rozglądam się po okolicy",            # brak łodzi
     "Atakuję bandytę przy moście",         # co innego
     "Idę wzdłuż rzeki na północ",          # ruch, nie przeprawa
+    "przechodze przez las",                # las, nie woda
 ])
 def test_boat_intent_rejects(text):
-    assert _BOAT_INTENT_RE.search(text) is None, f"NIE powinno łapać: {text}"
+    assert not _is_river_cross_intent(text), f"NIE powinno łapać: {text}"
