@@ -114,29 +114,24 @@ export function WorldMap({
   const restAction = suggested.data?.suggested_actions?.find(
     (a) => (a.action || a.text) === "REST:long",
   );
-  // #1406 — bieżący heks bezpieczny do odpoczynku (osada/karczma) wg autorytatywnego
-  // pola postaci. Na wejściu do osady suggested_actions bywają chwilowo nierozwiązane
-  // (hex jeszcze nielinkowany → backend daje tylko BUILD_CAMP) — safe_for_rest łata ten
-  // transient, żeby bezpieczny hex ZAWSZE oferował „Odpocznij", a obóz był chowany.
-  const hereSafe = character.data?.safe_for_rest === true;
-  const hasCampAction = suggested.data?.suggested_actions?.some(
+  const campAction = suggested.data?.suggested_actions?.find(
     (a) => (a.action || a.text) === "BUILD_CAMP",
-  ) ?? false;
-  // Przerwana podróż = backend emituje TRAVEL_RESUME (ścieżka interrupt:
-  // dusk/forced_camp/encounter). TRAVEL_RESUME pojawia się WYŁĄCZNIE przy przerwanej
-  // wyprawie, więc jest wiarygodnym sygnałem „stoję wymuszenie w dziczy".
+  );
+  // Przerwana podróż = backend emituje TRAVEL_RESUME (interrupt dusk/forced_camp/encounter).
   const canResume = suggested.data?.suggested_actions?.some(
     (a) => (a.action || a.text) === "TRAVEL_RESUME",
   ) ?? false;
-  // #1409 — obóz chowamy w bezpiecznej OSADZIE (opcja dziczy zbędna, #1406), ale przy
-  // WYMUSZONYM obozie w dziczy (interrupt) obóz MUSI się pokazać, nawet gdy safe_for_rest
-  // chwilowo czyta true (stary anchor / rozjazd cache postaci↔suggested). Wcześniej
-  // `canCampHere = hasCampAction && !hereSafe` gasił backendowy BUILD_CAMP i zostawał sam
-  // „Odpocznij". Analogicznie „Odpocznij” w dziczy podczas interruptu tylko gdy backend
-  // faktycznie je włączył (poza osadą long-rest = 409 not_safe). Spójne z WaitModalem
-  // (Game.tsx: canCamp = !canRest).
-  const canCampHere = hasCampAction && (!hereSafe || canResume);
-  const canRestHere = restAction?.enabled === true || (hereSafe && !canResume);
+  // #1410 — modal ufa AUTORYTATYWNYM flagom `enabled` z suggested-actions (jedno źródło
+  // prawdy). `character.safe_for_rest` (hereSafe) to OSOBNY, LAGUJĄCY endpoint — po wejściu
+  // na nowy hex trzyma bezpieczeństwo POPRZEDNIEJ lokacji. Wcześniej hereSafe nadpisywał
+  // akcje: na dzikim heksie chwilowo czytał true → gasił backendowy BUILD_CAMP i pokazywał
+  // „Odpocznij", który przy kliknięciu leciał 409 not_safe_for_rest (#1409/#1410).
+  // Teraz: enabled backendu decyduje; hereSafe TYLKO fallback dla transientu WEJŚCIA do
+  // osady (#1406), gdy hex nie jest jeszcze zlinkowany i backend NIE emituje jeszcze akcji
+  // REST — nigdy nie nadpisuje jawnej flagi enabled.
+  const hereSafe = character.data?.safe_for_rest === true;
+  const canRestHere = restAction ? restAction.enabled === true : hereSafe;
+  const canCampHere = campAction?.enabled === true;
 
   const hexes = map.data?.hexes ?? [];
   const hexTypes = map.data?.hex_types ?? {};
@@ -701,10 +696,10 @@ export function WorldMap({
                     onClick={() => { setSelected(null); onCamp(); }}
                   />
                 )}
-                {/* #1406 — jasny komunikat, czemu w osadzie nie ma „Rozbij obóz":
-                    tu jest bezpiecznie, obóz (opcja dziczy) jest zbędny. #1409 — nie
-                    pokazuj przy wymuszonym obozie (canResume), gdzie obóz JEST widoczny. */}
-                {hereSafe && hasCampAction && !canResume && (
+                {/* #1406/#1410 — komunikat czemu nie ma „Rozbij obóz": tu bezpiecznie,
+                    można normalnie odpocząć, obóz (opcja dziczy) zbędny. Pokazuj tylko gdy
+                    faktycznie: odpoczynek dostępny, obozu brak. */}
+                {hereSafe && canRestHere && !canCampHere && (
                   <p className="rounded-md border border-line-soft bg-white/[.02] px-3 py-2 text-center font-ui text-micro text-text-3">
                     Ten teren jest bezpieczny do odpoczynku — obóz zbędny.
                   </p>
