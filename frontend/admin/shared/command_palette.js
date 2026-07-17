@@ -188,18 +188,36 @@ function close() {
   _els?.overlay.classList.remove('open');
 }
 
+// Tworzy przycisk-trigger otwierający paletę (współdzielony przez sidebar i szufladę mobilną).
+function makeTrigger(id, withKbd) {
+  const t = document.createElement('button');
+  t.id = id;
+  t.className = 'cmdp-trigger';
+  t.type = 'button';
+  t.innerHTML = `<span class="cmdp-trigger-icon">🔍</span><span class="cmdp-trigger-label">Szukaj funkcji…</span>${withKbd ? '<kbd class="cmdp-trigger-kbd">Ctrl K</kbd>' : ''}`;
+  t.addEventListener('click', openPalette);
+  return t;
+}
+
 // ── Publiczny init — woła index.html ──────────────────────────────────────────
 export function initCommandPalette() {
-  // 1) Pole-trigger w sidebarze (nad nawigacją).
+  // 1a) Pole-trigger w sidebarze (nad nawigacją) — desktop.
   const nav = document.getElementById('admin-nav');
   if (nav && !document.getElementById('cmdp-trigger')) {
-    const trigger = document.createElement('button');
-    trigger.id = 'cmdp-trigger';
-    trigger.className = 'cmdp-trigger';
-    trigger.type = 'button';
-    trigger.innerHTML = `<span class="cmdp-trigger-icon">🔍</span><span class="cmdp-trigger-label">Szukaj funkcji…</span><kbd class="cmdp-trigger-kbd">Ctrl K</kbd>`;
-    trigger.addEventListener('click', openPalette);
-    nav.parentNode.insertBefore(trigger, nav);
+    nav.parentNode.insertBefore(makeTrigger('cmdp-trigger', true), nav);
+  }
+
+  // 1b) Pole-trigger w szufladzie mobilnej (na mobile sidebar jest poza ekranem,
+  // a skrótu Ctrl+K brak) — bez kbd, na górze listy sekcji.
+  const drawerNav = document.getElementById('mobile-drawer-nav');
+  if (drawerNav && !document.getElementById('cmdp-trigger-mobile')) {
+    const mt = makeTrigger('cmdp-trigger-mobile', false);
+    // po wyborze zamknij szufladę (i jej tło), żeby overlay nie był pod nią
+    mt.addEventListener('click', () => {
+      document.getElementById('mobile-drawer')?.classList.remove('open');
+      document.getElementById('drawer-overlay')?.classList.remove('open');
+    });
+    drawerNav.insertBefore(mt, drawerNav.firstChild);
   }
 
   // 2) Skrót Ctrl+K / Cmd+K — globalnie.
