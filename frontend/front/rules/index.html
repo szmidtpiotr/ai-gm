@@ -464,6 +464,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r11-zegar">Zegar świata</a></li>
           <li><a href="#r11-czekanie">Czekanie</a></li>
           <li><a href="#r11-marsz">Marsz i budżet dnia</a></li>
+          <li><a href="#r11-rzeki">Przeprawy przez rzeki</a></li>
           <li><a href="#r11-pogoda">Pogoda i tempo marszu</a></li>
           <li><a href="#r11-spotkania">Spotkania na szlaku</a></li>
           <li><a href="#r11-zmeczenie">Zmęczenie</a></li>
@@ -2353,6 +2354,29 @@ document.addEventListener('DOMContentLoaded',function(){
       </div>
       <p>Przerwana podróż nie przepada — po spotkaniu, noclegu czy walce gra pamięta trasę i proponuje
       ruszyć dalej.</p>
+
+      <h2 id="r11-rzeki">Przeprawy przez rzeki</h2>
+      <p><strong>Rzeka to bariera, nie ścieżka.</strong> Nie przejdziesz przez nurt suchą stopą tam, gdzie
+      ci się podoba — woda zagradza drogę tak samo jak jezioro czy morze. Przeprawić się można tylko w
+      trzech miejscach:</p>
+      <div class="degrees">
+        <div class="deg s"><b>Most</b> — bezpieczna, sucha przeprawa. Jeśli szlak prowadzi przez most,
+        przechodzisz bez ryzyka (choć mosty bywają pilnowane).</div>
+        <div class="deg f"><b>Bród</b> — płycizna, którą da się przejść w bród. Wolniejsza niż most i
+        <b>groźna</b>: nurt może cię porwać. Przy każdej przeprawie zdajesz <b>test Siły</b> — jeśli
+        przegrasz, przemakasz do suchej nitki (stan <b>Przemoczony</b>: −1 do testów fizycznych, póki nie
+        wyschniesz przy ogniu). Jeśli przegrasz wyraźnie albo wyrzucisz naturalną 1, nurt cię porywa i
+        ciska o kamienie — tracisz punkty życia.</div>
+        <div class="deg cf"><b>Łódź</b> — nad brzegiem możesz poszukać przeprawy: powiedz Mistrzowi
+        <span class="pc">„Szukam łodzi"</span> lub <span class="pc">„Buduję tratwę"</span>. Test przetrwania
+        rozstrzyga, czy znajdziesz łódź albo skleisz tratwę — jeśli tak, przeprawisz się przez rzekę
+        jednorazowo. Łódź nie trafia do plecaka; zostaje przy wodzie.</div>
+      </div>
+      <p>Gdy droga do celu wiedzie przez rzekę, a nie ma mostu ani brodu, wyznaczanie trasy samo poprowadzi
+      cię <strong>wzdłuż brzegu do najbliższej przeprawy</strong> — czasem nadłożysz drogi.</p>
+      <p class="ex"><span class="pc">„Brodzę przez rzekę."</span> Rzut Siły k20+3 = 7 wobec progu 12 —
+      przegrana o pięć. Rwący nurt porywa cię, tracisz kilka punktów życia i wychodzisz na brzeg
+      <b>przemoczony</b>. Warto było poszukać mostu.</p>
 
       <h2 id="r11-pogoda">Pogoda i tempo marszu</h2>
       <p>Niebo nad Kresami bywa łaskawe albo złośliwe, i marsz to czuje. Pogoda nie zmienia trasy —
