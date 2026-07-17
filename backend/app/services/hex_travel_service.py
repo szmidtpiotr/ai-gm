@@ -204,6 +204,12 @@ DAILY_SOFT_CAP = 8.0        # hours — dusk prompt threshold
 DAILY_HARD_CAP = 12.0       # hours — forced camp threshold
 NIGHT_ENCOUNTER_MULT = 1.5  # encounter chance multiplier when night_march=True
 
+# #1412 — „porwanie przez nurt": przeprawa przez BRÓD to test Obrony (SIŁA) na rzut.
+# Numbers Policy — wartości STARTOWE, tunable. Za każdy przebyty hex 'brod' 1 rzut.
+FORD_CROSS_DC = 12            # próg testu (Medium); d20 + SIŁA_mod ≥ DC = czysta przeprawa
+FORD_SWEEP_MARGIN = 5        # pudło o ≥5 (albo Nat 1) → porwanie przez nurt (obrażenia)
+FORD_SWEEP_DAMAGE_DIE = 6    # 1d6 obrażeń przy porwaniu
+
 # #1390 — częstotliwość spotkań w podróży (Numbers Policy — Sandbox-tunable STARTING).
 # Skumulowana szansa spotkania na CAŁĄ podróż jest capowana: bez tego długa trasa
 # przez las/bagno (0.3–0.4/hex) dawała ~76–90% gwarancji walki za każdym razem, bo
@@ -2276,6 +2282,115 @@ def maybe_narrate_arrival(
         logger.warning("arrival_narration_failed", error=str(_arr_err), campaign_id=campaign_id)
 
 
+def maybe_ford_hazard(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+    result: dict,
+) -> None:
+    """#1412 — „porwanie przez nurt". Za każdy hex `brod` faktycznie przebyty w tej
+    podróży: rzut Obrony d20 + SIŁA_mod vs FORD_CROSS_DC. Nat 20 = auto-sukces, Nat 1 =
+    auto-porwanie. Porażka → `przemoczony` + strata czasu; porażka o ≥FORD_SWEEP_MARGIN
+    lub Nat 1 → porwanie: 1d6 obrażeń. Skutki nakładane na sheet; wynik ląduje w
+    result["ford_hazard"] i osobnej turze narracyjnej [Bród] (bez LLM — pokazuje rzut).
+    """
+    if not result.get("ok"):
+        return
+    path = result.get("path") or []
+    if len(path) < 2:
+        return
+    coords = [(int(p["q"]), int(p["r"])) for p in path]
+    _arr = result.get("arrived_hex") or {}
+    try:
+        _aidx = coords.index((int(_arr["q"]), int(_arr["r"])))
+    except (ValueError, KeyError, TypeError):
+        _aidx = len(coords) - 1
+    traversed = coords[1:_aidx + 1]  # bez origin
+    if not traversed:
+        return
+    ford_hexes = [
+        (q, r) for (q, r) in traversed
+        if (conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
+            (q, r),
+        ).fetchone() or {"hex_type": None})["hex_type"] == "brod"
+    ]
+    if not ford_hexes:
+        return
+    try:
+        _ch = conn.execute("SELECT sheet_json FROM characters WHERE id=?", (character_id,)).fetchone()
+        sheet = json.loads(_ch["sheet_json"] or "{}") if _ch else {}
+        _str = int((sheet.get("stats") or {}).get("STR", 10) or 10)
+        str_mod = (_str - 10) // 2
+
+        events: list[dict] = []
+        total_dmg = 0
+        swept = False
+        wet = False
+        for (q, r) in ford_hexes:
+            d20 = random.randint(1, 20)
+            nat1, nat20 = d20 == 1, d20 == 20
+            total = d20 + str_mod
+            success = (not nat1) and (nat20 or total >= FORD_CROSS_DC)
+            ev = {"hex": {"q": q, "r": r}, "d20": d20, "mod": str_mod,
+                  "total": total, "dc": FORD_CROSS_DC, "success": success,
+                  "nat1": nat1, "nat20": nat20, "damage": 0}
+            if not success:
+                wet = True
+                if nat1 or (FORD_CROSS_DC - total) >= FORD_SWEEP_MARGIN:
+                    dmg = random.randint(1, FORD_SWEEP_DAMAGE_DIE)
+                    ev["damage"] = dmg
+                    total_dmg += dmg
+                    swept = True
+            events.append(ev)
+
+        # skutki: obrażenia + przemoczony
+        if total_dmg > 0:
+            _hp_row = conn.execute("SELECT sheet_json FROM characters WHERE id=?", (character_id,)).fetchone()
+            _sh = json.loads(_hp_row["sheet_json"] or "{}") if _hp_row else {}
+            _cur = int(_sh.get("current_hp", _sh.get("max_hp", 0)) or 0)
+            _sh["current_hp"] = max(0, _cur - total_dmg)
+            conn.execute("UPDATE characters SET sheet_json=? WHERE id=?",
+                         (json.dumps(_sh, ensure_ascii=False), character_id))
+        if wet:
+            try:
+                from app.services.combat_service import add_condition_to_character
+                add_condition_to_character(conn, character_id, campaign_id, "przemoczony")
+            except Exception as _cond_err:
+                logger.warning("ford_wet_condition_failed", error=str(_cond_err))
+        conn.commit()
+
+        result["ford_hazard"] = {"events": events, "damage": total_dmg, "swept": swept, "wet": wet}
+
+        # narracja mechaniczna (bez LLM) — pokazuje rzut i skutek w logu
+        if swept:
+            _msg = (f"Rwący nurt brodu porywa cię i ciska o kamienie (−{total_dmg} HP). "
+                    f"Wygrzebujesz się na brzeg przemoczony i posiniaczony.")
+        elif wet:
+            _msg = ("Nurt szarpie nogami przy przeprawie. Poślizgujesz się i przemakasz "
+                    "do suchej nitki, ale docierasz na drugi brzeg.")
+        else:
+            _msg = ("Brodzisz przez rzekę — zimna woda sięga pasa, lecz trzymasz się mocno "
+                    "i przechodzisz suchą stopą na drugi brzeg.")
+        _roll = events[-1]
+        _msg += (f" [Przeprawa — test SIŁY: k20 {_roll['d20']}{'+' if _roll['mod']>=0 else ''}"
+                 f"{_roll['mod']} = {_roll['total']} vs {FORD_CROSS_DC} → "
+                 f"{'sukces' if _roll['success'] else 'porażka'}.]")
+        _tn = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at) "
+            "VALUES (?,?,?,?,?,?,datetime('now'))",
+            (campaign_id, character_id, int(_tn), "[Bród: przeprawa]",
+             json.dumps({"narrative": _msg}, ensure_ascii=False), "narrative"),
+        )
+        conn.commit()
+    except Exception as _ford_err:
+        logger.warning("ford_hazard_failed", error=str(_ford_err), campaign_id=campaign_id)
+
+
 def execute_travel(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -2411,5 +2526,10 @@ def execute_travel(
             and not result.get("encounter")
         )
         maybe_narrate_arrival(conn, campaign_id, character_id, result, _arrived_full)
+
+    # #1412 — ryzyko przeprawy przez bród (niezależnie od narracji przybycia; też przy
+    # podróży przerwanej — liczy tylko faktycznie przebyte hexy 'brod').
+    if result.get("ok") and record_turn:
+        maybe_ford_hazard(conn, campaign_id, character_id, result)
 
     return result

@@ -1569,6 +1569,16 @@ ADMIN_SEEDS = [
     VALUES
     ('zmeczony', 'Zmęczony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":3,"per_level_effects":[{"type":"test_penalty","value":-1}],"threshold_effects":{"2":{"type":"initiative_penalty","value":-2},"3":{"type":"regen_multiplier","value":0.5}}}]}', 'Zmęczenie z podróży — kara -1 do wszystkich testów (i rzutów ataku) za każdy stack (max 3). Od 2 stacków gorsza inicjatywa; przy 3 stackach odpoczynek regeneruje o połowę mniej HP/many. Stacki: +1 za marsz ponad 8h w dniu, +1 za dobę bez pełnego noclegu. Pełny nocleg czyści wszystkie; krótki odpoczynek NIE czyści. Krasnolud (twardy jak kamień) ignoruje kary 1. stacka.', 1, 1, NULL, NULL, datetime('now'), datetime('now'))
     """,
+    # #1412 — `przemoczony`: nakładany po nieudanej przeprawie przez BRÓD (porwanie przez nurt).
+    # Jednopoziomowy test_penalty -1 (fizyczne testy); używa tego samego prymitywu co `zmeczony`,
+    # więc compute_test_penalty go sumuje, a clear_all_fatigue (pełny odpoczynek/obóz) go czyści
+    # (wysuszenie przy ogniu). Non-stacking (max_level 1). Flavor: nie rozpalisz ognia mokrą ręką.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('przemoczony', 'Przemoczony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":1,"per_level_effects":[{"type":"test_penalty","value":-1}]}]}', 'Przemoczony do suchej nitki — nurt rzeki zmoczył cię przy przeprawie przez bród. Kara -1 do testów fizycznych, dopóki nie wyschniesz. Mokrą ręką nie rozpalisz ognia. Znika po pełnym odpoczynku lub rozbiciu obozu (wysuszenie przy ognisku).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
     # PT-F5 (#1139) REPAIR — na bazach gdzie #1124 zdążyło nadpisać exhausted travel-fatigue jsonem,
     # przywróć oryginalny efekt S9 (STR/DEX/CON -3, block_action @L2). Idempotentne (guard LIKE test_penalty).
     """
