@@ -310,6 +310,13 @@ RAW_MIGRATIONS = [
     "ALTER TABLE hex_type_config ADD COLUMN is_passable INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE hex_type_config ADD COLUMN required_item TEXT",
     "UPDATE hex_type_config SET is_passable = 0 WHERE hex_type IN ('lake', 'ocean', 'sea')",
+    # #1411 — rzeka to bariera: przeprawa TYLKO przez most (bridge) lub bród (brod).
+    # Wcześniej river.is_passable=1 → gracz przechodził rzekę jak ląd (bez sensu fabularnie).
+    # Grandfather stranded origin + narracja blokady w hex_travel_service.
+    "UPDATE hex_type_config SET is_passable = 0 WHERE hex_type = 'river'",
+    # Nowy typ terenu 'brod' — przechodnia przeprawa przez rzekę: wolniejsza (brodzenie)
+    # i groźniejsza (więcej spotkań) niż most. Ręcznie stawiany przez admina na heksach rzeki.
+    "INSERT OR IGNORE INTO hex_type_config (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon, is_active, is_passable, placement_mode, location_spawn_chance, camp_encounter_boost) VALUES ('brod', 'Bród', 1.5, 0.35, '#6a8a9a', '🪵', 1, 1, 'scatter', 0.0, 0.35)",
     # C7 / #1164 — canonical XP meta (game_mechanics.md). Run-once (applied-set
     # guarded in run_raw_migrations): the ONE enforcer that also corrects existing
     # DBs, then never re-clobbers admin edits. ADMIN_SEEDS holds identical values

@@ -736,6 +736,25 @@ def resolve_chain_travel(
     hexes = _load_hex_graph(conn)
     hex_type_cfg = _load_hex_type_config(conn)
 
+    # #1411 — rzeki/woda są poza grafem (is_passable=0). Jeśli bohater STOI na takim
+    # heksie (np. stara pozycja sprzed reguły „rzeka=bariera", albo zniesiony most),
+    # dołącz jego origin do grafu, by mógł ZEJŚĆ na sąsiedni ląd. Sam hex-woda i tak nie
+    # dostaje sąsiadów-wody (te są poza grafem), więc gracz wychodzi, ale nie brnie w głąb.
+    if from_hex not in hexes:
+        _orow = conn.execute(
+            "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key, region "
+            "FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 LIMIT 1",
+            (from_hex[0], from_hex[1]),
+        ).fetchone()
+        if _orow:
+            _oh = dict(_orow)
+            try:
+                _oh["encounter_pool"] = json.loads(_oh.get("encounter_pool") or "[]")
+            except Exception:
+                _oh["encounter_pool"] = []
+            _oh["teleport_edges"] = []
+            hexes[from_hex] = _oh
+
     # PT7 #1117: Load daily march budget from session_flags
     _gs_budget = conn.execute(
         "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -807,6 +826,28 @@ def resolve_chain_travel(
             return {
                 "ok": False,
                 "error": f"Kraina niedostępna — {region_label} jest za zamkniętą granicą.",
+                "path": [], "total_hours": 0,
+                "arrived_hex": {"q": from_hex[0], "r": from_hex[1]}, "encounter": None, "encounter_hex": None,
+                "hex_data": {}, "teleport_used": None, "item_blocked": None,
+            }
+        # #1411 — hex istnieje, ale jest wodą/rzeką poza grafem: to fizyczna bariera,
+        # nie „nieznane terytorium". Jasny komunikat kierujący na most/bród/łódź.
+        _wtype_row = conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 LIMIT 1",
+            (to_hex[0], to_hex[1]),
+        ).fetchone()
+        _WATER_TYPES = ("river", "water", "lake", "sea", "ocean")
+        if _wtype_row and _wtype_row["hex_type"] in _WATER_TYPES:
+            _is_river = _wtype_row["hex_type"] == "river"
+            _msg = (
+                "Rzeka zagradza drogę — przeprawisz się tylko przez most albo bród. "
+                "Możesz też poszukać łodzi w pobliżu."
+                if _is_river else
+                "Woda zagradza drogę — bez łodzi tędy nie przejdziesz."
+            )
+            return {
+                "ok": False,
+                "error": _msg,
                 "path": [], "total_hours": 0,
                 "arrived_hex": {"q": from_hex[0], "r": from_hex[1]}, "encounter": None, "encounter_hex": None,
                 "hex_data": {}, "teleport_used": None, "item_blocked": None,
