@@ -420,8 +420,42 @@ export default function Game() {
 
   // F-80 (#1268): klik w chip. Mechaniczne akcje (podróż/obóz/odpoczynek) omijają
   // narratora i wołają dedykowane endpointy; reszta idzie jako akcja tury.
+  // #1415 — surowe kody błędów z backendu (not_safe_for_rest itd.) na czytelny polski.
+  function humanizeActionError(msg: string): { text: string; tone: "info" | "danger" } | null {
+    if (msg.includes("not_safe_for_rest"))
+      return { text: "Nie możesz tu bezpiecznie odpocząć — najpierw rozbij obóz (🔥) albo dojdź do osady lub karczmy.", tone: "info" };
+    if (msg.includes("in_combat"))
+      return { text: "Nie możesz odpocząć ani czekać w trakcie walki.", tone: "danger" };
+    if (msg.includes("short_rest_exhausted"))
+      return { text: "Krótki odpoczynek już wykorzystany — potrzebujesz pełnego snu.", tone: "info" };
+    if (msg.includes("hex_already_safe"))
+      return { text: "To miejsce jest już bezpieczne — obóz zbędny, po prostu odpocznij.", tone: "info" };
+    return null;
+  }
   function chipError(err: unknown) {
-    toast(err instanceof Error ? err.message : "Nie udało się wykonać akcji.", "danger");
+    const msg = err instanceof Error ? err.message : String(err ?? "");
+    const human = humanizeActionError(msg);
+    toast(human ? human.text : msg || "Nie udało się wykonać akcji.", human ? human.tone : "danger");
+  }
+  // #1415 — nieudany odpoczynek w dziczy: pokaż czytelny komunikat I zagwarantuj przycisk
+  // „Rozbij obóz" (modal decyzji), bo brak go na bieżącej powierzchni to główna skarga.
+  function restError(err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err ?? "");
+    if (msg.includes("not_safe_for_rest")) {
+      toast("Nie możesz tu bezpiecznie odpocząć — najpierw rozbij obóz.", "info");
+      setInterruptModal({
+        reason: "need_camp",
+        severity: "warn",
+        title: "Najpierw rozbij obóz",
+        message: "Aby odpocząć w dziczy, najpierw rozbij obóz — dopiero przy ognisku uśniesz bezpiecznie.",
+        step: -1,
+        hours_remaining: 0,
+        destination_label: null,
+        can_resume: true,
+      });
+      return;
+    }
+    chipError(err);
   }
   function onChip(c: Chip, current: Chip[]) {
     if (!characterId) return;
@@ -523,7 +557,7 @@ export default function Game() {
           if (enc?.triggered) toast("Coś zakłóciło obóz w nocy…", "danger");
           if (Number(r?.xp_available ?? 0) >= 30) openAdvancement();
         },
-        onError: chipError,
+        onError: restError,
       });
       return;
     }
