@@ -38,8 +38,10 @@ def _conn():
 
 
 def _ford_turn(conn):
+    # #1416 — rzut brodu zapisany jako user_text „[Rzut: Przeprawa (Siła) …]" (karta rzutu).
     return conn.execute(
-        "SELECT assistant_text FROM campaign_turns WHERE user_text = '[Bród: przeprawa]' ORDER BY id DESC LIMIT 1"
+        "SELECT user_text, assistant_text FROM campaign_turns "
+        "WHERE user_text LIKE '[Rzut: Przeprawa%' ORDER BY id DESC LIMIT 1"
     ).fetchone()
 
 
@@ -76,7 +78,10 @@ def test_ford_clean_crossing_nat20(monkeypatch):
     # wpis w logu z rzutem
     row = _ford_turn(conn)
     assert row is not None
-    assert "test SIŁY" in json.loads(row["assistant_text"])["narrative"]
+    # rzut w user_text jako karta „[Rzut: Przeprawa (Siła) — 20 +5 = 25 vs 12 — naturalny 20]"
+    assert "vs 12" in row["user_text"] and "naturalny 20" in row["user_text"]
+    # proza skutku w assistant (bez inline-tagu rzutu)
+    assert "brzeg" in json.loads(row["assistant_text"])["narrative"].lower()
 
 
 def test_ford_only_counts_traversed_hexes(monkeypatch):

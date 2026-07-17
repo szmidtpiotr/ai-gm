@@ -2394,7 +2394,7 @@ def maybe_ford_hazard(
 
         result["ford_hazard"] = {"events": events, "damage": total_dmg, "swept": swept, "wet": wet}
 
-        # narracja mechaniczna (bez LLM) — pokazuje rzut i skutek w logu
+        # narracja mechaniczna (bez LLM) — proza skutku
         if swept:
             _msg = (f"Rwący nurt brodu porywa cię i ciska o kamienie (−{total_dmg} HP). "
                     f"Wygrzebujesz się na brzeg przemoczony i posiniaczony.")
@@ -2404,10 +2404,16 @@ def maybe_ford_hazard(
         else:
             _msg = ("Brodzisz przez rzekę — zimna woda sięga pasa, lecz trzymasz się mocno "
                     "i przechodzisz suchą stopą na drugi brzeg.")
+        # #1416 — rzut jako KARTA w logu: user_text w formacie „[Rzut: … — d20 ±mod = suma
+        # vs DC — wynik]" (rollFromRzutLine → karta rzutu, parytet z testami umiejętności).
+        # Wcześniej rzut był doklejony do prozy w nawiasie [ ] i cleanProse go WYCINAŁ →
+        # gracz nie widział żadnego testu („0 widocznych testów").
         _roll = events[-1]
-        _msg += (f" [Przeprawa — test SIŁY: k20 {_roll['d20']}{'+' if _roll['mod']>=0 else ''}"
-                 f"{_roll['mod']} = {_roll['total']} vs {FORD_CROSS_DC} → "
-                 f"{'sukces' if _roll['success'] else 'porażka'}.]")
+        _outcome_word = ("naturalny 20" if _roll["nat20"] else "naturalny 1" if _roll["nat1"]
+                         else "sukces" if _roll["success"] else "porażka")
+        _m = int(_roll["mod"])
+        _rzut = (f"[Rzut: Przeprawa (Siła) — {_roll['d20']} {'+' if _m >= 0 else '-'}{abs(_m)} "
+                 f"= {_roll['total']} vs {FORD_CROSS_DC} — {_outcome_word}]")
         _tn = conn.execute(
             "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id = ?",
             (campaign_id,),
@@ -2415,7 +2421,7 @@ def maybe_ford_hazard(
         conn.execute(
             "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at) "
             "VALUES (?,?,?,?,?,?,datetime('now'))",
-            (campaign_id, character_id, int(_tn), "[Bród: przeprawa]",
+            (campaign_id, character_id, int(_tn), _rzut,
              json.dumps({"narrative": _msg}, ensure_ascii=False), "narrative"),
         )
         conn.commit()
