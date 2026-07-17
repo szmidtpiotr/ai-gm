@@ -117,7 +117,7 @@ def validate_action(
 
 # #1420 — gracze na mobilnych piszą bez polskich znaków. Kompilujemy wzorce w formie
 # ODdiakrytyzowanej i dopasowujemy do znormalizowanego wejścia → łapiemy oba warianty.
-from app.core.text_utils import strip_pl_diacritics as _sd
+from app.core.text_utils import phonetic_fold as _sd
 
 
 def _c(pattern: str) -> re.Pattern:

@@ -15,7 +15,7 @@ from typing import Any, Optional
 import structlog
 
 from app.core.constants import DEFAULT_REGION
-from app.core.text_utils import strip_pl_diacritics as _sd  # #1420 — intent bez polskich znaków
+from app.core.text_utils import strip_pl_diacritics as _sd  # #1420 — intent bez polskich znakow (hex_travel: diakrytyki, bez phonetic — psul route-integration pm4)
 from app.services.movement_service import (
     MovementProfile,
     MovementStep,

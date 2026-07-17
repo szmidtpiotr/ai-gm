@@ -123,7 +123,7 @@ def _inactive_combat_tag_reminder(user_text: str | None) -> str:
 
 
 import re as _re_skill
-from app.core.text_utils import strip_pl_diacritics as _sd_skill
+from app.core.text_utils import phonetic_fold as _sd_skill
 
 # #1420 — wzorzec ODdiakrytyzowany (gracze na mobilnych piszą bez ogonków), dopasowanie
 # do znormalizowanego wejścia (patrz _skill_test_tag_instruction).

@@ -220,7 +220,7 @@ def apply_spend_gold_to_narrative(
 
 # #1420 — wzorce ODdiakrytyzowane + wejście normalizowane (gracze piszą bez ogonków:
 # "zamowic", "place", "prosze o", "posilek", "sniadanie", "gorzala").
-from app.core.text_utils import strip_pl_diacritics as _sd
+from app.core.text_utils import phonetic_fold as _sd
 
 
 def _c(pattern: str) -> re.Pattern:

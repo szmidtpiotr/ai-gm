@@ -8,7 +8,7 @@ sys.path.insert(0, "/app")
 
 import pytest
 
-from app.core.text_utils import strip_pl_diacritics, fold
+from app.core.text_utils import strip_pl_diacritics, fold, phonetic_fold
 from app.services.gate_service import classify_intent_stub
 from app.services.intent_service import parse_intent
 from app.services.hex_travel_service import detect_route_choice, _PT3_MOVE_VERB_RE
@@ -59,10 +59,11 @@ def test_route_choice_ascii(text, expected):
 
 @pytest.mark.parametrize("text", [
     "podazam do wsi",     # podążam
-    "prbuje... probuje przejsc",  # próbuję
+    "probuje przejsc",    # próbuję
     "wracam do obozu",
 ])
 def test_move_verb_ascii(text):
+    # hex_travel używa diakrytycznej normalizacji (nie phonetic — psuło route-integration).
     assert _PT3_MOVE_VERB_RE.search(strip_pl_diacritics(text)) is not None
 
 
@@ -73,7 +74,7 @@ def test_move_verb_ascii(text):
     "napraw zbroje",           # napraw
 ])
 def test_skill_verb_hint_ascii(text):
-    assert _SKILL_VERB_HINT.search(strip_pl_diacritics(text)) is not None
+    assert _SKILL_VERB_HINT.search(phonetic_fold(text)) is not None
 
 
 def test_skill_verb_hint_diacritic_equivalence():
@@ -91,7 +92,19 @@ def test_skill_verb_hint_diacritic_equivalence():
     ("prosze o gorzale", False, True),     # proszę gorzałę
 ])
 def test_food_drink_ascii(text, food, drink):
-    n = strip_pl_diacritics(text)
+    n = phonetic_fold(text)
     assert SG._FOOD_ORDER_VERB_RE.search(n) is not None
     assert bool(SG._FOOD_NOUN_RE.search(n)) == food
     assert bool(SG._DRINK_NOUN_RE.search(n)) == drink
+
+
+# #1421 — FONETYCZNE błędy (Polak zna brzmienie, myli zapis): ó↔u, rz↔ż, ch↔h.
+def test_gate_phonetic():
+    from app.services.gate_service import classify_intent_stub
+    assert classify_intent_stub("prubuje otworzyc")["action_type"] == "SKILL_ATTEMPT"  # próbuję→prubuje
+
+
+def test_river_intent_phonetic():
+    from app.api.turns import _is_river_cross_intent
+    assert _is_river_cross_intent("przeprawiam sie przez zeke")   # rzekę→żeke→zeke
+    assert _is_river_cross_intent("bodoje tratwe")                # buduję→bodoje (u→o)

@@ -27,3 +27,15 @@ def strip_pl_diacritics(s: str | None) -> str:
 def fold(s: str | None) -> str:
     """Normalizacja pod porównania keyword-owe: bez diakrytyków + lowercase."""
     return strip_pl_diacritics(s).lower()
+
+
+# #1421 — FONETYCZNA normalizacja: zwija systematyczne polskie błędy pisowni homofonów.
+# Polak zna brzmienie, myli zapis: ó↔u ("prubuje"), rz↔ż↔ź ("żeka"/"rzeka"), ch↔h
+# ("hleb"/"chleb"). Zastosowana do WZORCA i WEJŚCIA jednocześnie → łapie oba warianty.
+# NIE zwija podwojeń/przestawień liter (to klasa mechaniczna — zostaje na LLM-fallbacku).
+def phonetic_fold(s: str | None) -> str:
+    """Bez diakrytyków + lowercase + zwinięcie fonetyczne (rz/ż/ź→z, ch→h, ó/u→o)."""
+    t = strip_pl_diacritics(s).lower()   # ż/ź→z, ó→o, ł→l, ...
+    t = t.replace("rz", "z").replace("ch", "h")
+    t = t.replace("u", "o")              # ó/u/o → o (ó brzmi jak u)
+    return t

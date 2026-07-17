@@ -2701,28 +2701,30 @@ _DIG_INTENT_RE = re.compile(
 # #1413 Model C — narracyjna przeprawa łodzią. Wymaga CZASOWNIKA (szukam/buduję/…)
 # przy rzeczowniku łódź/tratwa/prom/czółno, albo jawnej frazy „przeprawiam się …".
 # Sam rzeczownik (opis „widzę łódź") NIE triggeruje — jak person-guard w #1394.
-# #1419 — gracze często piszą BEZ polskich znaków („przeplywam", „rzeke", „lodz").
-# Normalizujemy diakrytyki PRZED matchem, a wzorzec trzymamy w ASCII → łapie oba warianty.
-_PL_STRIP = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+# #1419/#1421 — gracze piszą bez polskich znaków I z fonetycznymi błędami. Wzorzec i
+# wejście przechodzą przez `phonetic_fold` (diakrytyki + rz/ż→z, ch→h, ó/u→o) → łapie oba.
+from app.core.text_utils import phonetic_fold as _pf
 
-# #1418/#1419 — szeroki intent przeprawy przez rzekę (ASCII): czasownik przeprawy + rzeczownik
+# #1418/#1419 — szeroki intent przeprawy przez rzekę: czasownik przeprawy + rzeczownik
 # wody, ALBO szukam/buduje + przeprawa/brod/lodz/tratwa/most, ALBO „na druga strone/brzeg".
 _BOAT_INTENT_RE = re.compile(
-    r"(przekracz\w*|przechodz\w*|przepraw\w*|przebywa\w*|brn[ie]\w*|brodz\w*|forsuj\w*|"
-    r"pokonuj\w*|plyn[ie]\w*|przeplywa\w*|przeprawia\w*)\b[^.!?]{0,30}"
-    r"(rzek\w*|wod[aey]\w*|nurt\w*|brzeg\w*|brod\w*|lod(zi|zia|ka|z)\w*|lodk\w*|"
-    r"tratw\w*|prom\w*|czoln\w*|na\s+drug\w+\s+(stron|brzeg))"
-    r"|(szukam|znajd\w*|buduj\w*|sklec\w*|klec\w*|majstruj\w*|robi\w*|potrzebuj\w*|wsiadam|odbijam)\b[^.!?]{0,45}"
-    r"(przepraw\w*|brod\w*|lod(zi|zia|ka|z)\w*|lodk\w*|tratw\w*|prom\w*|czoln\w*|most\w*|"
-    r"miejsc\w*\s+\w*\s*(przej|przepraw|przekrocz))"
-    r"|na\s+drug\w+\s+(brzeg|stron)",
+    _pf(
+        r"(przekracz\w*|przechodz\w*|przepraw\w*|przebywa\w*|brn[ie]\w*|brodz\w*|forsuj\w*|"
+        r"pokonuj\w*|plyn[ie]\w*|przeplywa\w*|przeprawia\w*)\b[^.!?]{0,30}"
+        r"(rzek\w*|wod[aey]\w*|nurt\w*|brzeg\w*|brod\w*|lod(zi|zia|ka|z)\w*|lodk\w*|"
+        r"tratw\w*|prom\w*|czoln\w*|na\s+drug\w+\s+(stron|brzeg))"
+        r"|(szukam|znajd\w*|buduj\w*|sklec\w*|klec\w*|majstruj\w*|robi\w*|potrzebuj\w*|wsiadam|odbijam)\b[^.!?]{0,45}"
+        r"(przepraw\w*|brod\w*|lod(zi|zia|ka|z)\w*|lodk\w*|tratw\w*|prom\w*|czoln\w*|most\w*|"
+        r"miejsc\w*\s+\w*\s*(przej|przepraw|przekrocz))"
+        r"|na\s+drug\w+\s+(brzeg|stron)"
+    ),
     re.IGNORECASE,
 )
 
 
 def _is_river_cross_intent(text: str) -> bool:
-    """#1419 — intent przeprawy przez rzekę, ODPORNY na brak polskich znaków."""
-    return bool(_BOAT_INTENT_RE.search((text or "").translate(_PL_STRIP)))
+    """#1419/#1421 — intent przeprawy: odporny na brak polskich znaków + błędy fonetyczne."""
+    return bool(_BOAT_INTENT_RE.search(_pf(text)))
 
 
 def _river_cross_target(conn: sqlite3.Connection, cq: int, cr: int):

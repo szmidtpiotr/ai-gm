@@ -23,7 +23,7 @@ class PlayerIntent:
 
 # #1420 — dopasowanie odporne na brak polskich znaków: wzorce ODdiakrytyzowane,
 # wejście też normalizowane (patrz parse_intent).
-from app.core.text_utils import strip_pl_diacritics as _sd
+from app.core.text_utils import phonetic_fold as _sd
 
 
 def _c(pattern: str) -> re.Pattern:
