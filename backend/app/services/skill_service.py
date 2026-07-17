@@ -145,13 +145,21 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str, conn=None, character_i
         fatigue_penalty = compute_test_penalty(sheet.get("conditions") or [], race=sheet.get("race"))
     except Exception:
         fatigue_penalty = 0
-    total = skill_rank + stat_mod + proficiency + fatigue_penalty
+    # #1193: choroba (zaraza) — kara flat_test_penalty, niezależna od zmęczenia
+    # (długi odpoczynek jej nie zdejmuje). Osobny prymityw → osobny sumator.
+    try:
+        from app.services.disease_service import compute_disease_penalty
+        disease_penalty = compute_disease_penalty(sheet.get("conditions") or [])
+    except Exception:
+        disease_penalty = 0
+    total = skill_rank + stat_mod + proficiency + fatigue_penalty + disease_penalty
     return {
         "governing_stat": governing_stat,
         "skill_rank": skill_rank,
         "stat_mod": stat_mod,
         "proficiency": proficiency,
         "fatigue_penalty": fatigue_penalty,
+        "disease_penalty": disease_penalty,
         "equipment_bonus": equipment_bonus,
         "total": total,
     }

@@ -310,6 +310,16 @@ def advance_clock(
             except Exception:
                 pass
 
+            # #1193 — day-tick regionalnych wydarzeń: przy przekroczeniu doby
+            # gry wygaś przeterminowane i (za flagą auto-roll) wylosuj nowy event.
+            # Best-effort — nigdy nie wywraca przewijania zegara.
+            try:
+                if (old_hours // 24) != (new_hours // 24):
+                    from app.services import world_event_service as _wes
+                    _wes.on_day_tick(conn, campaign_id)
+            except Exception:
+                pass
+
         # #580: keep the legacy `ingame_hours` column in sync with the authoritative
         # session_flags value, so direct column readers never see a stale time-of-day.
         conn.execute(

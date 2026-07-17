@@ -507,6 +507,9 @@ class ContextInjector:
                 weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
                 if weather:
                     swiat += f"\n{weather}"
+                event = self._build_event_line(campaign_id)
+                if event:
+                    swiat += f"\n{event}"
                 return swiat
         except Exception as e:
             logger.warning("build_swiat_block_failed", error=str(e))
@@ -540,6 +543,9 @@ class ContextInjector:
         weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
         if weather:
             lines.append(weather)
+        event = self._build_event_line(campaign_id)
+        if event:
+            lines.append(event)
         return "\n".join(lines)
 
     def _build_weather_line(
@@ -568,6 +574,17 @@ class ContextInjector:
             )
         except Exception as e:
             logger.warning("build_weather_line_failed", error=str(e))
+            return ""
+
+    def _build_event_line(self, campaign_id: int | None) -> str:
+        """#1193 — linia WYDARZENIE (aktywny event regionalny). '' gdy brak/off."""
+        if campaign_id is None:
+            return ""
+        try:
+            from app.services import world_event_service
+            return world_event_service.build_event_line(self.conn, int(campaign_id))
+        except Exception as e:
+            logger.warning("build_event_line_failed", error=str(e))
             return ""
 
     _STORY_STALE_THRESHOLD = 12  # #1026: raised from 5 — was triggering too early

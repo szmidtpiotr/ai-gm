@@ -41,6 +41,29 @@ def _norm_item_type(t: str) -> str:
     return _ITEM_TYPE_ALIASES.get(str(t or "").strip().lower(), str(t or "").strip().lower())
 
 
+def _event_price_category(item_type: str) -> str:
+    """#1193: item_type → kategoria cenowa dla mnożnika wydarzenia regionalnego."""
+    t = _norm_item_type(item_type)
+    if t in ("weapon", "consumable", "armor"):
+        return t
+    return "item"
+
+
+def _event_price_multiplier(conn: sqlite3.Connection, character_id: int, item_type: str) -> float:
+    """#1193: mnożnik ceny z aktywnego wydarzenia regionalnego (jarmark/zaraza/susza).
+
+    1.0 gdy brak eventu / brak kampanii / błąd. Defensywny."""
+    try:
+        cid = _campaign_id_for_character(conn, character_id)
+        if cid is None:
+            return 1.0
+        from app.services import world_event_service, reputation_service
+        region = reputation_service.resolve_region(conn, int(cid))
+        return world_event_service.price_multiplier(conn, region, _event_price_category(item_type))
+    except Exception:
+        return 1.0
+
+
 def _campaign_id_for_character(conn: sqlite3.Connection, character_id: int) -> int | None:
     """S6: bohater wie, w jakiej kampanii gra → tam żyją session_flags z rabatem."""
     try:
@@ -536,7 +559,10 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
             if not _item_passes_filters(cat, char_level, location_key):
                 continue
             base = int(cat.get("value_gp") or 0)
-            cat["buy_price_gp"] = max(1, int(math.floor(base * eff_buy_mult))) if base > 0 else base
+            # #1193: wydarzenie regionalne (jarmark −20%, zaraza mikstury +50%) —
+            # mnożnik per kategoria, składany multiplikatywnie z CHA/haggle/noc.
+            ev_mult = _event_price_multiplier(conn, character_id, e["type"])
+            cat["buy_price_gp"] = max(1, int(math.floor(base * eff_buy_mult * ev_mult))) if base > 0 else base
             items.append(cat)
         # #1196 E6 — black market at night offers a treasure-map fragment (kept out
         # of the normal catalog so it never leaks into daytime/regular stock).
@@ -655,6 +681,11 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         # #1127: black-market surcharge stacks on top of everything else.
         if night_state["is_black_market"]:
             eff_buy_mult = round(eff_buy_mult * night_econ.BLACK_MARKET_BUY_MULT, 4)
+        # #1193: aktywne wydarzenie regionalne modyfikuje cenę per kategoria
+        # (musi zgadzać się z podglądem w get_shop_inventory).
+        ev_mult = _event_price_multiplier(conn, character_id, item_type)
+        if ev_mult != 1.0:
+            eff_buy_mult = round(eff_buy_mult * ev_mult, 4)
         price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price
 
     # Validate gold first for cleaner error mapping.

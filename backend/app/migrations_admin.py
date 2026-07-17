@@ -1273,6 +1273,42 @@ ADMIN_MIGRATIONS = [
         sent_at  TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # #1193 — Wydarzenia regionalne ("żywy świat"). Template = strojony przepis
+    # eventu (typ, czas trwania, mnożniki, tagi narracyjne); world_events =
+    # instancja aktywna w regionie. Modyfikatory to CIENKA warstwa na istniejących
+    # systemach (sklep/encounter/podróż/narrator) — patrz world_event_service.py.
+    """
+    CREATE TABLE IF NOT EXISTS game_config_event_templates (
+        key                TEXT PRIMARY KEY,
+        type               TEXT NOT NULL,
+        label              TEXT NOT NULL,
+        duration_days_min  INTEGER NOT NULL DEFAULT 2,
+        duration_days_max  INTEGER NOT NULL DEFAULT 5,
+        modifiers_json     TEXT NOT NULL DEFAULT '{}',
+        narrative_tags     TEXT NOT NULL DEFAULT '[]',
+        weight             INTEGER NOT NULL DEFAULT 10,
+        is_active          INTEGER NOT NULL DEFAULT 1,
+        created_by         TEXT NOT NULL DEFAULT 'seed',
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS world_events (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        region       TEXT NOT NULL,
+        template_key TEXT NOT NULL,
+        started_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        ends_at      TEXT NOT NULL,
+        state        TEXT NOT NULL DEFAULT 'active',
+        source       TEXT NOT NULL DEFAULT 'manual',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_world_events_region_state
+    ON world_events(region, state)
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -2080,6 +2116,45 @@ ADMIN_SEEDS = [
     # #1011 refinement: pin a quest to a beat (beat_key) so it auto-cancels
     # (status='skipped') when that beat is skipped on critical-path act close (#1010).
     "ALTER TABLE character_quests ADD COLUMN beat_key TEXT",
+    # #1193 — kondycja `chory` (zaraza). Prymityw `flat_test_penalty` — CZYTANY
+    # przez disease_service, świadomie NIE `test_penalty` (fatigue_service), by
+    # długi odpoczynek NIE leczył choroby (clear_all_fatigue zdejmuje tylko
+    # kondycje zmęczeniowe ze `stacking_levels`). Zdjęcie: test medicine DC 12
+    # (zielarz/uzdrowiciel) lub mikstura z `cures_disease`. Liczby startowe.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('chory', 'Chory', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"flat_test_penalty","value":-2}],"cure":{"skill":"medicine","dc":12}}', 'Postać złapała zarazę — -2 do wszystkich testów umiejętności. Nie mija sama ani po odpoczynku; zdjęcie: leczenie u zielarza/uzdrowiciela (test medicine DC 12) lub mikstura lecznicza z odtrutką.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # #1193 — szablony wydarzeń regionalnych (4 typy). modifiers_json = cienka
+    # warstwa mnożników na istniejących systemach; narrative_tags → linia
+    # WYDARZENIE w prompcie narratora. Liczby STARTOWE (Numbers Policy).
+    """
+    INSERT OR IGNORE INTO game_config_event_templates
+    (key, type, label, duration_days_min, duration_days_max, modifiers_json, narrative_tags, weight, is_active, created_by)
+    VALUES
+    ('jarmark', 'jarmark', 'Jarmark', 2, 4,
+     '{"shop_price_mult":{"*":0.8},"badge":"🎪"}',
+     '["W osadzie trwa gwarny jarmark — tłok, kramy, wędrowni kupcy i muzyka.","Ceny u kupców spadły, towaru w bród."]',
+     10, 1, 'seed'),
+    ('zaraza', 'zaraza', 'Zaraza', 3, 6,
+     '{"shop_price_mult":{"consumable":1.5},"rest_disease_dc":12,"badge":"☠"}',
+     '["Region nęka zaraza — ludzie chodzą w kapturach, unikają obcych, na tablicach wiszą kontrakty na zielarzy.","Mikstury i lekarstwa podrożały, aptekarze przebierają w klientach."]',
+     8, 1, 'seed'),
+    ('rajdy', 'rajdy', 'Rajdy bandytów', 2, 5,
+     '{"encounter_chance_mult":1.5,"loot_gold_mult":1.3,"badge":"⚔"}',
+     '["Trakty regionu nękają zuchwałe bandy — kupcy podróżują w strachu, na rozstajach wiszą ostrzeżenia.","Kto przeżyje starcie z bandytą, znajdzie przy nim więcej łupu niż zwykle."]',
+     8, 1, 'seed'),
+    ('zima', 'zima', 'Surowa zima', 4, 8,
+     '{"travel_hours_mult":1.25,"badge":"❄"}',
+     '["Region skuła sroga zima — zaspy, lód i mróz spowalniają każdą podróż.","Drogi zasypane, marsz między osadami trwa dłużej niż zwykle."]',
+     6, 1, 'seed'),
+    ('susza', 'susza', 'Susza', 4, 8,
+     '{"travel_hours_mult":1.2,"shop_price_mult":{"consumable":1.2},"badge":"🌵"}',
+     '["Region trawi susza — spękana ziemia, wyschłe studnie, drożejąca woda i prowiant.","Upał i pył wydłużają podróż, a zapasy w osadach topnieją."]',
+     6, 1, 'seed')
+    """,
 ]
 
 

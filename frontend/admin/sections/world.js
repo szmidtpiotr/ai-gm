@@ -1671,6 +1671,103 @@ function _worldAddAction() {
   else _showToast('Przełącz na zakładkę Wrogowie, aby dodać wroga.','info');
 }
 
+// ── Wydarzenia regionalne (#1193) ───────────────────────────────────────────────
+let _eventsCache = { templates: [], regions: [], auto_roll: false };
+
+async function _loadWorldEvents() {
+  const container = document.getElementById('world-events-container');
+  if (!container) return;
+  try {
+    const d = await apiFetch('/api/admin/world-events?include_ended=false');
+    _eventsCache = { templates: d.templates || [], regions: d.regions || [], auto_roll: !!d.auto_roll };
+    const events = d.events || [];
+    const regionOpts = (d.regions || []).map(r => `<option value="${_esc(r)}">${_esc(r)}</option>`).join('');
+    const tplOpts = (d.templates || []).map(t => `<option value="${_esc(t.key)}">${_esc(t.label)} (${_esc(t.type)})</option>`).join('');
+
+    const rows = events.length ? events.map(ev => {
+      const badge = (ev.modifiers && ev.modifiers.badge) ? ev.modifiers.badge + ' ' : '';
+      return `<tr>
+        <td data-label="Region">${_esc(ev.region)}</td>
+        <td data-label="Wydarzenie">${badge}${_esc(ev.label)}</td>
+        <td data-label="Typ"><span class="td-muted">${_esc(ev.type)}</span></td>
+        <td data-label="Źródło">${ev.source === 'random' ? '🎲 losowe' : '✋ ręczne'}</td>
+        <td data-label="Do">${_esc((ev.ends_at||'').replace('T',' '))}</td>
+        <td style="text-align:right"><button class="btn-icon" title="Zakończ" onclick="window._worldEndEvent(${ev.id},this)">⏹</button></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak aktywnych wydarzeń.</td></tr>`;
+
+    container.innerHTML = `
+      <div class="card" style="margin-bottom:12px;padding:12px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem">
+          <input type="checkbox" id="we-auto-roll" ${d.auto_roll ? 'checked' : ''} onchange="window._worldToggleAutoRoll(this)">
+          <span>Automatyczne losowanie przy zmianie dnia gry (szansa dzienna ${Math.round((d.daily_chance||0)*100)}% / region)</span>
+        </label>
+        <div class="td-muted" style="font-size:0.75rem;margin-top:4px">Domyślnie WYŁĄCZONE. Ręczne sterowanie poniżej działa zawsze.</div>
+      </div>
+      <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+        <select id="we-region" class="input input-sm">${regionOpts}</select>
+        <select id="we-template" class="input input-sm">${tplOpts}</select>
+        <input type="number" id="we-duration" class="input input-sm" placeholder="dni (opcj.)" style="width:110px" min="1" max="30">
+        <button class="btn btn-primary btn-sm" onclick="window._worldStartEvent()">+ Dodaj wydarzenie</button>
+        <button class="btn btn-secondary btn-sm" onclick="window._worldRollEvent()" title="Wylosuj wydarzenie dla regionu">🎲 Wylosuj</button>
+      </div>
+      <div class="data-table--cards table-wrap">
+        <table class="data-table" id="world-events-table">
+          <thead><tr>
+            <th><div class="th-inner">Region</div></th>
+            <th><div class="th-inner">Wydarzenie</div></th>
+            <th><div class="th-inner">Typ</div></th>
+            <th><div class="th-inner">Źródło</div></th>
+            <th><div class="th-inner">Do</div></th>
+            <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--danger)">Błąd: ${_esc(err.message||String(err))}</div>`;
+  }
+}
+
+async function _startWorldEvent() {
+  const region = document.getElementById('we-region')?.value;
+  const template_key = document.getElementById('we-template')?.value;
+  const durationRaw = document.getElementById('we-duration')?.value;
+  if (!template_key) { _showToast('Wybierz szablon.', 'error'); return; }
+  const body = { region, template_key };
+  if (durationRaw) body.duration_days = parseInt(durationRaw, 10);
+  try {
+    await apiFetch('/api/admin/world-events', { method: 'POST', body: JSON.stringify(body) });
+    _showToast('Wydarzenie uruchomione.', 'success');
+    _loadWorldEvents();
+  } catch (err) { _showToast('Błąd: ' + (err.message || err), 'error'); }
+}
+
+async function _rollWorldEvent() {
+  const region = document.getElementById('we-region')?.value;
+  try {
+    const r = await apiFetch('/api/admin/world-events/roll', { method: 'POST', body: JSON.stringify({ region }) });
+    if (r.ok) { _showToast('Wylosowano wydarzenie.', 'success'); _loadWorldEvents(); }
+    else _showToast('Region ma już aktywne wydarzenie lub brak szablonów.', 'info');
+  } catch (err) { _showToast('Błąd: ' + (err.message || err), 'error'); }
+}
+
+async function _endWorldEvent(id, btn) {
+  if (!confirm('Zakończyć to wydarzenie?')) return;
+  try {
+    await apiFetch(`/api/admin/world-events/${id}/end`, { method: 'PATCH' });
+    _showToast('Wydarzenie zakończone.', 'success');
+    _loadWorldEvents();
+  } catch (err) { _showToast('Błąd: ' + (err.message || err), 'error'); }
+}
+
+async function _toggleAutoRoll(chk) {
+  try {
+    await apiFetch('/api/admin/world-events/auto-roll', { method: 'POST', body: JSON.stringify({ enabled: chk.checked }) });
+    _showToast(chk.checked ? 'Auto-losowanie włączone.' : 'Auto-losowanie wyłączone.', 'success');
+  } catch (err) { _showToast('Błąd: ' + (err.message || err), 'error'); chk.checked = !chk.checked; }
+}
+
 // ── Section HTML ───────────────────────────────────────────────────────────────
 function _sectionHtml() {
   return `
@@ -1687,6 +1784,7 @@ function _sectionHtml() {
         <button class="stab active" data-wtab="npcs">NPC</button>
         <button class="stab" data-wtab="enemies">Wrogowie</button>
         <button class="stab" data-wtab="loot">Tabele Łupów</button>
+        <button class="stab" data-wtab="events">Wydarzenia</button>
         <button class="stab" data-wtab="pending">Oczekujące <span class="nav-badge" id="world-pending-badge" style="display:none">0</span></button>
       </div>
 
@@ -1756,6 +1854,12 @@ function _sectionHtml() {
         <div id="world-loot-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div></div>
       </div>
 
+      <!-- Wydarzenia regionalne (#1193) -->
+      <div class="stab-panel" id="wtab-events">
+        <div class="section-sub" style="margin-bottom:8px">Wydarzenia regionalne — „żywy świat". Jarmark, zaraza, rajdy bandytów, surowa zima/susza zmieniają ceny, spotkania i podróż w regionie.</div>
+        <div id="world-events-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div></div>
+      </div>
+
       <!-- Oczekujące -->
       <div class="stab-panel" id="wtab-pending">
         <div class="selection-bar" id="pending-sel-bar">
@@ -1772,6 +1876,7 @@ const _TAB_LOADERS = {
   npcs:    () => { if (!_loaded.has('npcs'))    { _loaded.add('npcs');    _loadNPCs().catch(()=>_loaded.delete('npcs')); } },
   enemies: () => { if (!_loaded.has('enemies')) { _loaded.add('enemies'); _loadEnemies().catch(()=>_loaded.delete('enemies')); } },
   loot:    () => { if (!_loaded.has('loot'))    { _loaded.add('loot');    _loadBestiaryLoot().catch(()=>_loaded.delete('loot')); } },
+  events:  () => { _loadWorldEvents(); },  // #1193 — zawsze świeże (stan eventów żyje)
   pending: () => { if (!_loaded.has('pending')) { _loaded.add('pending'); _loadBestiaryPending().catch(()=>_loaded.delete('pending')); } },
 };
 
@@ -1807,6 +1912,10 @@ export async function init(panel) {
   window._worldPendingFillAI     = (type, key, btn) => _pendingFillAI(type, key, btn);
   window._worldPendingGenItemImage = (key, btn) => _pendingGenItemImage(key, btn);
   window._worldBulkDiscardPending  = (btn) => _bulkDiscardPending(btn);
+  window._worldStartEvent      = () => _startWorldEvent();       // #1193
+  window._worldRollEvent       = () => _rollWorldEvent();
+  window._worldEndEvent        = (id, btn) => _endWorldEvent(id, btn);
+  window._worldToggleAutoRoll  = (chk) => _toggleAutoRoll(chk);
   window.rowCheck   = rowCheck;
   window.toggleAll  = toggleAll;
   window.eiOpenGallery  = (key) => eiOpenGallery(key);

@@ -778,6 +778,18 @@ def resolve_chain_travel(
     except Exception:
         _weather_mult, _weather_type = 1.0, None
 
+    # #1193: aktywne wydarzenie regionalne — surowa zima/susza wydłuża marsz
+    # (składane z pogodą), rajdy bandytów zagęszczają spotkania na traktach.
+    _event_enc_mult = 1.0
+    try:
+        from app.services import world_event_service as _wes
+        from app.services.reputation_service import resolve_region as _resolve_region_ev
+        _ev_region = _resolve_region_ev(conn, campaign_id)
+        _weather_mult = _weather_mult * _wes.travel_hours_multiplier(conn, _ev_region)
+        _event_enc_mult = _wes.encounter_chance_multiplier(conn, _ev_region)
+    except Exception:
+        pass
+
     if from_hex not in hexes and from_hex != to_hex:
         # Player is not on a hex yet — allow if destination exists
         pass
@@ -925,6 +937,7 @@ def resolve_chain_travel(
             m *= NIGHT_ENCOUNTER_MULT
         if route_mode == "road" and hex_data.get("hex_type") == "road":
             m *= ROAD_ENCOUNTER_MULT
+        m *= _event_enc_mult  # #1193: rajdy bandytów zagęszczają spotkania w regionie
         return m
 
     # #1390 Fix 3 — cap na CAŁĄ podróż. Rzut leci per hex (stop na 1. trafieniu),

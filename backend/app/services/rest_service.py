@@ -253,6 +253,16 @@ def perform_long_rest(
 
     advance_clock(campaign_id, 8, "long_rest", conn=conn)
 
+    # #1193: nocleg w osadzie regionu objętego ZARAZĄ → test CON na zarażenie.
+    # Operuje na własnym odczycie sheeta (chory dokłada się PO leczeniu HP/many —
+    # odpoczynek regeneruje, ale można obudzić się chorym). No-op poza zarazą.
+    disease_result: dict[str, Any] = {}
+    try:
+        from app.services import disease_service
+        disease_result = disease_service.maybe_infect_on_rest(conn, character_id, campaign_id)
+    except Exception:
+        disease_result = {}
+
     # PT7 #1117: Reset daily march budget after long rest
     # PT9 #1119: Roll camp encounter before clearing flags, then clear boost
     camp_encounter: dict[str, Any] = {}
@@ -353,6 +363,8 @@ def perform_long_rest(
         result["new_level"] = new_level
     if camp_encounter:
         result["camp_encounter"] = camp_encounter
+    if disease_result.get("infected"):
+        result["disease"] = disease_result
     return result
 
 
