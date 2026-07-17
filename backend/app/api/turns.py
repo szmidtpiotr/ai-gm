@@ -3099,21 +3099,21 @@ def _maybe_tavern_rumor_shortcut(conn: sqlite3.Connection, campaign_id: int,
     cid = int(character["id"])
 
     def _commit_narration(user_line: str, prose: str, route: str) -> dict:
-        # tura 1: dymek gracza; tura 2: proza skutku (jak river_cross/herb)
-        _log = create_turn_log(conn=conn, campaign_id=campaign_id, character_id=cid,
-                               user_text=user_line, assistant_text=None, route=route)
-        _tn2 = conn.execute(
+        # pojedyncza tura: dymek gracza + proza skutku (jak herb_cooldown). user_text
+        # NOT NULL (#1152) — zawsze przekazuj słowa gracza.
+        _tn = conn.execute(
             "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
             (campaign_id,),
         ).fetchone()[0]
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, "
             "assistant_text, route, created_at) VALUES (?,?,?,?,?,?,datetime('now'))",
-            (campaign_id, cid, int(_tn2), None,
+            (campaign_id, cid, int(_tn), user_line,
              json.dumps({"narrative": prose}, ensure_ascii=False), route),
         )
         conn.commit()
-        return {"prose": prose, "route": route, "turn_number": int(_log["turn_number"])}
+        return {"prose": prose, "route": route, "turn_number": int(_tn),
+                "id": int(cur.lastrowid)}
 
     # Kolejka kosztuje — brak złota = odmowa narracyjna (tura zapisana, bez plotki).
     if paid:
