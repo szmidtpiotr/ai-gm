@@ -29,6 +29,22 @@ Treść jest pogrupowana według głównych zakładek panelu (lewa nawigacja): <
 w zakładce <b>Do zatwierdzenia</b> sekcji <b>Mapa</b>.</p>
 <p>Rozdziały są niezależne — czytaj ten, którego potrzebujesz. Spis treści po lewej.</p>`,
       },
+      {
+        id: 'wyszukiwarka',
+        title: 'Szukaj funkcji (wyszukiwarka)',
+        body: `
+<p>Nie musisz pamiętać, w której zakładce jest dana funkcja. Na górze lewej nawigacji jest pole
+<b>🔍 Szukaj funkcji…</b> — otwierasz je kliknięciem albo skrótem <b>Ctrl + K</b> (na Macu ⌘ K).</p>
+<p>Wpisz nazwę tego, czego szukasz (np. <b>tabele łupów</b>, <b>presety LLM</b>, <b>kostki</b>,
+<b>portret wroga</b>). W miarę pisania pojawia się lista wyników — każdy z krótkim opisem i etykietą
+zakładki, w której się znajduje. Kliknij wynik (lub wybierz strzałkami ↑↓ i wciśnij ↵), a panel
+<b>przeniesie Cię prosto do tej zakładki</b> — jeśli funkcja siedzi w podzakładce, otworzy się od razu
+ta podzakładka.</p>
+<p>Wyszukiwarka rozumie pisownię bez polskich znaków i odmiany (np. <b>lupy</b> znajdzie
+<b>Tabele łupów</b>). Kilka funkcji (np. Plan GM konkretnej kampanii, LLM konkretnego gracza) wymaga
+wcześniejszego wybrania kampanii/gracza — wtedy wynik przenosi Cię do właściwej sekcji, a resztę
+wybierasz już na miejscu.</p>`,
+      },
     ],
   },
   { ico: '▦', label: 'Przegląd',  chapters: [{ id: 'przeglad',  title: 'Pulpit i statystyki', body: STUB }] },

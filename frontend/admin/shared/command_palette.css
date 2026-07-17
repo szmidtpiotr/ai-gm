@@ -1,0 +1,89 @@
+/* command_palette.css — wyszukiwarka funkcji admina (pole w sidebarze + Ctrl+K). */
+
+/* ── Pole-trigger w sidebarze ─────────────────────────────────────────────── */
+.cmdp-trigger {
+  display: flex; align-items: center; gap: 8px;
+  width: calc(100% - 20px); margin: 8px 10px 4px;
+  padding: 8px 10px; cursor: pointer;
+  background: var(--page, #f1f3f5); color: var(--t3, #868e96);
+  border: 1px solid var(--border, #dee2e6); border-radius: var(--r, 6px);
+  font-size: .8rem; text-align: left; transition: border-color .12s, color .12s;
+}
+.cmdp-trigger:hover { border-color: var(--blue, #4c6ef5); color: var(--t2, #495057); }
+.cmdp-trigger-icon { font-size: .85rem; flex-shrink: 0; }
+.cmdp-trigger-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmdp-trigger-kbd {
+  flex-shrink: 0; font-size: .62rem; font-family: inherit;
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--canvas, #fff); border: 1px solid var(--border, #dee2e6); color: var(--t3, #868e96);
+}
+
+/* ── Overlay ───────────────────────────────────────────────────────────────── */
+.cmdp-overlay {
+  display: none; position: fixed; inset: 0; z-index: 400;
+  background: rgba(15, 18, 24, .45);
+  align-items: flex-start; justify-content: center;
+  padding: 12vh 16px 16px;
+}
+.cmdp-overlay.open { display: flex; }
+
+.cmdp-box {
+  width: 100%; max-width: 560px; max-height: 70vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--canvas, #fff); border: 1px solid var(--border, #dee2e6);
+  border-radius: var(--r-xl, 12px); box-shadow: var(--shadow-md, 0 12px 40px rgba(0,0,0,.25));
+}
+
+.cmdp-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border, #dee2e6);
+}
+.cmdp-input-icon { font-size: 1rem; color: var(--t3, #868e96); flex-shrink: 0; }
+.cmdp-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-size: 1rem; color: var(--t1, #212529);
+}
+.cmdp-input::placeholder { color: var(--t3, #adb5bd); }
+.cmdp-esc {
+  font-size: .62rem; font-family: inherit; padding: 2px 6px; border-radius: 4px;
+  background: var(--page, #f1f3f5); border: 1px solid var(--border, #dee2e6); color: var(--t3, #868e96);
+}
+
+/* ── Wyniki ────────────────────────────────────────────────────────────────── */
+.cmdp-results { overflow-y: auto; flex: 1; padding: 6px; }
+.cmdp-empty { padding: 22px 16px; text-align: center; color: var(--t3, #868e96); font-size: .85rem; }
+
+.cmdp-row {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 9px 12px; margin: 2px 0; border: none; border-radius: var(--r, 6px);
+  background: transparent; color: inherit; transition: background .1s;
+}
+.cmdp-row:hover, .cmdp-row.active { background: var(--blue-light, #edf2ff); }
+.cmdp-row.active { box-shadow: inset 0 0 0 1px var(--blue, #4c6ef5); }
+
+.cmdp-row-main { display: flex; align-items: center; gap: 8px; }
+.cmdp-row-title { font-size: .88rem; font-weight: 600; color: var(--t1, #212529); }
+.cmdp-row-badge {
+  margin-left: auto; flex-shrink: 0;
+  font-size: .64rem; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+  background: var(--page, #f1f3f5); color: var(--t2, #495057); border: 1px solid var(--border, #dee2e6);
+}
+.cmdp-row-desc {
+  font-size: .76rem; color: var(--t3, #868e96); margin-top: 2px; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+.cmdp-foot {
+  padding: 8px 14px; border-top: 1px solid var(--border, #dee2e6);
+  font-size: .68rem; color: var(--t3, #868e96);
+}
+.cmdp-foot kbd {
+  font-family: inherit; font-size: .62rem; padding: 1px 5px; border-radius: 4px; margin: 0 1px;
+  background: var(--page, #f1f3f5); border: 1px solid var(--border, #dee2e6);
+}
+
+@media (max-width: 640px) {
+  .cmdp-overlay { padding: 8vh 10px 10px; }
+  .cmdp-trigger-kbd { display: none; }
+}
