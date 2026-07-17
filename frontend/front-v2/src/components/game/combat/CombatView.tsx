@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import type { CombatState, CharacterDetail, DefenseReaction, CombatActionResult } from "@/lib/types";
 import type { LogBlock } from "@/lib/game";
 import type { Vitals } from "@/lib/game";
+import { readConditions } from "@/lib/sheet";
 import {
   readCombat,
   livingEnemies,
@@ -792,7 +793,7 @@ export function CombatView({
             heroName={character?.name}
           />
         </div>
-        <VitalsRail v={combatVitals} stats={stats} locationLabel={character?.current_location_label} />
+        <VitalsRail v={combatVitals} stats={stats} locationLabel={character?.current_location_label} conditions={readConditions(character?.sheet_json)} />
       </div>
 
       {/* pasek akcji walki + composer prozy (proza działa równolegle) */}

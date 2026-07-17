@@ -62,6 +62,7 @@ import { AdvancementScreen } from "@/components/game/outcomes/AdvancementScreen"
 import { useCombatState } from "@/hooks/useCombat";
 import { useCharacterRecipes } from "@/hooks/useCrafting";
 import { detectShop } from "@/lib/game";
+import { readConditions } from "@/lib/sheet";
 
 // FE14 (#1263): czytelne nazwy ekranów do auto-kontekstu bug-reportu.
 const SCREEN_LABELS: Record<string, string> = {
@@ -885,6 +886,7 @@ export default function Game() {
               v={vitals}
               stats={stats}
               locationLabel={character.data?.current_location_label}
+              conditions={readConditions(character.data?.sheet_json)}
             />
           </div>
 

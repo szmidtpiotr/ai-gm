@@ -3,6 +3,7 @@ import { useAppStore } from "@/store/appStore";
 import { useCharacter } from "@/hooks/useGameData";
 import { useCharacterRecipes } from "@/hooks/useCrafting";
 import { readVitals } from "@/lib/game";
+import { readConditions } from "@/lib/sheet";
 import { VitalBars } from "@/components/game/Vitals";
 import {
   JOURNAL_TAB,
@@ -37,7 +38,7 @@ export function TabBar({ inGame }: { inGame: boolean }) {
       aria-label="Panele gry"
     >
       {/* HP/Mana — 2 cienkie paski nad tabbarem (sekcja 5) */}
-      {character.data && <VitalBars v={vitals} />}
+      {character.data && <VitalBars v={vitals} conditions={readConditions(character.data?.sheet_json)} />}
       <div className="flex items-stretch">
         {/* Przypięta Opowieść */}
         <div className="flex shrink-0 border-r border-line">
