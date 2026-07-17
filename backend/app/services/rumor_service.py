@@ -23,6 +23,14 @@ logger = get_logger(__name__)
 
 RUMOR_DB_PATH = "/data/ai_gm.db"
 
+# #1190 — Numbers Policy (wartości startowe, Sandbox-tunable):
+#   proporcja plotek PRAWDZIWYCH do fałszywych = 60/40.
+#   Tylko cele MIEJSCA (lokacja/loch/skarb) mogą być fałszywe — „obietnica pustki":
+#   gracz dociera na miejsce i nic tam nie ma → status debunked. Wroga/recepturę/event
+#   demaskacja przez wizytę nie ma sensu (istnieją realnie), więc te są ZAWSZE prawdziwe.
+TRUE_RUMOR_WEIGHT = 0.6
+_PLACE_TARGET_TYPES = frozenset({"location", "dungeon", "treasure_site"})
+
 
 def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(RUMOR_DB_PATH)
@@ -96,6 +104,48 @@ def _pick_target(conn: sqlite3.Connection, campaign_id: int,
     if candidates:
         return random.choice(candidates)
 
+    # 1.5 — #1190: nieukończony loch (game_dungeons) — plotka jako kanał dystrybucji
+    # contentu (skieruj gracza do farmowalnego lochu). „Ukończony" = wpis w
+    # character_dungeon_runs po location_key. Cel MIEJSCE → może być fałszywy.
+    try:
+        cleared = {
+            r["location_key"]
+            for r in conn.execute(
+                "SELECT location_key FROM character_dungeon_runs WHERE character_id = ?",
+                (character_id,),
+            ).fetchall()
+        }
+        dungeon_rows = conn.execute(
+            "SELECT key, label, location_key FROM game_dungeons "
+            "WHERE COALESCE(is_active,1)=1 ORDER BY key"
+        ).fetchall()
+        dungeon_cands = [
+            {"target_type": "dungeon", "target_key": r["key"], "label": r["label"] or r["key"]}
+            for r in dungeon_rows
+            if r["location_key"] not in cleared
+            and ("dungeon", r["key"]) not in open_targets
+        ]
+        if dungeon_cands:
+            return random.choice(dungeon_cands)
+    except sqlite3.OperationalError:
+        pass
+
+    # 1.7 — #1190: aktywne wydarzenie regionalne (#1193) — plotka o „żywym świecie".
+    # Event JEST faktem → zawsze prawdziwy. Region z reputation_service.
+    try:
+        from app.services.reputation_service import resolve_region
+        from app.services import world_event_service as _wes
+        _region = resolve_region(conn, campaign_id)
+        _ev = _wes.get_active_event(conn, _region)
+        if _ev:
+            _ekey = str(_ev.get("id") or _ev.get("template_key") or _region)
+            _elabel = (_ev.get("label") or _ev.get("title")
+                       or _ev.get("name") or "niepokojące wieści")
+            if ("event", _ekey) not in open_targets:
+                return {"target_type": "event", "target_key": _ekey, "label": _elabel}
+    except (sqlite3.OperationalError, ImportError):
+        pass
+
     # 2 — a region enemy type not yet hunted
     try:
         enemy_rows = conn.execute(
@@ -163,14 +213,70 @@ _FLAVOUR = {
                      "widziano nieopodal — może uda się dokończyć zbiór.",
     "recipe": "Stary rzemieślnik przy kuflu mamrocze o zapomnianej recepturze: {label}. "
               "Podobno trzeba zmieszać to przy tyglu we właściwych proporcjach.",
+    # #1190 — nowe cele: loch (kanał dystrybucji farmy) + wydarzenie regionalne.
+    "dungeon": "Zawadiaka przy kuflu zaklina się, że w {label} można nieźle zarobić — "
+               "o ile wyjdzie się stamtąd żywym.",
+    "event": "Ludzie w karczmie ściszają głos: {label}. Podobno to nie koniec.",
     None: "Krążą po karczmie plotki i niesprawdzone wieści — nic konkretnego.",
 }
+
+# #1190 — warianty FAŁSZYWE dla celów-miejsc: kusząca, ale pusta obietnica. Świat
+# nie jest wiarygodny w 100%. Etykieta celu (realna) uwiarygadnia bujdę.
+_FLAVOUR_FALSE = {
+    "location": "Pewien pijak zarzeka się, że w {label} zakopano skrzynię pełną złota — "
+                "„sam widziałem mapę!”. Brzmi zbyt pięknie.",
+    "dungeon": "Ktoś rozpowiada, że w {label} leży smoczy skarb bez strażnika. "
+               "Darmowy łup? Coś tu nie gra.",
+    "treasure_site": "Obcy przysięga, że twoją mapę można dokończyć tuż za rogiem — "
+                     "wystarczy postawić mu jeszcze jedną kolejkę.",
+}
+
+
+def _region_for(conn: sqlite3.Connection, campaign_id: int) -> Optional[str]:
+    """Best-effort campaign region for rumor tagging. None on any failure."""
+    try:
+        from app.services.reputation_service import resolve_region
+        return resolve_region(conn, campaign_id)
+    except Exception:
+        return None
+
+
+def _insert_rumor(c: sqlite3.Connection, cid: int, camp: int,
+                  source_type: str, rng=random) -> Optional[dict[str, Any]]:
+    """Pick a target, decide truth (place-types 60/40, others always true), write a
+    row. Returns {rumor_id, rumor_text, target_type, target_key, truth_flag} or None."""
+    target = _pick_target(c, camp, cid)
+    ttype = target["target_type"] if target else None
+    tkey = target["target_key"] if target else None
+    label = target["label"] if target else None
+    # #1190 — tylko cele-miejsca bywają fałszywe; reszta zawsze prawdziwa.
+    truth = True
+    if ttype in _PLACE_TARGET_TYPES and rng.random() >= TRUE_RUMOR_WEIGHT:
+        truth = False
+    if not truth and ttype in _FLAVOUR_FALSE:
+        text = _FLAVOUR_FALSE[ttype].format(label=label or "")
+    else:
+        text = _FLAVOUR.get(ttype, _FLAVOUR[None]).format(label=label or "")
+    now = _now_iso()
+    region = _region_for(c, camp)
+    cur = c.execute(
+        "INSERT INTO character_rumors "
+        "(character_id, campaign_id, rumor_text, target_type, target_key, status, "
+        " heard_at, truth_flag, source_type, region, suspected) "
+        "VALUES (?, ?, ?, ?, ?, 'heard', ?, ?, ?, ?, 0)",
+        (cid, camp, text, ttype, tkey, now, 1 if truth else 0, source_type, region),
+    )
+    return {"rumor_id": int(cur.lastrowid), "rumor_text": text,
+            "target_type": ttype, "target_key": tkey, "truth_flag": 1 if truth else 0}
 
 
 def create_rumor(campaign_id: Any, character_id: Any,
                  conn: sqlite3.Connection | None = None) -> Optional[dict[str, Any]]:
-    """Record a rumor on a successful quest_rumor encounter. Returns the rumor
-    dict (incl. rumor_text for narrator injection) or None on no-op/failure."""
+    """Record a rumor on a successful quest_rumor encounter (#1191 path).
+
+    Encounter rumors are a SOFT SUCCESS hook → always a true lead (truth_flag=1);
+    only deliberate tavern eavesdropping (#1190 `eavesdrop_rumor`) can be false.
+    Returns the rumor dict (incl. rumor_text) or None on no-op/failure."""
     try:
         cid = int(character_id)
         camp = int(campaign_id)
@@ -179,21 +285,11 @@ def create_rumor(campaign_id: Any, character_id: Any,
     own = conn is None
     c = conn or _conn()
     try:
-        target = _pick_target(c, camp, cid)
-        ttype = target["target_type"] if target else None
-        tkey = target["target_key"] if target else None
-        label = target["label"] if target else None
-        text = _FLAVOUR.get(ttype, _FLAVOUR[None]).format(label=label or "")
-        now = _now_iso()
-        c.execute(
-            "INSERT INTO character_rumors "
-            "(character_id, campaign_id, rumor_text, target_type, target_key, status, heard_at) "
-            "VALUES (?, ?, ?, ?, ?, 'heard', ?)",
-            (cid, camp, text, ttype, tkey, now),
-        )
+        # encounter path: force truth by using a no-false rng (>= weight never hits)
+        res = _insert_rumor(c, cid, camp, source_type="encounter", rng=_ALWAYS_TRUE_RNG)
         if own:
             c.commit()
-        return {"rumor_text": text, "target_type": ttype, "target_key": tkey}
+        return res
     except Exception as e:
         logger.warning("rumor_create_failed", campaign_id=campaign_id,
                        character_id=character_id, error=str(e))
@@ -203,10 +299,74 @@ def create_rumor(campaign_id: Any, character_id: Any,
             c.close()
 
 
+class _AlwaysTrueRNG:
+    """random-like shim whose .random() forces the true-rumor branch."""
+    @staticmethod
+    def random() -> float:
+        return 0.0  # 0.0 < TRUE_RUMOR_WEIGHT → always true
+
+
+_ALWAYS_TRUE_RNG = _AlwaysTrueRNG()
+
+
+def eavesdrop_rumor(campaign_id: Any, character_id: Any, paid: bool = False,
+                    conn: sqlite3.Connection | None = None,
+                    rng=random) -> Optional[dict[str, Any]]:
+    """#1190 — a deliberate tavern eavesdrop / bought round. Records a rumor that
+    may be false (60/40 for place-type targets). `paid` only tags the source
+    (round vs eavesdrop); the caller handles gold + the suspicion test. Returns the
+    rumor dict {rumor_id, rumor_text, target_type, target_key, truth_flag} or None."""
+    try:
+        cid = int(character_id)
+        camp = int(campaign_id)
+    except (TypeError, ValueError):
+        return None
+    own = conn is None
+    c = conn or _conn()
+    try:
+        res = _insert_rumor(c, cid, camp,
+                            source_type="round" if paid else "eavesdrop", rng=rng)
+        if own:
+            c.commit()
+        return res
+    except Exception as e:
+        logger.warning("rumor_eavesdrop_failed", campaign_id=campaign_id,
+                       character_id=character_id, error=str(e))
+        return None
+    finally:
+        if own:
+            c.close()
+
+
+def mark_suspected(rumor_id: Any, conn: sqlite3.Connection | None = None) -> bool:
+    """Flag a rumor as suspicious (the hero's WIS/CHA sniffed out a possible lie).
+    Does NOT reveal the truth to the player — just raises a red flag. No-op safe."""
+    try:
+        rid = int(rumor_id)
+    except (TypeError, ValueError):
+        return False
+    own = conn is None
+    c = conn or _conn()
+    try:
+        c.execute("UPDATE character_rumors SET suspected = 1 WHERE id = ?", (rid,))
+        if own:
+            c.commit()
+        return True
+    except sqlite3.OperationalError as e:
+        logger.warning("rumor_suspect_failed", error=str(e))
+        return False
+    finally:
+        if own:
+            c.close()
+
+
 def confirm_rumors_for(campaign_id: Any, target_type: str, target_key: str,
                        conn: sqlite3.Connection | None = None) -> int:
-    """Flip heard→confirmed for all open rumors in this campaign matching the
-    discovered target. Returns count confirmed. Campaign-scoped, no-op safe."""
+    """Resolve all open rumors in this campaign matching a discovered target.
+
+    #1190 — a TRUE rumor flips heard→confirmed; a FALSE one flips heard→debunked
+    (the promised payoff wasn't there). Returns count resolved. Campaign-scoped,
+    no-op safe."""
     if not target_type or not target_key:
         return 0
     try:
@@ -217,7 +377,9 @@ def confirm_rumors_for(campaign_id: Any, target_type: str, target_key: str,
     c = conn or _conn()
     try:
         cur = c.execute(
-            "UPDATE character_rumors SET status = 'confirmed', confirmed_at = ? "
+            "UPDATE character_rumors SET "
+            "  status = CASE WHEN COALESCE(truth_flag, 1) = 0 THEN 'debunked' ELSE 'confirmed' END, "
+            "  confirmed_at = ? "
             "WHERE campaign_id = ? AND status = 'heard' "
             "AND target_type = ? AND target_key = ?",
             (_now_iso(), camp, target_type, target_key),

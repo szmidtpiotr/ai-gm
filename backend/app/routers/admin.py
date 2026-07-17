@@ -2939,6 +2939,97 @@ def admin_get_campaign_turns(
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/rumors")
+def admin_list_campaign_rumors(
+    campaign_id: int,
+    _: None = Depends(require_admin_token),
+):
+    """#1190 — plotki krążące w kampanii (admin monitor + ręczne wstrzykiwanie)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """SELECT r.id, r.character_id, r.rumor_text, r.target_type, r.target_key,
+                      r.status, r.truth_flag, r.source_type, r.region, r.suspected,
+                      r.heard_at, r.confirmed_at, c.name AS character_name
+               FROM character_rumors r
+               LEFT JOIN characters c ON c.id = r.character_id
+               WHERE r.campaign_id = ?
+               ORDER BY r.id DESC""",
+            (campaign_id,),
+        ).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    except sqlite3.OperationalError:
+        return {"items": []}
+    finally:
+        conn.close()
+
+
+class AdminRumorCreateReq(BaseModel):
+    rumor_text: str
+    truth_flag: int = 1
+    region: str | None = None
+    target_type: str | None = None
+    target_key: str | None = None
+    character_id: int | None = None  # None → wstrzyknij aktywnemu bohaterowi kampanii
+
+
+@router.post("/admin/campaigns/{campaign_id}/rumors")
+def admin_create_campaign_rumor(
+    campaign_id: int,
+    req: AdminRumorCreateReq,
+    _: None = Depends(require_admin_token),
+):
+    """#1190 — ręczna plotka: najlepsze narzędzie do delikatnego kierowania gracza
+    bez łamania immersji. source_type='manual'. target_* opcjonalne (zamknięta pula)."""
+    from datetime import datetime, timezone
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cid = req.character_id
+        if cid is None:
+            row = conn.execute(
+                "SELECT id FROM characters WHERE campaign_id = ? "
+                "AND COALESCE(is_active,1)=1 ORDER BY id LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if not row:
+                raise HTTPException(404, "Brak bohatera w tej kampanii")
+            cid = int(row["id"])
+        now = datetime.now(timezone.utc).isoformat()
+        cur = conn.execute(
+            "INSERT INTO character_rumors "
+            "(character_id, campaign_id, rumor_text, target_type, target_key, status, "
+            " heard_at, truth_flag, source_type, region, suspected) "
+            "VALUES (?, ?, ?, ?, ?, 'heard', ?, ?, 'manual', ?, 0)",
+            (cid, campaign_id, req.rumor_text, req.target_type or None,
+             req.target_key or None, now, 1 if req.truth_flag else 0, req.region),
+        )
+        conn.commit()
+        return {"ok": True, "id": int(cur.lastrowid)}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/campaigns/{campaign_id}/rumors/{rumor_id}")
+def admin_delete_campaign_rumor(
+    campaign_id: int,
+    rumor_id: int,
+    _: None = Depends(require_admin_token),
+):
+    """#1190 — usuń plotkę (np. błędnie wstrzykniętą)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "DELETE FROM character_rumors WHERE id = ? AND campaign_id = ?",
+            (rumor_id, campaign_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @router.post("/admin/campaigns/{campaign_id}/run-command")
 def admin_run_campaign_command(
     campaign_id: int,

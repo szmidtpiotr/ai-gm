@@ -348,20 +348,37 @@ function Atlas({ characterId }: { characterId: number | undefined }) {
         <p className="text-[13px] text-label">Jeszcze nie zebrałeś żadnych plotek. Zaglądaj do karczm.</p>
       ) : (
         <div className="space-y-1.5">
-          {rumors.entries.map((r, i) => (
-            <div
-              key={i}
-              className={cn(
-                "rounded-md border px-3 py-2 text-[13px]",
-                r.status === "confirmed"
-                  ? "border-ember/40 bg-ember/5 text-text"
-                  : "border-line-soft bg-surface text-prose",
-              )}
-            >
-              <span className="mr-2 align-middle">{r.status === "confirmed" ? "✓" : "•"}</span>
-              {r.rumor_text}
-            </div>
-          ))}
+          {rumors.entries.map((r, i) => {
+            // #1190 — 3 statusy + znacznik „podejrzana". debunked = fałszywka
+            // zdemaskowana wizytą (przekreślona); suspected = wyczułeś, że coś śmierdzi.
+            const debunked = r.status === "debunked";
+            const confirmed = r.status === "confirmed";
+            const glyph = debunked ? "✗" : confirmed ? "✓" : "•";
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "rounded-md border px-3 py-2 text-[13px]",
+                  debunked
+                    ? "border-line-soft bg-bg/30 text-label line-through decoration-label/50"
+                    : confirmed
+                      ? "border-ember/40 bg-ember/5 text-text"
+                      : "border-line-soft bg-surface text-prose",
+                )}
+              >
+                <span className="mr-2 align-middle">{glyph}</span>
+                {r.rumor_text}
+                {!debunked && r.suspected ? (
+                  <span className="ml-2 rounded bg-gold/15 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-gold">
+                    podejrzana
+                  </span>
+                ) : null}
+                {debunked ? (
+                  <span className="ml-2 align-middle text-[10.5px] italic text-label">— okazała się bujdą</span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
     </>

@@ -3023,6 +3023,164 @@ def _maybe_dig_shortcut(conn: sqlite3.Connection, campaign_id: int, character: d
     }
 
 
+# ── #1190 — Plotki w karczmie (nadstaw ucha / postaw kolejkę) ─────────────────
+# Gracz nadstawia ucha (darmo, plotka z szansą) albo stawia komuś kolejkę (5 zł,
+# plotka gwarantowana + bonus do wyczucia fałszu). Deterministyczny pre-LLM skrót
+# jak dig/herb/river — serwer komponuje narrację (działa pod AI_TEST_STUB_LLM).
+# Wzorce w ASCII, wejście przez strip_pl_diacritics (#1420) — łapie brak ogonków.
+from app.core.text_utils import strip_pl_diacritics as _spd
+
+# płatna akcja: „stawiam/funduję/postaw kolejkę", „stawiam piwo komuś na plotki"
+_RUMOR_PAID_RE = re.compile(
+    r"\b(staw\w*|funduj\w*|postaw\w*|kupuj\w*|zamawiam)\b[^.!?]{0,25}"
+    r"\b(kolejk\w*|piwo|kufel|kufl\w*|trunk\w*|rundk\w*|browar\w*)\b",
+    re.IGNORECASE,
+)
+# darmowa akcja: „nadstawiam ucha", „przysłuchuję się", „podsłuchuję", „nasłuchuję plotek"
+_RUMOR_FREE_RE = re.compile(
+    r"\b(nadstaw\w*\s+ucha|nadstaw\w*\s+uszu|przysluchuj\w*|podsluchuj\w*|"
+    r"nasluchuj\w*|slucham\s+plotek|zbieram\s+plotk\w*|wypytuj\w*\s+o\s+plotk\w*|"
+    r"lowie\s+plotk\w*|dowiaduj\w*\s+sie\s+co\s+slychac)\b",
+    re.IGNORECASE,
+)
+# rzeczownik-karczma w tekście — luźna bramka lokalizacji, gdy subtyp niezapisany
+_TAVERN_NOUN_RE = re.compile(
+    r"\b(karczm\w*|gospod\w*|tawern\w*|zajazd\w*|obers\w*|szynk\w*|kufel|kufl\w*)\b",
+    re.IGNORECASE,
+)
+
+# Numbers Policy (#1190) — wartości startowe, Sandbox-tunable.
+_RUMOR_ROUND_COST = 5     # koszt postawionej kolejki (zł)
+_RUMOR_FREE_CHANCE = 0.6  # szansa na plotkę przy darmowym nadstawianiu ucha
+_RUMOR_SENSE_DC = 12      # DC testu wyczucia fałszu (Medium)
+_RUMOR_PAID_SENSE_BONUS = 2  # kolejka rozwiązuje języki → +2 do wyczucia
+
+
+def _rumor_intent(text: str) -> str | None:
+    """Zwróć 'paid' / 'free' / None wg intencji karczemnej (odporne na brak ogonków)."""
+    t = _spd(text or "")
+    if _RUMOR_PAID_RE.search(t):
+        return "paid"
+    if _RUMOR_FREE_RE.search(t):
+        return "free"
+    return None
+
+
+def _at_tavern(conn: sqlite3.Connection, campaign_id: int, text: str) -> bool:
+    """Bramka: obecna lokacja to karczma (subtyp) LUB gracz wprost pisze o karczmie."""
+    if _TAVERN_NOUN_RE.search(_spd(text or "")):
+        return True
+    try:
+        loc_key = _current_location_key(conn, campaign_id)
+        if not loc_key:
+            return False
+        row = conn.execute(
+            "SELECT location_subtype FROM game_locations WHERE key = ? LIMIT 1", (loc_key,)
+        ).fetchone()
+        if not row:
+            return False
+        from app.services.social_encounter_service import resolve_subtype
+        return resolve_subtype(row["location_subtype"]) == "tavern"
+    except sqlite3.OperationalError:
+        return False
+
+
+def _maybe_tavern_rumor_shortcut(conn: sqlite3.Connection, campaign_id: int,
+                                 character: dict, text: str) -> dict | None:
+    """#1190 — deterministyczna akcja karczemna przed LLM. Nadstaw ucha (darmo, 60%)
+    lub postaw kolejkę (5 zł, pewniak + bonus wyczucia). Serwer komponuje narrację,
+    zapisuje plotkę (Atlas) i rozstrzyga test wyczucia fałszu. Poza karczmą → None."""
+    intent = _rumor_intent(text)
+    if intent is None:
+        return None
+    if not _at_tavern(conn, campaign_id, text):
+        return None  # nie w karczmie — niech LLM narruje zwyczajnie
+    paid = intent == "paid"
+    cid = int(character["id"])
+
+    def _commit_narration(user_line: str, prose: str, route: str) -> dict:
+        # tura 1: dymek gracza; tura 2: proza skutku (jak river_cross/herb)
+        _log = create_turn_log(conn=conn, campaign_id=campaign_id, character_id=cid,
+                               user_text=user_line, assistant_text=None, route=route)
+        _tn2 = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, "
+            "assistant_text, route, created_at) VALUES (?,?,?,?,?,?,datetime('now'))",
+            (campaign_id, cid, int(_tn2), None,
+             json.dumps({"narrative": prose}, ensure_ascii=False), route),
+        )
+        conn.commit()
+        return {"prose": prose, "route": route, "turn_number": int(_log["turn_number"])}
+
+    # Kolejka kosztuje — brak złota = odmowa narracyjna (tura zapisana, bez plotki).
+    if paid:
+        gold = int((conn.execute(
+            "SELECT gold_gp FROM characters WHERE id=? LIMIT 1", (cid,)
+        ).fetchone() or {"gold_gp": 0})["gold_gp"] or 0)
+        if gold < _RUMOR_ROUND_COST:
+            return _commit_narration(
+                text,
+                f"Sięgasz po sakiewkę, ale brakuje ci nawet {_RUMOR_ROUND_COST} zł na kolejkę. "
+                "Karczmarz kręci głową — plotki kosztują.",
+                "tavern_rumor_broke",
+            )
+        try:
+            from app.services.economy_service import change_gold
+            change_gold(conn, cid, -_RUMOR_ROUND_COST, "tavern_round",
+                        meta={"feature": "rumor"})
+            conn.commit()
+        except Exception as _ge:
+            logger.warning("tavern_round_gold_failed", error=str(_ge))
+
+    # Darmowe ucho: plotka nie zawsze się trafia.
+    import random as _rnd
+    if not paid and _rnd.random() >= _RUMOR_FREE_CHANCE:
+        return _commit_narration(
+            text,
+            "Nadstawiasz ucha, ale dziś przy stołach same pijackie przechwałki — "
+            "nic wartego zapamiętania.",
+            "tavern_rumor_empty",
+        )
+
+    from app.services import rumor_service
+    _r = rumor_service.eavesdrop_rumor(campaign_id, cid, paid=paid, conn=conn)
+    if not _r or not _r.get("rumor_text"):
+        return _commit_narration(
+            text,
+            "Rozmowy milkną, gdy się zbliżasz. Dziś nikt nie ma nic ciekawego do powiedzenia.",
+            "tavern_rumor_empty",
+        )
+
+    # Test wyczucia fałszu: d20 + max(WIS_mod, CHA_mod) [+2 za kolejkę] vs DC 12.
+    # Sukces przy FAŁSZYWEJ plotce → oznacz podejrzaną + ostrzeż (nie zdradzaj prawdy).
+    from app.core.mechanics import stat_modifier as _stat_mod
+    sheet = json.loads(character["sheet_json"] or "{}")
+    _stats = sheet.get("stats", sheet.get("attributes", {})) or {}
+    wis = _stat_mod(int(_stats.get("WIS", 10) or 10))
+    cha = _stat_mod(int(_stats.get("CHA", 10) or 10))
+    _mod = max(wis, cha) + (_RUMOR_PAID_SENSE_BONUS if paid else 0)
+    d20 = _rnd.randint(1, 20)
+    total = d20 + _mod
+    sensed = (d20 != 1) and (d20 == 20 or total >= _RUMOR_SENSE_DC)
+    is_false = _r.get("truth_flag") == 0
+    warn = ""
+    if is_false and sensed:
+        rumor_service.mark_suspected(_r["rumor_id"], conn=conn)
+        conn.commit()
+        warn = " Coś w tej opowieści zgrzyta — brzmi jak bujda uszyta pod naiwniaka."
+
+    lead = ("Stawiasz kolejkę i języki się rozwiązują."
+            if paid else "Nadstawiasz ucha przy sąsiednim stole.")
+    prose = f"{lead} {_r['rumor_text']}{warn}"
+    route = "tavern_rumor"
+    result = _commit_narration(text, prose, route)
+    result["rumor"] = {"target_type": _r.get("target_type"), "suspected": bool(warn)}
+    return result
+
+
 def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
     """Active NPCs with is_shop=1 at current location (+ globals), same filter as [NPC CONTEXT]."""
     if current_key:
@@ -6196,6 +6354,11 @@ def create_turn(
             _boat_sc = _maybe_boat_shortcut(conn, campaign_id, character, text)
             if _boat_sc is not None:
                 return _with_turn_trace(_boat_sc, turn_id)
+
+            # #1190 — plotki karczemne (nadstaw ucha / postaw kolejkę).
+            _rumor_sc = _maybe_tavern_rumor_shortcut(conn, campaign_id, character, text)
+            if _rumor_sc is not None:
+                return _with_turn_trace(_rumor_sc, turn_id)
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 

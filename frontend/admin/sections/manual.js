@@ -84,6 +84,28 @@ Ręczne sterowanie działa zawsze, niezależnie od przełącznika.</p>
 <p class="muted">Wszystkie liczby (szansa, czas trwania, mnożniki cen, DC choroby) to wartości
 startowe — będą strojone po obserwacji rozgrywki.</p>`,
       },
+      {
+        id: 'plotki',
+        title: 'Zakładka Plotki (kierowanie graczem)',
+        body: `
+<p>W sekcji <b>Świat</b> zakładka <b>Plotki</b> pokazuje plotki krążące w danej kampanii.
+Plotka to zasłyszana w karczmie wskazówka — kieruje gracza do lochu, skarbu, wydarzenia
+albo nieodkrytej lokacji, <b>bez</b> łamania immersji przez „deus ex machina" w narracji.</p>
+<p>Gracz zdobywa plotki sam: w karczmie pisze <b>„nadstawiam ucha"</b> (za darmo, plotka nie zawsze
+się trafia) albo <b>„stawiam kolejkę"</b> (kosztuje kilka złotych, plotka gwarantowana i łatwiej
+wyczuć fałsz).</p>
+<h4>Prawda i fałsz</h4>
+<p>Świat nie jest wiarygodny w 100% — część plotek to <b>bujda</b>. Prawdziwa plotka <b>potwierdza się</b>,
+gdy gracz dotrze do celu; fałszywa <b>demaskuje się</b> („okazała się bujdą") i zostaje przekreślona
+w dzienniku gracza. Udany test wyczucia (WIS/CHA) oznacza plotkę jako <b>podejrzaną</b>, ale nie zdradza
+wprost prawdy.</p>
+<h4>Ręczna plotka</h4>
+<p>Wybierz <b>kampanię</b> u góry, potem <b>+ Dodaj ręcznie</b>. Podaj treść i zdecyduj, czy jest
+prawdziwa (potwierdzi się przy wizycie) czy fałszywa (zdemaskuje się). To najdelikatniejsze narzędzie
+do naprowadzania gracza. Plotki błędnie wstawione usuwasz przyciskiem 🗑.</p>
+<p class="muted">Koszt kolejki, szansa na plotkę, proporcja prawda/fałsz i DC wyczucia to wartości
+startowe — będą strojone po obserwacji rozgrywki.</p>`,
+      },
     ],
   },
   {

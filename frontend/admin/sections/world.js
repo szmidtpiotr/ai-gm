@@ -1785,6 +1785,7 @@ function _sectionHtml() {
         <button class="stab" data-wtab="enemies">Wrogowie</button>
         <button class="stab" data-wtab="loot">Tabele Łupów</button>
         <button class="stab" data-wtab="events">Wydarzenia</button>
+        <button class="stab" data-wtab="rumors">Plotki</button>
         <button class="stab" data-wtab="pending">Oczekujące <span class="nav-badge" id="world-pending-badge" style="display:none">0</span></button>
       </div>
 
@@ -1860,6 +1861,16 @@ function _sectionHtml() {
         <div id="world-events-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div></div>
       </div>
 
+      <!-- Plotki (#1190) -->
+      <div class="stab-panel" id="wtab-rumors">
+        <div class="section-sub" style="margin-bottom:8px">Plotki krążące w karczmach — kanał dystrybucji hooków (lochy, skarby, wydarzenia). Ręczna plotka = delikatne kierowanie gracza bez łamania immersji. Fałszywki demaskują się, gdy gracz dotrze do celu.</div>
+        <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+          <select id="rumor-campaign" class="input input-sm" onchange="window._worldLoadRumors()"><option value="">— wybierz kampanię —</option></select>
+          <button class="btn btn-primary btn-sm" onclick="window._worldAddRumor()">+ Dodaj ręcznie</button>
+        </div>
+        <div id="world-rumors-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Wybierz kampanię, aby zobaczyć plotki.</div></div>
+      </div>
+
       <!-- Oczekujące -->
       <div class="stab-panel" id="wtab-pending">
         <div class="selection-bar" id="pending-sel-bar">
@@ -1877,8 +1888,104 @@ const _TAB_LOADERS = {
   enemies: () => { if (!_loaded.has('enemies')) { _loaded.add('enemies'); _loadEnemies().catch(()=>_loaded.delete('enemies')); } },
   loot:    () => { if (!_loaded.has('loot'))    { _loaded.add('loot');    _loadBestiaryLoot().catch(()=>_loaded.delete('loot')); } },
   events:  () => { _loadWorldEvents(); },  // #1193 — zawsze świeże (stan eventów żyje)
+  rumors:  () => { _initRumorTab(); },     // #1190 — plotki per kampania
   pending: () => { if (!_loaded.has('pending')) { _loaded.add('pending'); _loadBestiaryPending().catch(()=>_loaded.delete('pending')); } },
 };
+
+// ── Plotki (#1190) ───────────────────────────────────────────────────────────
+let _rumorCampaignsLoaded = false;
+
+async function _initRumorTab() {
+  if (_rumorCampaignsLoaded) return;
+  const sel = document.getElementById('rumor-campaign');
+  if (!sel) return;
+  try {
+    const d = await apiFetch('/api/admin/campaigns');
+    const items = d.items || d.campaigns || d || [];
+    sel.innerHTML = '<option value="">— wybierz kampanię —</option>' +
+      items.map(c => `<option value="${c.id}">${_esc(c.name || ('#' + c.id))}</option>`).join('');
+    _rumorCampaignsLoaded = true;
+  } catch (e) {
+    showToast('Nie udało się wczytać kampanii', 'error');
+  }
+}
+
+const _RUMOR_STATUS_BADGE = {
+  heard:     '<span class="td-muted">• niepotwierdzona</span>',
+  confirmed: '<span style="color:var(--ok,#4caf50)">✓ potwierdzona</span>',
+  debunked:  '<span style="color:var(--t3)">✗ fałszywa</span>',
+};
+
+async function _loadRumors() {
+  const sel = document.getElementById('rumor-campaign');
+  const container = document.getElementById('world-rumors-container');
+  if (!sel || !container) return;
+  const cid = sel.value;
+  if (!cid) {
+    container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Wybierz kampanię, aby zobaczyć plotki.</div>';
+    return;
+  }
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3)">Ładowanie…</div>';
+  try {
+    const d = await apiFetch(`/api/admin/campaigns/${cid}/rumors`);
+    const items = d.items || [];
+    if (!items.length) {
+      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3)">Brak plotek w tej kampanii.</div>';
+      return;
+    }
+    const rows = items.map(r => `<tr>
+      <td data-label="Plotka">${_esc(r.rumor_text)}</td>
+      <td data-label="Prawda">${r.truth_flag ? '✅ prawda' : '❌ fałsz'}${r.suspected ? ' <span class="td-muted">(podejrzana)</span>' : ''}</td>
+      <td data-label="Cel"><span class="td-muted">${_esc(r.target_type || '—')}${r.target_key ? ':' + _esc(r.target_key) : ''}</span></td>
+      <td data-label="Status">${_RUMOR_STATUS_BADGE[r.status] || _esc(r.status)}</td>
+      <td data-label="Źródło"><span class="td-muted">${_esc(r.source_type || '')}</span></td>
+      <td style="text-align:right"><button class="btn-icon danger" title="Usuń" onclick="window._worldDeleteRumor(${r.id},this)">🗑</button></td>
+    </tr>`).join('');
+    container.innerHTML = `<div class="data-table--cards table-wrap"><table class="data-table">
+      <thead><tr>
+        <th><div class="th-inner">Plotka</div></th>
+        <th><div class="th-inner">Prawda/fałsz</div></th>
+        <th><div class="th-inner">Cel</div></th>
+        <th><div class="th-inner">Status</div></th>
+        <th><div class="th-inner">Źródło</div></th>
+        <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  } catch (e) {
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--err,#f44)">Błąd wczytywania plotek.</div>';
+  }
+}
+
+async function _addRumorManual() {
+  const sel = document.getElementById('rumor-campaign');
+  if (!sel || !sel.value) { showToast('Najpierw wybierz kampanię', 'error'); return; }
+  const cid = sel.value;
+  const text = prompt('Treść plotki (widzi ją gracz w dzienniku):');
+  if (!text || !text.trim()) return;
+  const isTrue = confirm('OK = plotka PRAWDZIWA (potwierdzi się przy wizycie).\nAnuluj = FAŁSZYWA (zdemaskuje się przy wizycie).');
+  try {
+    await apiFetch(`/api/admin/campaigns/${cid}/rumors`, {
+      method: 'POST',
+      body: JSON.stringify({ rumor_text: text.trim(), truth_flag: isTrue ? 1 : 0 }),
+    });
+    showToast('Plotka dodana', 'success');
+    _loadRumors();
+  } catch (e) {
+    showToast('Nie udało się dodać plotki', 'error');
+  }
+}
+
+async function _deleteRumor(id, btn) {
+  const sel = document.getElementById('rumor-campaign');
+  if (!sel || !sel.value) return;
+  if (!confirm('Usunąć tę plotkę?')) return;
+  try {
+    await apiFetch(`/api/admin/campaigns/${sel.value}/rumors/${id}`, { method: 'DELETE' });
+    btn.closest('tr')?.remove();
+    showToast('Usunięto', 'success');
+  } catch (e) {
+    showToast('Błąd usuwania', 'error');
+  }
+}
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 export async function init(panel) {
@@ -1916,6 +2023,9 @@ export async function init(panel) {
   window._worldRollEvent       = () => _rollWorldEvent();
   window._worldEndEvent        = (id, btn) => _endWorldEvent(id, btn);
   window._worldToggleAutoRoll  = (chk) => _toggleAutoRoll(chk);
+  window._worldLoadRumors      = () => _loadRumors();            // #1190
+  window._worldAddRumor        = () => _addRumorManual();
+  window._worldDeleteRumor     = (id, btn) => _deleteRumor(id, btn);
   window.rowCheck   = rowCheck;
   window.toggleAll  = toggleAll;
   window.eiOpenGallery  = (key) => eiOpenGallery(key);

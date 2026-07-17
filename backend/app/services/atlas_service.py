@@ -128,19 +128,30 @@ def get_atlas(character_id: Any, conn: sqlite3.Connection | None = None) -> dict
 
 
 def _rumor_summary(conn: sqlite3.Connection, character_id: int) -> dict[str, Any]:
-    """Rumor counts + confirmed list. Empty if the table does not exist yet (E4)."""
+    """Rumor counts + list. #1190 adds debunked count + suspected/truth flags on
+    each entry (for the „fałszywa"/„podejrzana" badges). Tolerant of the pre-#1190
+    schema (missing columns) — falls back to the legacy column set."""
     try:
         rows = conn.execute(
-            "SELECT rumor_text, target_type, target_key, status, heard_at, confirmed_at "
+            "SELECT rumor_text, target_type, target_key, status, heard_at, confirmed_at, "
+            "       COALESCE(suspected,0) AS suspected, COALESCE(truth_flag,1) AS truth_flag "
             "FROM character_rumors WHERE character_id = ? ORDER BY heard_at DESC",
             (character_id,),
         ).fetchall()
     except sqlite3.OperationalError:
-        return {"heard": 0, "confirmed": 0, "entries": []}
+        try:
+            rows = conn.execute(
+                "SELECT rumor_text, target_type, target_key, status, heard_at, confirmed_at "
+                "FROM character_rumors WHERE character_id = ? ORDER BY heard_at DESC",
+                (character_id,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {"heard": 0, "confirmed": 0, "debunked": 0, "entries": []}
     heard = sum(1 for r in rows if r["status"] == "heard")
     confirmed = sum(1 for r in rows if r["status"] == "confirmed")
+    debunked = sum(1 for r in rows if r["status"] == "debunked")
     entries = [dict(r) for r in rows]
-    return {"heard": heard, "confirmed": confirmed, "entries": entries}
+    return {"heard": heard, "confirmed": confirmed, "debunked": debunked, "entries": entries}
 
 
 def _treasure_summary(conn: sqlite3.Connection, character_id: int) -> dict[str, Any]:
@@ -165,6 +176,6 @@ def _empty_atlas() -> dict[str, Any]:
     return {
         "hexes": {"discovered": 0, "total": 0, "pct": 0, "regions": []},
         "locations": {"discovered": 0},
-        "rumors": {"heard": 0, "confirmed": 0, "entries": []},
+        "rumors": {"heard": 0, "confirmed": 0, "debunked": 0, "entries": []},
         "treasure_sites": {"found": 0, "entries": []},
     }

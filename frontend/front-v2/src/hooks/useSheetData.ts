@@ -272,6 +272,7 @@ export interface AtlasResponse {
   rumors: {
     heard: number;
     confirmed: number;
+    debunked?: number;
     entries: {
       rumor_text: string;
       target_type: string | null;
@@ -279,6 +280,8 @@ export interface AtlasResponse {
       status: string;
       heard_at: string;
       confirmed_at: string | null;
+      suspected?: number;
+      truth_flag?: number;
     }[];
   };
 }

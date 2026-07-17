@@ -6545,7 +6545,11 @@ def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
                 target_key TEXT,
                 status TEXT NOT NULL DEFAULT 'heard',
                 heard_at TEXT NOT NULL,
-                confirmed_at TEXT
+                confirmed_at TEXT,
+                truth_flag INTEGER NOT NULL DEFAULT 1,
+                source_type TEXT NOT NULL DEFAULT 'encounter',
+                region TEXT,
+                suspected INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -6553,6 +6557,19 @@ def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_rumors_char "
             "ON character_rumors(character_id, status)"
         )
+        # #1190 — plotki karczemne: prawda/fałsz, źródło, region, podejrzenie.
+        # status zyskuje wartość 'debunked' (bez zmiany schematu — kolumna już TEXT).
+        for col, decl in (
+            ("truth_flag", "INTEGER NOT NULL DEFAULT 1"),
+            ("source_type", "TEXT NOT NULL DEFAULT 'encounter'"),
+            ("region", "TEXT"),
+            ("suspected", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE character_rumors ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError as _ce:
+                if "duplicate column" not in str(_ce).lower():
+                    raise
         conn.commit()
     except sqlite3.OperationalError as e:
         logger.warning("rumor_schema_skipped", error=str(e))

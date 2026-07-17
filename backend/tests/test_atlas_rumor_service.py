@@ -28,7 +28,7 @@ def conn():
         CREATE TABLE campaigns (id INTEGER PRIMARY KEY, gm_plan_json TEXT);
         """ + table_sql("game_config_enemies") + """
         CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT);
-        CREATE TABLE character_rumors (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, campaign_id INTEGER, rumor_text TEXT, target_type TEXT, target_key TEXT, status TEXT DEFAULT 'heard', heard_at TEXT, confirmed_at TEXT);
+        CREATE TABLE character_rumors (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, campaign_id INTEGER, rumor_text TEXT, target_type TEXT, target_key TEXT, status TEXT DEFAULT 'heard', heard_at TEXT, confirmed_at TEXT, truth_flag INTEGER NOT NULL DEFAULT 1, source_type TEXT NOT NULL DEFAULT 'encounter', region TEXT, suspected INTEGER NOT NULL DEFAULT 0);
         """
     )
     # hero 1: current campaign 100, past campaign 101
