@@ -360,6 +360,55 @@ def event_badge(conn: sqlite3.Connection, region: str | None) -> str | None:
 
 # ─── Linia WYDARZENIE do promptu narratora ────────────────────────────────────
 
+# Ton dymka per typ eventu (system_events tone — kolor obramowania).
+_EVENT_TONE = {
+    "jarmark": "success",  # dobra wieść — tanio
+    "zaraza": "warning",
+    "rajdy": "warning",
+    "zima": "info",
+    "susza": "info",
+}
+
+
+def notify_if_new(conn: sqlite3.Connection, campaign_id: int) -> None:
+    """#1193 — emituje dymek system_events RAZ, gdy w regionie kampanii pojawia
+    się nowe wydarzenie (dotąd łatwe do przeoczenia: tylko narracja + ceny).
+
+    Dedupe przez `world_event_seen` (kampania+event). Gated na aktywny bus tury —
+    poza turą (podgląd promptu / skrypt) jest no-opem i NIE zużywa powiadomienia.
+    Defensywny — nie rzuca."""
+    try:
+        from app.services import system_events as se
+        if se.current_bus() is None:
+            return  # nie w turze → nie zużywaj powiadomienia
+        from app.services.reputation_service import resolve_region
+        region = resolve_region(conn, int(campaign_id))
+        ev = get_active_event(conn, region)
+        if not ev:
+            return
+        event_id = int(ev["id"])
+        seen = conn.execute(
+            "SELECT 1 FROM world_event_seen WHERE campaign_id = ? AND event_id = ? LIMIT 1",
+            (int(campaign_id), event_id),
+        ).fetchone()
+        if seen:
+            return
+        tags = ev.get("narrative_tags") or []
+        tag = str(tags[0]) if tags else ""
+        label = ev.get("label") or ev.get("type") or "Wydarzenie"
+        badge = (ev.get("modifiers") or {}).get("badge") or "✦"
+        tone = _EVENT_TONE.get(str(ev.get("type") or "").lower(), "info")
+        text = f"{label} — {tag}" if tag else label
+        se.emit("rumor", text, icon=str(badge), tone=tone,
+                dedupe_key=f"world_event:{event_id}")
+        conn.execute(
+            "INSERT OR IGNORE INTO world_event_seen (campaign_id, event_id) VALUES (?, ?)",
+            (int(campaign_id), event_id),
+        )
+    except Exception:
+        pass
+
+
 def build_event_line(
     conn: sqlite3.Connection,
     campaign_id: int,

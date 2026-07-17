@@ -210,6 +210,50 @@ def test_apply_and_cure_disease():
     assert disease_service.has_disease(sheet["conditions"]) is False
 
 
+# ─── Dymek system_events (#1193 follow-up) ───────────────────────────────────
+
+def test_notify_emits_once_and_dedupes():
+    from app.services import system_events as se
+    conn = _make_db()
+    wes.start_event(conn, REGION, "zima")
+    with se.use_turn_bus() as bus:
+        wes.notify_if_new(conn, campaign_id=1)
+        wes.notify_if_new(conn, campaign_id=1)  # drugi raz — już seen
+        events = bus.drain()
+    # jeden dymek (dedupe przez world_event_seen), z badge zimy
+    assert len(events) == 1
+    assert events[0]["icon"] == "❄"
+    assert "zima" in events[0]["text"].lower()
+    # marker zapisany
+    n = conn.execute("SELECT COUNT(*) FROM world_event_seen WHERE campaign_id=1").fetchone()[0]
+    assert n == 1
+
+
+def test_notify_noop_outside_turn_bus():
+    conn = _make_db()
+    wes.start_event(conn, REGION, "zima")
+    # brak busa → nie zużywa powiadomienia, nie zapisuje markera
+    wes.notify_if_new(conn, campaign_id=1)
+    n = conn.execute("SELECT COUNT(*) FROM world_event_seen").fetchone()[0]
+    assert n == 0
+
+
+def test_notify_new_event_after_first_seen():
+    from app.services import system_events as se
+    conn = _make_db()
+    wes.start_event(conn, REGION, "zima")
+    with se.use_turn_bus() as bus:
+        wes.notify_if_new(conn, campaign_id=1)
+        bus.drain()
+    # nowe wydarzenie (kończy zimę) → nowy dymek
+    wes.start_event(conn, REGION, "jarmark")
+    with se.use_turn_bus() as bus2:
+        wes.notify_if_new(conn, campaign_id=1)
+        events = bus2.drain()
+    assert len(events) == 1
+    assert events[0]["icon"] == "🎪"
+
+
 def test_disease_survives_clear_all_fatigue():
     """Choroba używa flat_test_penalty, nie stacking → długi odpoczynek jej nie zdejmuje."""
     from app.services.fatigue_service import clear_all_fatigue

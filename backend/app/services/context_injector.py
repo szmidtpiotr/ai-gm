@@ -582,6 +582,10 @@ class ContextInjector:
             return ""
         try:
             from app.services import world_event_service
+            # #1193 — dymek system_events RAZ, gdy region dostaje nowe wydarzenie
+            # (gated na aktywny bus tury; poza turą no-op). Bez tego zima/susza
+            # były niewidoczne poza subtelną narracją.
+            world_event_service.notify_if_new(self.conn, int(campaign_id))
             return world_event_service.build_event_line(self.conn, int(campaign_id))
         except Exception as e:
             logger.warning("build_event_line_failed", error=str(e))

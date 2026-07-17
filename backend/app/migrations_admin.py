@@ -1309,6 +1309,16 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_world_events_region_state
     ON world_events(region, state)
     """,
+    # #1193 — marker "kampania już dostała dymek o tym evencie" (dedupe per
+    # kampania+event), żeby system_events zawiadomił gracza RAZ, nie co turę.
+    """
+    CREATE TABLE IF NOT EXISTS world_event_seen (
+        campaign_id INTEGER NOT NULL,
+        event_id    INTEGER NOT NULL,
+        seen_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (campaign_id, event_id)
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [
