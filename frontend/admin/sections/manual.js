@@ -293,6 +293,56 @@ wzorca śmieciem.</li>
 kanoniczną (drogowskaz, pula startów). <b>💾 Zapisz mapę (kanon)</b> zabezpiecza CAŁY teren świata.</p>`,
       },
       {
+        id: 'skarby',
+        title: 'Mapy skarbów i ich fragmenty',
+        body: `
+<p>Mapa skarbu prowadzi bohatera do <b>zakopanego skarbu</b> na konkretnym hexie świata. Mapa może
+przyjść w całości albo w <b>kilku fragmentach</b> — bohater musi zebrać komplet, zanim skrytka
+pojawi się na jego mapie i da się ją odkopać. To osobna zawartość od zwykłego łupu: nośnik mapy
+nigdy nie ląduje jako martwy przedmiot w plecaku — system przechwytuje go i zapisuje jako postęp
+mapy.</p>
+
+<h4>Skąd bohater bierze mapę (dwie drogi)</h4>
+<ol>
+<li><b>Z łupu (losowo)</b> — nośnik <code>fragment_mapy_skarbow</code> wpada z tabeli łupów jak
+każdy inny przedmiot. Steruje tym <b>Przedmioty → Tabele łupów</b> (patrz niżej).</li>
+<li><b>Ręcznie zakopana przez Ciebie</b> — przyciskiem <b>🗺 Zakop skarb</b> w budowniczym mapy.</li>
+</ol>
+
+<h4>🗺 Zakop skarb (ręczne wręczenie mapy)</h4>
+<p>W sekcji <b>Mapa</b> wybierz narzędzie <b>⬡ Wybierz</b> i kliknij hex, na którym ma leżeć skarb —
+w prawym panelu edycji hexa jest przycisk <b>🗺 Zakop skarb</b>. Zapyta o cztery rzeczy:</p>
+<ul>
+<li><b>ID bohatera (character_id)</b> — kto dostanie mapę do swoich <b>Map skarbów</b>. Pole
+obowiązkowe; ID podejrzysz w sekcji <b>Bohaterowie</b>.</li>
+<li><b>Liczba części mapy</b> — <b>1</b> = cała mapa naraz; więcej = tyle fragmentów do uzbierania
+(bohater zbiera je stopniowo).</li>
+<li><b>Nazwa skarbu</b> (opcjonalnie) — etykieta widoczna dla gracza (domyślnie „Mapa skarbu").</li>
+<li><b>Klucz strażnika</b> (opcjonalnie) — klucz wroga, który pilnuje skrytki; puste = brak strażnika.
+Przy kopaniu wskoczy walka z nim.</li>
+</ul>
+<p>Po zakopaniu toast potwierdza <b>Skarb zakopany (#numer)</b>. Skarb jest <b>jednorazowy dla tego
+bohatera</b> — ten sam bohater nie odkopie go dwa razy.</p>
+
+<h4>Sterowanie szansą wypadnięcia mapy (z łupu)</h4>
+<p>Prawdopodobieństwo, że mapa wypadnie z walki, ustawiasz w sekcji <b>Przedmioty → Tabele łupów</b>.
+W tabeli łupów danego wroga dodaj wpis niosący <code>fragment_mapy_skarbow</code> i ustaw pole
+<b>Waga (1-100)</b> — waga to wprost szansa w procentach (np. 10 = 10% na wpis). Szansa wpisu jest
+dodatkowo bramkowana <b>szansą łupu wroga</b> (pole przy edycji wroga): jeśli ta bramka spudłuje,
+nie pada nic. Efektywna szansa = szansa_łupu × (waga/100).</p>
+<p><b>Uwaga (obejście):</b> istniejącej wagi wpisu z mapą <b>nie zmienisz w miejscu</b> — <b>usuń</b>
+wpis i <b>dodaj go ponownie</b> z nową wagą.</p>
+
+<h4>Co robi gracz</h4>
+<p>Fragmenty tej samej mapy grupują się razem (po skarbie, nie po nazwie). Gdy bohater ma komplet,
+mapa jest <b>złożona</b> i skrytka pojawia się na jego mapie. Na właściwym hexie gracz kopie —
+zdaje test <b>Dochodzenie</b>. Jeśli ustawiłeś strażnika, najpierw walka. Skarb <b>nigdy nie jest
+pusty</b>: zawsze wypłaca złoto (jest minimalny próg) i łup, a im więcej części miała mapa, tym
+<b>hojniejsza wypłata</b> (więcej złota, dodatkowe losowania łupu, wyższy tier).</p>
+<p class="muted">Liczby (próg złota, DC kopania, mnożniki wypłaty za liczbę części, wagi w tabelach
+łupów) to wartości startowe — będą strojone po obserwacji rozgrywki.</p>`,
+      },
+      {
         id: 'narrator',
         title: 'Jak narrator (AI) korzysta z lokacji',
         body: `
