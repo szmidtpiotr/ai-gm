@@ -876,8 +876,11 @@ def get_locations_map(authorization: str | None = Header(default=None)):
                WHERE world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL
                ORDER BY label"""
         ).fetchall()
+        # #1407: match the "Do zatwierdzenia" LIST exactly (get_pending_locations)
+        # — same status string + is_active filter — so the badge never lies about
+        # a queue that renders empty (was 'pending', no is_active → 31 vs 0 shown).
         pending = conn.execute(
-            "SELECT COUNT(*) AS n FROM game_locations WHERE review_status = 'pending'"
+            "SELECT COUNT(*) AS n FROM game_locations WHERE review_status = 'pending_review' AND is_active = 1"
         ).fetchone()
         return {
             "locations": [dict(r) for r in locs],

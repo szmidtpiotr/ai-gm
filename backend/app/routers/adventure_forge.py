@@ -1445,7 +1445,7 @@ def _auto_create_forge_locations(
     template_id: int,
     locations: list[dict],
 ) -> list[dict]:
-    """Create game_locations rows from plan key_locations with review_status='pending'.
+    """Create game_locations rows from plan key_locations with review_status='pending_review'.
 
     Idempotent: skips any key that already exists in game_locations.
     Returns list of {key, name} for each created location.
@@ -1471,7 +1471,7 @@ def _auto_create_forge_locations(
                    (key, label, description, location_type, parent_key,
                     review_status, is_active, ai_generated,
                     created_by, source_campaign_id, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, 'pending_review', 1, 1, 'forge', ?, ?, ?)""",
                 (key, name, description, loc_type, parent_key, template_id, now, now),
             )
             if conn.execute("SELECT changes()").fetchone()[0]:

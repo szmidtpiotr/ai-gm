@@ -3486,11 +3486,22 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
              WHERE ai_generated = 1 AND review_status = 'permanent' AND approved = 0
         """)
         n2 = cur.rowcount or 0
-        if n1 or n2:
+        # #1407: unify the pending-review status string. Forge (adventure_forge)
+        # and template_start_anchor wrote 'pending', but the review LIST + approve
+        # flow query 'pending_review' → those rows were invisible in "Do
+        # zatwierdzenia" yet still counted by the map badge (31 pending, 0 shown).
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET review_status = 'pending_review'
+             WHERE review_status = 'pending'
+        """)
+        n3 = cur.rowcount or 0
+        if n1 or n2 or n3:
             conn.commit()
             logger.info("v2_migration_applied",
                         label="v2-locations-provenance-fixup",
-                        created_by_fixed=n1, review_status_fixed=n2)
+                        created_by_fixed=n1, review_status_fixed=n2,
+                        pending_status_unified=n3)
     except Exception as e:
         logger.warning("v2_migration_skipped", label="v2-locations-provenance-fixup", error=str(e))
 

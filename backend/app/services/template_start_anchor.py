@@ -233,7 +233,7 @@ def ensure_template_start_location(
                (key, label, description, review_status, is_active, ai_generated,
                 created_by, source_campaign_id, safe_for_rest,
                 world_hex_q, world_hex_r, created_at, updated_at)
-               VALUES (?, ?, '', 'pending', 1, 1, 'forge', ?, 1, ?, ?, ?, ?)""",
+               VALUES (?, ?, '', 'pending_review', 1, 1, 'forge', ?, 1, ?, ?, ?, ?)""",
             (new_key, label, template_id, q, r, now, now),
         )
 
@@ -404,7 +404,7 @@ def ensure_template_location_structure(
                     review_status, is_active, ai_generated, created_by,
                     source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, 'pending_review', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
                 (key, label, desc, loc_type, parent_key, parent_id,
                  template_id, safe, hex_q, hex_r, now, now),
             )
