@@ -454,5 +454,17 @@
     "updated_at": "2026-07-03 11:51:11",
     "stackable": 1,
     "auto_remove": null
+  },
+  {
+    "key": "sleeping",
+    "label": "Uśpiony",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"skip_turn\", \"duration_rounds\": 2}], \"clear_on\": \"damage_taken\"}",
+    "description": "Postać pogrążona w magicznym śnie — traci turę (nie działa), dopóki nie zostanie zbudzona. Otrzymanie obrażeń natychmiast przerywa sen. Wygasa po 2 rundach.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-18 00:00:00",
+    "updated_at": "2026-07-18 00:00:00",
+    "stackable": 0,
+    "auto_remove": "on_damage"
   }
 ]

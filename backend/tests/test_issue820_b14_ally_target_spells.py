@@ -95,6 +95,10 @@ def _mp_combat_db(tmp_path, *, caster_hp=5, ally_hp=3, max_hp=10, mana=5, max_ma
           (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,tier,xp_award)
           VALUES ('goblin','Goblin',10,10,0,'1d4',0,'minion',10);
         """)
+        conn.execute(
+            "INSERT INTO character_spells (character_id, spell_key, rank) "
+            "SELECT c.id, s.key, 1 FROM characters c, game_config_spells s"
+        )  # #1431: bramka wymaga znanego czaru — seeduj czary jako znane
         conn.commit()
     finally:
         conn.close()
@@ -247,6 +251,10 @@ def _solo_combat_db(tmp_path, *, player_hp=4, max_hp=10, mana=5):
           (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,tier,xp_award)
           VALUES ('goblin','Goblin',10,10,0,'1d4',0,'minion',10);
         """)
+        conn.execute(
+            "INSERT INTO character_spells (character_id, spell_key, rank) "
+            "SELECT c.id, s.key, 1 FROM characters c, game_config_spells s"
+        )  # #1431: bramka wymaga znanego czaru — seeduj czary jako znane
         conn.commit()
     finally:
         conn.close()

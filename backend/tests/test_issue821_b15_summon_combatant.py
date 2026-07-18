@@ -112,6 +112,10 @@ def _solo_combat_db(
           (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,tier,xp_award)
           VALUES ('goblin','Goblin',20,10,0,'1d4',0,'minion',10);
         """)
+        conn.execute(
+            "INSERT INTO character_spells (character_id, spell_key, rank) "
+            "SELECT c.id, s.key, 1 FROM characters c, game_config_spells s"
+        )  # #1431: bramka wymaga znanego czaru — seeduj czary jako znane
         conn.commit()
     finally:
         conn.close()

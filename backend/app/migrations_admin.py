@@ -1545,6 +1545,16 @@ ADMIN_SEEDS = [
     VALUES
     ('poisoned', 'Poisoned', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2,"expires":"duration_rounds:3"}]}', 'Temporary STR penalty.', 1, NULL, datetime('now'), datetime('now'))
     """,
+    # #1433 (AUDIT) — kondycja `sleeping`: cel czaru `sleep` (effect_type='sleeping') tracił
+    # turę, ale kondycji nie było w katalogu → w walce zawsze `unsupported_effect`, poza walką 400.
+    # Czar był w katalogu, gracz mógł wydać XP na naukę, nigdy go nie użyć. skip_turn 2 rundy,
+    # budzenie po otrzymaniu obrażeń (clear_on damage_taken + auto_remove on_damage — wzorzec `zaskoczony`).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('sleeping', 'Uśpiony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"skip_turn","duration_rounds":2}],"clear_on":"damage_taken"}', 'Postać pogrążona w magicznym śnie — traci turę (nie działa), dopóki nie zostanie zbudzona. Otrzymanie obrażeń natychmiast przerywa sen. Wygasa po 2 rundach.', 1, 0, 'on_damage', NULL, datetime('now'), datetime('now'))
+    """,
     """
     INSERT OR IGNORE INTO game_config_conditions
     (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)

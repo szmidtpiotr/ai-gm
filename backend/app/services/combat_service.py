@@ -2317,8 +2317,14 @@ def _resolve_effect_spell_in_combat(
 
     player_raw = int(raw_d20) if raw_d20 is not None else None
     target_stats = enemy.get("stats") if isinstance(enemy.get("stats"), dict) else {}
+    # #1432: przekaż rasę → is_miscast (krasnolud pudłuje kontrolę też na Nat 2).
+    try:
+        _cr_eff = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _race_eff = str((_cr_eff["race"] if _cr_eff else None) or "human")
+    except sqlite3.OperationalError:
+        _race_eff = "human"
     resolution = spell_service.resolve_combat_effect_spell(
-        sheet, target_stats, condition_key, mana_cost, raw_d20=player_raw,
+        sheet, target_stats, condition_key, mana_cost, raw_d20=player_raw, race=_race_eff,
     )
     out["spell_effect"] = resolution
     out["player_raw_d20"] = player_raw
@@ -2454,10 +2460,13 @@ def _resolve_aoe_effect_spell_in_combat(
     out["player_raw_d20"] = player_raw
     out["player_nat1"] = (player_raw == 1)
 
-    # Nat 1 → miscast (pełna mana, brak kondycji na nikim).
-    if player_raw == 1:
+    # Miscast (pełna mana, brak kondycji na nikim) — #1432: is_miscast (dwarf Nat 1-2).
+    try:
         _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
         _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+    except sqlite3.OperationalError:
+        _char_race = "human"
+    if player_raw is not None and spell_service.is_miscast(int(player_raw), _char_race):
         _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
@@ -2908,11 +2917,17 @@ def _resolve_heal_spell_in_combat(
             return out
         _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
-    heal_die_row = conn.execute(
-        "SELECT heal_die FROM game_config_spells WHERE key = ? AND is_active = 1",
-        (spell_k,),
-    ).fetchone()
-    spell_stats = {"heal_die": (heal_die_row["heal_die"] if heal_die_row else None) or "1d6"}
+    # #1432: heal_die ZMERGOWANE wg rangi (spell_row przychodzi z get_spell_stats_at_rank);
+    # fallback do świeżego fetchu dla wywołań podających wąski wiersz.
+    _merged_heal_die = spell_row.get("heal_die") if isinstance(spell_row, dict) else None
+    if _merged_heal_die:
+        spell_stats = {"heal_die": str(_merged_heal_die)}
+    else:
+        heal_die_row = conn.execute(
+            "SELECT heal_die FROM game_config_spells WHERE key = ? AND is_active = 1",
+            (spell_k,),
+        ).fetchone()
+        spell_stats = {"heal_die": (heal_die_row["heal_die"] if heal_die_row else None) or "1d6"}
 
     # ── B14: ustal cele leczenia ──────────────────────────────────────────────
     caster_chid = _b14_comb_char_id(caster_comb_id, row)
@@ -3226,13 +3241,14 @@ def _resolve_aoe_spell_in_combat(
     out["player_nat1"] = player_nat1
     out["player_nat20"] = player_nat20
 
-    # 2. Nat 1 → miscast (pełna mana stracona)
-    if player_nat1:
-        try:
-            _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
-            _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
-        except sqlite3.OperationalError:  # izolowane fikstury bez kolumny race
-            _char_race = "human"
+    # 2. Miscast (pełna mana stracona) — #1432: is_miscast(raw, race): człowiek Nat 1,
+    #    krasnolud Nat 1-2 (Rdzeń-magia). Wcześniej twardo player_nat1 (dwarf Nat 2 martwy).
+    try:
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+    except sqlite3.OperationalError:  # izolowane fikstury bez kolumny race
+        _char_race = "human"
+    if player_raw is not None and spell_service.is_miscast(int(player_raw), _char_race):
         _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
@@ -7253,16 +7269,19 @@ def _attack_spell_secondary(
         out["spell_nat20_secondary"] = _nat20_fx
         if _nat20_fx.get("condition"):
             _cond = _nat20_fx["condition"]
-            existing_conds = enemy.get("conditions") or []
-            if not any(c.get("key") == _cond for c in existing_conds):
-                if not isinstance(enemy.get("conditions"), list):
-                    enemy["conditions"] = []
-                enemy["conditions"].append({
-                    "key": _cond,
-                    "label": _cond.title(),
-                    "duration_rounds": 2,
-                    "runtime": {},
-                })
+            if not isinstance(enemy.get("conditions"), list):
+                enemy["conditions"] = []
+            _already = any(
+                isinstance(c, dict) and str(c.get("key", "")).lower() == _cond
+                for c in enemy["conditions"]
+            )
+            if not _already:
+                # #1432: kondycja z KATALOGU (effect_json → silnik faktycznie stosuje
+                # efekt: `stunned` skip_turn, `burning` dot). Wcześniej inline dict bez
+                # effect_json = kondycja czysto kosmetyczna (ogłuszony wróg atakował).
+                _entry = _build_condition_entry(conn, _cond, applied_at="spell_nat20")
+                if _entry is not None:
+                    enemy["conditions"].append(_entry)
     if is_spell and player_nat1:
         from app.services.spell_service import resolve_miscast
         _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
@@ -7271,6 +7290,76 @@ def _attack_spell_secondary(
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+
+
+def _load_player_spell_gate(
+    conn, ch_id: int, sheet: dict, spell_key: str, row, out: dict[str, Any],
+) -> tuple[dict[str, Any] | None, int, dict[str, Any] | None]:
+    """#1431 (AUDIT P0) + #1432 — jedna bramka znajomości czaru PRZED dispatchem walki.
+
+    Wszystkie gałęzie czaru w walce ufały wcześniej tylko ``game_config_spells`` (klucz
+    istnieje), bez sprawdzenia ``character_spells``/archetypu/rasy/tieru — scholar L1 mógł
+    rzucić ``fireball`` (tier 5, nienauczony), krasnolud ludzkie czary itd. Ta bramka
+    pokrywa WSZYSTKIE spell_type (effect/effect_aoe/defense/reaction/attack_aoe/heal/
+    summon/attack). Sprawdza:
+      • czar istnieje i jest aktywny,
+      • rzucający to Uczony (scholar),
+      • czar JEST w ``character_spells`` (koniec bypassu progresji) — zwraca ``rank``,
+      • ``race_lock`` dopuszcza rasę postaci (lustro ``learn_spell``),
+      • tier ≤ ``max_spell_tier_for_level(level)``.
+
+    Zwraca ``(blocked_out, 0, None)`` gdy zablokowane — tura ORAZ mana NIETKNIĘTE
+    (``block_reason='spell_not_known'`` i pochodne). Inaczej ``(None, rank, merged_stats)``
+    ze statami zmergowanymi wg rangi (``get_spell_stats_at_rank``) do skalowania R2/R3
+    w każdym handlerze. Kantrypy (``spell_key=None``) nie przechodzą tędy.
+    """
+    from app.services import spell_service
+
+    def _block(reason: str, msg: str):
+        out["hit"] = False
+        out["blocked"] = True
+        out["block_reason"] = reason
+        out["message"] = msg
+        out["combat_state"] = _row_to_combat_dict(row)
+        return out, 0, None
+
+    spell_row = conn.execute(
+        "SELECT * FROM game_config_spells WHERE key = ? AND is_active = 1", (spell_key,),
+    ).fetchone()
+    if not spell_row:
+        return _block("spell_not_known", f"Nie znasz zaklęcia „{spell_key}”.")
+    _label = str(spell_row["label"] or spell_key)
+    if str(sheet.get("archetype") or "").strip().lower() != "scholar":
+        return _block("not_a_caster", "Tylko Uczony potrafi rzucać zaklęcia.")
+    known = conn.execute(
+        "SELECT rank FROM character_spells WHERE character_id = ? AND spell_key = ?",
+        (int(ch_id), spell_key),
+    ).fetchone()
+    if not known:
+        return _block(
+            "spell_not_known",
+            f"Nie znasz zaklęcia „{_label}” — naucz się go najpierw (progresja czarów).",
+        )
+    rank = int(known["rank"] or 1)
+    # race_lock — lustro learn_spell: CSV dopuszczonych ras; pusty/NULL = pula ludzka.
+    try:
+        _cr = conn.execute("SELECT race FROM characters WHERE id = ?", (int(ch_id),)).fetchone()
+        char_race = str((_cr["race"] if _cr else None) or "human").strip().lower()
+    except sqlite3.OperationalError:
+        char_race = "human"
+    spell_cols = spell_row.keys()
+    raw_lock = str((spell_row["race_lock"] if "race_lock" in spell_cols else "") or "").strip().lower()
+    allowed_races = [r.strip() for r in raw_lock.split(",") if r.strip()] or ["human"]
+    if char_race not in allowed_races:
+        return _block(
+            "spell_race_locked",
+            f"Zaklęcie „{_label}” nie jest dostępne dla twojej rasy.",
+        )
+    # Tier gate: EGZEKWOWANY już przy nauce (`learn_spell` → `max_spell_tier_for_level`),
+    # więc obecność w character_spells sama w sobie potwierdza, że tier był w zasięgu.
+    # Nie duplikujemy go tu, by nie rozjechać kontraktu „znany = rzucalny".
+    merged = spell_service.get_spell_stats_at_rank(dict(spell_row), rank)
+    return None, rank, merged
 
 
 def _process_enemy_death(
@@ -7531,23 +7620,34 @@ def _resolve_player_attack_turn(
     if authoritative:
         raw_d20 = roll_d20()
         roll_result = None
+    # ── #1431 (AUDIT P0): bramka znajomości czaru PRZED dispatchem ────────────────
+    # Zwraca `_spell_stats` = staty ZMERGOWANE wg rangi (get_spell_stats_at_rank) —
+    # używane w KAŻDEJ gałęzi niżej, więc rangi R2/R3 działają w walce (#1432).
+    _spell_rank = 1
+    _spell_stats: dict[str, Any] | None = None
+    if spell_key:
+        _blocked, _spell_rank, _spell_stats = _load_player_spell_gate(
+            conn, ch_id, sheet, spell_key, row, out,
+        )
+        if _blocked is not None:
+            # spell_not_known / race_locked / tier_too_high → tura i mana NIETKNIĘTE.
+            return _blocked
+
     target_id, enemy, _tgt_early = _attack_target_select(
         combatants, _player_comb_id, spell_key, sheet, conn, ch_id, row, target_id, out,
     )
     if _tgt_early is not None:
         return _tgt_early
 
-    # ── B9 (#656): czar NIE-atakujący (kondycja) — pojedynek INT vs WIS/CON, NIE unik ──
-    # Wykrywamy PRZED ścieżką ataku/obrażeń: czar `effect` w walce nakłada kondycję
-    # FAZY S testem przeciwnym (decyzja D-spell), zamiast zadawać obrażenia jak broń.
-    if spell_key:
-        _eff_row = conn.execute(
-            "SELECT key, label, spell_type, effect_type, effect_duration, mana_cost, tier "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _eff_row and str(_eff_row["spell_type"] or "").strip().lower() == "effect":
-            _cond_k = str(_eff_row["effect_type"] or "").strip().lower()
+    # ── Dispatch czaru wg spell_type (staty ZMERGOWANE wg rangi — #1432) ──────────
+    # Każda gałąź dostaje `_spell_stats`, więc mana/kość/czas rangi R2/R3 obowiązują
+    # w walce, nie tylko poza nią (koniec „placebo rang").
+    if spell_key and _spell_stats is not None:
+        _st = str(_spell_stats.get("spell_type") or "").strip().lower()
+
+        # B9 (#656) — czar NIE-atakujący (kondycja): pojedynek INT vs WIS/CON, NIE unik.
+        if _st == "effect":
+            _cond_k = str(_spell_stats.get("effect_type") or "").strip().lower()
             _has_cond = conn.execute(
                 "SELECT 1 FROM game_config_conditions WHERE key = ? AND is_active = 1",
                 (_cond_k,),
@@ -7555,30 +7655,21 @@ def _resolve_player_attack_turn(
             if _has_cond:
                 return _resolve_effect_spell_in_combat(
                     conn, row, campaign_id, ch_id, sheet, combatants,
-                    enemy, target_id, _eff_row, raw_d20, out,
+                    enemy, target_id, _spell_stats, raw_d20, out,
                 )
-            # Efekt bez kondycji w katalogu FAZY S (np. sleep→sleeping): nie wspieramy
-            # w Fazie 1 — łagodne odbicie, tura nietknięta (zero duplikatu stanów).
+            # Efekt bez kondycji w katalogu (np. sleep bez `sleeping`) — łagodne odbicie.
             out["hit"] = False
             out["blocked"] = True
             out["block_reason"] = "unsupported_effect"
             out["message"] = (
-                f"Czar „{_eff_row['label']}” nie jest jeszcze wspierany w walce."
+                f"Czar „{_spell_stats.get('label')}” nie jest jeszcze wspierany w walce."
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
 
-    # ── B17 (#823): czar kontroli OBSZAROWY (mass_fear) — kondycja na WSZYSTKICH wrogach ──
-    # Wykrywamy PRZED attack_aoe: spell_type='effect_aoe' nakłada kondycję FAZY S pojedynkiem
-    # przeciwnym INT per wróg (decyzja D3 — casting INT), zamiast zadawać obrażenia.
-    if spell_key:
-        _eaoe_row = conn.execute(
-            "SELECT key, label, spell_type, effect_type, effect_duration, mana_cost, tier "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _eaoe_row and str(_eaoe_row["spell_type"] or "").strip().lower() == "effect_aoe":
-            _cond_k = str(_eaoe_row["effect_type"] or "").strip().lower()
+        # B17 (#823) — czar kontroli OBSZAROWY (mass_fear).
+        if _st == "effect_aoe":
+            _cond_k = str(_spell_stats.get("effect_type") or "").strip().lower()
             _has_cond = conn.execute(
                 "SELECT 1 FROM game_config_conditions WHERE key = ? AND is_active = 1",
                 (_cond_k,),
@@ -7586,91 +7677,53 @@ def _resolve_player_attack_turn(
             if _has_cond:
                 return _resolve_aoe_effect_spell_in_combat(
                     conn, row, campaign_id, ch_id, sheet, combatants,
-                    enemy, target_id, _eaoe_row, raw_d20, out,
+                    enemy, target_id, _spell_stats, raw_d20, out,
                 )
             out["hit"] = False
             out["blocked"] = True
             out["block_reason"] = "unsupported_effect"
             out["message"] = (
-                f"Czar „{_eaoe_row['label']}” nie jest jeszcze wspierany w walce."
+                f"Czar „{_spell_stats.get('label')}” nie jest jeszcze wspierany w walce."
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
 
-    # ── B10 (#657): czar OBRONNY (ward_of_iron/mage_armor) — pula absorpcji ──
-    # Self-buff: nakłada temp-HP na combatanta gracza, NIE atakuje wroga.
-    # Wykrywany PRZED ścieżką ataku (inaczej wpadał w fallback 2d6 — ukryty bug).
-    if spell_key:
-        _def_row = conn.execute(
-            "SELECT key, label, spell_type, mana_cost, tier "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _def_row and str(_def_row["spell_type"] or "").strip().lower() == "defense":
+        # B10 (#657) — czar OBRONNY (pula absorpcji).
+        if _st == "defense":
             return _resolve_defense_spell_in_combat(
-                conn, row, campaign_id, ch_id, sheet, combatants, _def_row, out,
+                conn, row, campaign_id, ch_id, sheet, combatants, _spell_stats, out,
                 caster_comb_id=_player_comb_id,
                 requested_target_id=_b14_req_target,
-                mass=_b14_is_mass_spell(str(_def_row["key"])),
+                mass=_b14_is_mass_spell(str(_spell_stats.get("key"))),
             )
 
-    # ── B16 (#822): czar REAKCJI (mirror_image/blink/globe) — stan prewencyjny ──
-    # Self-buff: zapisuje stan auto-wyzwalany przy następnym trafieniu wroga
-    # (_try_spell_reaction). Wykrywany PRZED ścieżką ataku (inaczej wpadał w fallback).
-    if spell_key:
-        _react_row = conn.execute(
-            "SELECT key, label, spell_type, mana_cost, tier "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _react_row and str(_react_row["spell_type"] or "").strip().lower() == "reaction":
+        # B16 (#822) — czar REAKCJI (mirror_image/blink/globe).
+        if _st == "reaction":
             return _resolve_reaction_spell_in_combat(
-                conn, row, campaign_id, ch_id, sheet, combatants, _react_row, out,
+                conn, row, campaign_id, ch_id, sheet, combatants, _spell_stats, out,
                 caster_comb_id=_player_comb_id,
             )
 
-    # ── B11 (#659): czar AoE (attack_aoe) — multi-target ──────────────
-    # Wykrywamy PRZED ścieżką ST ataku: czar AoE uderza w WSZYSTKICH żywych
-    # wrogów (aoe=1) lub maks 3 (aoe=0, chain). Reużywa tego samego d20.
-    if spell_key:
-        # Detekcja BEZ kolumny `aoe` — izolowane fikstury testowe mogą jej
-        # nie mieć (real schema zawsze ma). Handler dociąga `aoe` osobno.
-        _aoe_row = conn.execute(
-            "SELECT key, label, spell_type, mana_cost, damage_die, tier "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _aoe_row and str(_aoe_row["spell_type"] or "").strip().lower() == "attack_aoe":
+        # B11 (#659) — czar AoE atakujący (multi-target).
+        if _st == "attack_aoe":
             return _resolve_aoe_spell_in_combat(
                 conn, row, campaign_id, ch_id, sheet, combatants,
-                enemy, target_id, _aoe_row, raw_d20, out, loot_pool_accum,
+                enemy, target_id, _spell_stats, raw_d20, out, loot_pool_accum,
             )
-    # ── B13 (#663): czar LECZĄCY (heal) — self-heal w walce ──────────
-    if spell_key:
-        _heal_row = conn.execute(
-            "SELECT key, label, spell_type, mana_cost, tier "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _heal_row and str(_heal_row["spell_type"] or "").strip().lower() == "heal":
+
+        # B13 (#663) — czar LECZĄCY (self/ally heal).
+        if _st == "heal":
             return _resolve_heal_spell_in_combat(
-                conn, row, campaign_id, ch_id, sheet, combatants, _heal_row, out,
+                conn, row, campaign_id, ch_id, sheet, combatants, _spell_stats, out,
                 caster_comb_id=_player_comb_id,
                 requested_target_id=_b14_req_target,
-                mass=_b14_is_mass_spell(str(_heal_row["key"])),
+                mass=_b14_is_mass_spell(str(_spell_stats.get("key"))),
             )
-    # ── B15 (#821): czar PRZYWOŁANIA (summon) — dodaj towarzysza-kombatanta ──
-    # Wykrywamy PRZED ścieżką ataku: summon nie atakuje wroga rzutem gracza,
-    # tylko wstawia nowego kombatanta type=='summon' do walki (własna tura niżej).
-    if spell_key:
-        _sum_row = conn.execute(
-            "SELECT key, label, spell_type, mana_cost, tier, effect_json "
-            "FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if _sum_row and str(_sum_row["spell_type"] or "").strip().lower() == "summon":
+
+        # B15 (#821) — czar PRZYWOŁANIA (summon).
+        if _st == "summon":
             return _resolve_summon_spell_in_combat(
-                conn, row, campaign_id, ch_id, sheet, combatants, _sum_row, out,
+                conn, row, campaign_id, ch_id, sheet, combatants, _spell_stats, out,
                 caster_comb_id=_player_comb_id,
             )
     # ─────────────────────────────────────────────────────────────────
@@ -7686,25 +7739,27 @@ def _resolve_player_attack_turn(
     # #598: dual-wield off-hand — wymuszona broń (pomija sheet/spell/scholar)
     if weapon_override is not None:
         weapon_row = weapon_override
-    # If spell_key provided, override weapon with spell stats
+    # If spell_key provided, override weapon with spell stats (ZMERGOWANE wg rangi #1432).
+    elif spell_key and _spell_stats is not None:
+        # #1433 NULL-safe (lustro #1373 po stronie gracza): 0 to LEGALNY koszt many
+        # (nie falsy-fallback do 2), a brak kości ataku → 1d4 (parytet z kantrypem),
+        # nie ciche 2d6 rozbieżne z formularzem Smart Entry.
+        _sd_raw = _spell_stats.get("damage_die")
+        _spell_damage_die = str(_sd_raw) if (_sd_raw is not None and str(_sd_raw).strip()) else "1d4"
+        _mc_raw = _spell_stats.get("mana_cost")
+        _spell_mana = int(_mc_raw) if _mc_raw is not None else 2
+        weapon_row = {
+            "key": str(_spell_stats.get("key") or spell_key),
+            "label": str(_spell_stats.get("label") or spell_key),
+            "weapon_type": "spell",
+            "damage_die": _spell_damage_die,
+            "mana_cost": _spell_mana,
+            "linked_stat": "INT",
+            "attack_bonus": 0,
+            "damage_bonus": 0,
+        }
     elif spell_key:
-        spell_weapon = conn.execute(
-            "SELECT key, label, mana_cost, damage_die, spell_type, tier FROM game_config_spells WHERE key = ? AND is_active = 1",
-            (spell_key,),
-        ).fetchone()
-        if spell_weapon:
-            weapon_row = {
-                "key": spell_weapon["key"],
-                "label": spell_weapon["label"],
-                "weapon_type": "spell",
-                "damage_die": spell_weapon["damage_die"] or "2d6",
-                "mana_cost": spell_weapon["mana_cost"] or 2,
-                "linked_stat": "INT",
-                "attack_bonus": 0,
-                "damage_bonus": 0,
-            }
-        else:
-            weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
+        weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
     elif str(sheet.get("archetype") or "").strip().lower() == "scholar":
         # Scholar cantrip: free basic magic attack (1d4, INT-based, no mana cost)
         weapon_row = {
@@ -7786,10 +7841,24 @@ def _resolve_player_attack_turn(
         pass
     player_nat20 = player_raw == 20
     player_nat1 = player_raw == 1
+    # #1432 (AUDIT): miscast Rdzeń-magii — krasnolud pudłuje wyuczony czar TAKŻE na Nat 2
+    # (spell_service.is_miscast, próg dwarf=2). Dotyczy tylko czarów `spell_key`, NIE
+    # darmowego kantrypa. Człowiek: bez zmian (próg 1). Wyzwala tę samą ścieżkę miscast.
+    _spell_backfire = False
+    if spell_key and player_raw is not None:
+        try:
+            _cr_row = conn.execute(
+                "SELECT race FROM characters WHERE id = ?", (int(row["character_id"]),)
+            ).fetchone()
+            _caster_race = str((_cr_row["race"] if _cr_row else None) or "human")
+        except sqlite3.OperationalError:
+            _caster_race = "human"
+        from app.services.spell_service import is_miscast as _is_miscast_fn
+        _spell_backfire = bool(_is_miscast_fn(int(player_raw), _caster_race))
     dodge_roll: dict[str, Any] | None = None
     dodged = False
     hit = False
-    if player_nat1:
+    if player_nat1 or _spell_backfire:
         hit = False
         dodged = True
     else:
@@ -7931,6 +8000,24 @@ def _resolve_player_attack_turn(
             weapon_row, sheet, enemy, combatants, _player_comb_id,
             player_raw, _surprise_fx, conn, ch_id, out, dmg,
         )
+        # ── #1432 (AUDIT): drain_life / lifesteal ─────────────────────
+        # Czar-wampir (heal_pct w statach rangi, np. drain_life R3 → 100%) leczy
+        # castera o dmg*pct/100, cap max_hp. Wcześniej „heal_pct" był martwym seedem.
+        if _is_spell and _spell_stats is not None and dmg > 0:
+            try:
+                _heal_pct = int(_spell_stats.get("heal_pct") or 0)
+            except (TypeError, ValueError):
+                _heal_pct = 0
+            if _heal_pct > 0:
+                _steal = max(0, (int(dmg) * _heal_pct) // 100)
+                _cur_hp = int(sheet.get("current_hp") or 0)
+                _max_hp = int(sheet.get("max_hp") or _cur_hp)
+                _new_hp = min(_max_hp, _cur_hp + _steal)
+                if _new_hp != _cur_hp:
+                    sheet["current_hp"] = _new_hp
+                    out["lifesteal_healed"] = _new_hp - _cur_hp
+                    out["hp_after"] = _new_hp
+                    _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
         # ─────────────────────────────────────────────────────────────
 
         dead = int(enemy.get("hp_current", 0) or 0) <= 0
@@ -8083,8 +8170,9 @@ def _resolve_player_attack_turn(
             if _hidden_miss:
                 _remove_combatant_conditions(_pc_miss, _hidden_miss)
 
+    # #1432: krasnoludzki miscast na Nat 2 wchodzi tą samą ścieżką co Nat 1 (backfire).
     _attack_spell_secondary(
-        _is_spell, player_nat20, player_nat1, hit, enemy, dmg, out, sheet,
+        _is_spell, player_nat20, (player_nat1 or _spell_backfire), hit, enemy, dmg, out, sheet,
         conn, campaign_id, row,
     )
 

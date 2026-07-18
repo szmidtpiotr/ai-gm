@@ -123,6 +123,10 @@ def _combat_db(tmp_path, *, int_stat=16, mana=10, max_mana=10,
         # slowed condition for backward-compat test
         conn.execute("INSERT INTO game_config_conditions (key,label,effect_json,is_active,stackable) "
                      "VALUES ('slowed','Spowolniony','{\"effects\":[]}',1,0)")
+        conn.execute(
+            "INSERT INTO character_spells (character_id, spell_key, rank) "
+            "SELECT c.id, s.key, 1 FROM characters c, game_config_spells s"
+        )  # #1431: bramka wymaga znanego czaru — seeduj czary jako znane
         conn.commit()
     finally:
         conn.close()

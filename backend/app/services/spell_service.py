@@ -507,7 +507,7 @@ def mana_refund_on_resist(mana_cost: int) -> int:
 
 def resolve_combat_effect_spell(
     caster_sheet: dict, target_stats: dict, condition_key: str,
-    mana_cost: int, raw_d20: int | None = None, rng=random,
+    mana_cost: int, raw_d20: int | None = None, rng=random, race: str = "human",
 ) -> dict:
     """B9 (#656): rozstrzygnięcie czaru NIE-atakującego (kondycja) w walce.
 
@@ -520,7 +520,8 @@ def resolve_combat_effect_spell(
     persistu walki). Zwraca {outcome, condition_applied, save_stat, mana_refund, save}.
     """
     save_stat = spell_save_stat(condition_key)
-    if raw_d20 == 1:
+    # #1432: is_miscast(raw, race) — człowiek Nat 1, krasnolud Nat 1-2 (Rdzeń-magia).
+    if raw_d20 is not None and is_miscast(int(raw_d20), race):
         return {"outcome": "miscast", "condition_applied": False,
                 "save_stat": save_stat, "mana_refund": 0, "save": None}
     save = resolve_spell_opposed_save(caster_sheet, target_stats, condition_key, rng=rng)
@@ -655,8 +656,13 @@ def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
         spell = get_spell(spell_key)
         if not spell:
             raise ValueError(f"Zaklęcie '{spell_key}' nie istnieje")
-        if spell["spell_type"] in ("attack", "attack_aoe", "effect"):
-            raise ValueError("Zaklęcia ofensywne i efektowe można rzucić tylko w walce — wymagają celu")
+        # #1433: czary wymagające walki (cel/kombatanci) blokowane poza walką — inaczej
+        # `defense` dopisywał goły string do sheet["conditions"] (śmieć, mana za nic).
+        # OOC-valid zostają tylko heal/narrative. pending_absorb pre-buff = przyszłość.
+        if spell["spell_type"] in (
+            "attack", "attack_aoe", "effect", "effect_aoe", "defense", "reaction", "summon",
+        ):
+            raise ValueError("To zaklęcie można rzucić tylko w walce — wymaga celu lub przeciwników")
         spell_stats = get_spell_stats_at_rank(spell, known["rank"])
         mana_cost = int(spell_stats.get("mana_cost") or 0)
         if mana_cost > 0:
@@ -679,16 +685,6 @@ def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
                 f"Rzucasz {spell.get('label', spell_key)} — leczysz się za "
                 f"{heal_result['healed']} HP. Masz teraz "
                 f"{heal_result['hp_after']}/{int(sheet.get('max_hp', 0))} HP."
-            )
-        elif spell["spell_type"] == "defense":
-            conditions = list(sheet.get("conditions") or [])
-            if spell_key not in conditions:
-                conditions.append(spell_key)
-            sheet["conditions"] = conditions
-            result["outcome"] = "defense"
-            result["conditions"] = conditions
-            result["message"] = (
-                f"Rzucasz {spell.get('label', spell_key)}. Magiczna ochrona otacza cię."
             )
         elif spell["spell_type"] == "narrative":
             result["outcome"] = "narrative"

@@ -110,6 +110,10 @@ def _combat_db(tmp_path, *, mana=12, max_mana=12, n_enemies=3, enemy_hp=8):
         INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,skills_json,stats_json,tier,loot_table_key,drop_chance,xp_award)
           VALUES ('goblin','Goblin',8,8,0,'1d6',0,NULL,NULL,'minion',NULL,0,10);
         """)
+        conn.execute(
+            "INSERT INTO character_spells (character_id, spell_key, rank) "
+            "SELECT c.id, s.key, 1 FROM characters c, game_config_spells s"
+        )  # #1431: bramka wymaga znanego czaru — seeduj czary jako znane
         conn.commit()
     finally:
         conn.close()
