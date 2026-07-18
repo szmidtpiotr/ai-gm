@@ -8,6 +8,8 @@ import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
+
+from app.core.jwt_auth import assert_campaign_owner
 from pydantic import BaseModel
 
 from app.core.logging import bind_context, get_logger
@@ -4944,8 +4946,9 @@ def get_debug_log(campaign_id: int, limit: int = Query(default=5, ge=1, le=20)):
 # ---------------------------------------------------------------------------
 
 @router.post("/campaigns/{campaign_id}/export")
-def export_session(campaign_id: int):
+def export_session(campaign_id: int, authorization: str | None = Header(default=None)):
     """Exports the full session to a .txt file under /data/exports/"""
+    assert_campaign_owner(campaign_id, authorization)
     conn = get_db()
     try:
         get_campaign_or_404(conn, campaign_id)
@@ -6232,7 +6235,9 @@ def create_turn(
     campaign_id: int,
     payload: TurnCreate,
     x_ollama_base_url: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
+    assert_campaign_owner(campaign_id, authorization)
     conn = get_db()
     turn_id = _start_turn_trace(campaign_id, payload.character_id, "turn")
     # #1186: in-flight lock — drugi równoległy turn tej samej kampanii → 409 (nie drugi LLM)
@@ -6599,7 +6604,9 @@ def create_turn_stream(
     payload: TurnCreate,
     x_ollama_base_url: str | None = Header(default=None),
     ui_trace_id: str | None = Header(default=None, alias="X-UI-Trace-Id"),
+    authorization: str | None = Header(default=None),
 ):
+    assert_campaign_owner(campaign_id, authorization)
     """
     Streaming version of the turn endpoint.
     Returns a text/event-stream (SSE) response.
@@ -8431,7 +8438,9 @@ def create_turn_stream(
 def search_body_or_location(
     campaign_id: int,
     payload: SearchPayload,
+    authorization: str | None = Header(default=None),
 ):
+    assert_campaign_owner(campaign_id, authorization)
     if not is_slash_command_enabled("/search"):
         raise HTTPException(
             status_code=403,
@@ -8510,12 +8519,14 @@ class SkillTestResolvePayload(BaseModel):
 def resolve_skill_test_endpoint(
     campaign_id: int,
     payload: SkillTestResolvePayload,
+    authorization: str | None = Header(default=None),
 ):
     """
     Player triggers resolution. Backend uses the server-committed d20 value
     (locked in when the pending was created) so a refresh-spammer cannot
     reroll. Returns prose + mechanic result.
     """
+    assert_campaign_owner(campaign_id, authorization)
     import json as _json
     from app.services.skill_service import resolve_skill_test, build_skill_result_context
     from app.services.llm_service import generate_chat as _gen_chat
@@ -9007,6 +9018,7 @@ class SkillTestRerollPayload(BaseModel):
 def reroll_skill_test_endpoint(
     campaign_id: int,
     payload: SkillTestRerollPayload,
+    authorization: str | None = Header(default=None),
 ):
     """S11 (#606) — przerzut gracza (inspired, ``player_keep_best``).
 
@@ -9014,6 +9026,7 @@ def reroll_skill_test_endpoint(
     rzuca NOWY serwerowy d20, składa LEPSZY z dwóch (oryginał vs nowy), zużywa przerzut
     (zdejmuje inspired) i narruje wynik. Model committed-d20 zachowany — klient nie podaje
     rzutu, więc nie da się go nadużyć."""
+    assert_campaign_owner(campaign_id, authorization)
     import json as _json
     import random as _random
     from app.services.skill_service import _derive_outcome, build_skill_result_context
@@ -9517,13 +9530,14 @@ class TravelPayload(BaseModel):
 
 
 @router.post("/campaigns/{campaign_id}/travel")
-def player_travel(campaign_id: int, payload: TravelPayload):
+def player_travel(campaign_id: int, payload: TravelPayload, authorization: str | None = Header(default=None)):
     """U30: Unified travel endpoint — accepts target_hex OR target_location_key.
 
     #1244 (R4): thin wrapper over the shared `execute_travel` pipeline — all
     travel logic (origin/destination resolution, chain travel, clock, scenes,
     synthetic turn) lives in hex_travel_service so every travel route is identical.
     """
+    assert_campaign_owner(campaign_id, authorization)
     from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
     if payload.target_hex:
@@ -9899,13 +9913,14 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
 
 
 @router.post("/campaigns/{campaign_id}/hex-travel")
-def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
+def player_hex_travel(campaign_id: int, payload: HexTravelPayload, authorization: str | None = Header(default=None)):
     """Player-initiated hex chain travel.
 
     #1244 (R4): alias of /travel — delegates to the shared `execute_travel`
     pipeline so a hex-travel move now ALSO advances scenes and records a
     synthetic turn (previously clock-only → narrator was blind to the move).
     """
+    assert_campaign_owner(campaign_id, authorization)
     from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
     target = {"hex": {"q": payload.destination_q, "r": payload.destination_r}}

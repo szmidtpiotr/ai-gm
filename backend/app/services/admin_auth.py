@@ -72,7 +72,10 @@ def issue_dev_admin_token(username: str, password: str) -> str:
     try:
         row = conn.execute(
             """
-            SELECT id, username, password_hash, COALESCE(is_active, 1) AS is_active
+            SELECT id, username, password_hash,
+                   COALESCE(is_active, 1) AS is_active,
+                   COALESCE(is_admin, 0) AS is_admin,
+                   COALESCE(role, 'player') AS role
             FROM users
             WHERE username = ?
             LIMIT 1
@@ -85,6 +88,11 @@ def issue_dev_admin_token(username: str, password: str) -> str:
             raise PermissionError("inactive_user")
         if not _verify_user_password(str(row["password_hash"] or ""), password):
             raise PermissionError("invalid_credentials")
+        # #1425 — dev-login MUST NOT mint an admin token for a regular player.
+        # Verifying login+password alone escalated any user to superadmin
+        # (unlocks all of /api/admin/*). Require is_admin=1 OR role='admin'.
+        if int(row["is_admin"] or 0) != 1 and str(row["role"] or "").lower() != "admin":
+            raise PermissionError("not_admin")
 
         raw_token = secrets.token_urlsafe(32)
         token_hash = hash_admin_token(raw_token)

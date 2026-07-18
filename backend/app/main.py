@@ -705,6 +705,10 @@ def _backfill_terrain_tags():
 async def lifespan(app: FastAPI):
     # Startup
     configure_logging()
+    # #1426 — fail fast if JWT_SECRET is unset. Signing with a predictable
+    # fallback key let anyone forge admin tokens; there is no safe default.
+    from app.services.jwt_service import _secret as _assert_jwt_secret
+    _assert_jwt_secret()
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)

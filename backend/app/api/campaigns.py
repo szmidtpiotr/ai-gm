@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict
 
 from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
-from app.core.jwt_auth import resolve_authed_user_id
+from app.core.jwt_auth import assert_campaign_owner, resolve_authed_user_id
 from app.core.logging import get_logger
 from app.services.history_summary_service import generate_dual_summary_preview
 from app.services.solo_death_service import death_summary_payload, end_summary_payload
@@ -1005,11 +1005,12 @@ def skip_tutorial(
 
 
 @router.post("/campaigns/{campaign_id}/reset")
-def reset_campaign_progress(campaign_id: int):
+def reset_campaign_progress(campaign_id: int, authorization: str | None = Header(default=None)):
     """
     Dev / playtest: clear chat turns, combat state, AI summaries; reopen ended campaign.
     Does not delete the campaign row or characters.
     """
+    assert_campaign_owner(campaign_id, authorization)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -1522,7 +1523,8 @@ def travel_resume(campaign_id: int):
 
 
 @router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_campaign(campaign_id: int):
+def delete_campaign(campaign_id: int, authorization: str | None = Header(default=None)):
+    assert_campaign_owner(campaign_id, authorization)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 

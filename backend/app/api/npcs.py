@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from app.core.jwt_auth import require_admin_role
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -115,7 +117,9 @@ def get_npc(npc_id: int):
 
 
 @router.post("/npcs")
-def create_npc(body: NpcCreateReq):
+def create_npc(body: NpcCreateReq, authorization: str | None = Header(None)):
+    # #1424 — world NPCs are global game content; only admins may mutate them.
+    require_admin_role(authorization)
     _validate_npc_type(body.npc_type)
     _validate_json_fields(
         {
@@ -151,7 +155,8 @@ def create_npc(body: NpcCreateReq):
 
 
 @router.patch("/npcs/{npc_id}")
-def patch_npc(npc_id: int, body: NpcPatchReq):
+def patch_npc(npc_id: int, body: NpcPatchReq, authorization: str | None = Header(None)):
+    require_admin_role(authorization)
     data = body.model_dump(exclude_unset=True)
     location_keys = data.pop("location_keys", None)
     _validate_npc_type(data.get("npc_type"))
@@ -173,7 +178,8 @@ def patch_npc(npc_id: int, body: NpcPatchReq):
 
 
 @router.delete("/npcs/{npc_id}")
-def delete_npc(npc_id: int):
+def delete_npc(npc_id: int, authorization: str | None = Header(None)):
+    require_admin_role(authorization)
     with _conn() as conn:
         _load_npc(conn, npc_id)
         conn.execute("DELETE FROM npc_locations WHERE npc_id = ?", (int(npc_id),))

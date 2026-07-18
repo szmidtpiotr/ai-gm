@@ -9,7 +9,7 @@ Cienkie wrappery na crafting_service (logika + walidacja tam).
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 from pydantic import BaseModel
 
-from app.core.jwt_auth import resolve_authed_user_id
+from app.core.jwt_auth import assert_character_owner, resolve_authed_user_id
 from app.services import crafting_service
 from app.services.crafting_service import CraftError
 
@@ -42,7 +42,7 @@ def craft_recipe(
     authorization: str | None = Header(default=None),
 ):
     """Wykonaj przepis — bohater dostarcza komponenty, rzemieślnik wytwarza za opłatą."""
-    resolve_authed_user_id(authorization, body.user_id or user_id)
+    assert_character_owner(character_id, authorization, body.user_id or user_id)
     try:
         return crafting_service.craft(
             character_id,
@@ -77,7 +77,7 @@ def craft_experiment(
     """Eksperyment przy tyglu — 2–4 komponenty → dopasowanie do ukrytej receptury.
     Trafienie+sukces = przedmiot + trwałe odkrycie; porażka = strata połowy; pudło
     = fuszerka. Wynik ZAWSZE z receptury admina (nie kompozycja statów w runtime)."""
-    resolve_authed_user_id(authorization, body.user_id or user_id)
+    assert_character_owner(character_id, authorization, body.user_id or user_id)
     try:
         return crafting_service.experiment(
             character_id,

@@ -1,8 +1,9 @@
 """Phase 9A-4 — NPC shop API."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.jwt_auth import assert_character_owner
 from app.services import shop_service
 from app.services import guild_shop_service
 from app.services import night_economy_service as night_econ
@@ -97,7 +98,8 @@ def get_guild_shop_by_key(npc_key: str, character_id: int = Query(...)):
 
 
 @router.post("/guild-shop/{npc_id}/buy")
-def post_guild_buy(npc_id: int, body: GuildBuyRequest):
+def post_guild_buy(npc_id: int, body: GuildBuyRequest, authorization: str | None = Header(None)):
+    assert_character_owner(body.character_id, authorization)
     try:
         data = guild_shop_service.buy_component(
             character_id=body.character_id, npc_id=npc_id, item_key=body.item_key,
@@ -108,7 +110,8 @@ def post_guild_buy(npc_id: int, body: GuildBuyRequest):
 
 
 @router.post("/guild-shop/{npc_id}/sell")
-def post_guild_sell(npc_id: int, body: GuildSellRequest):
+def post_guild_sell(npc_id: int, body: GuildSellRequest, authorization: str | None = Header(None)):
+    assert_character_owner(body.character_id, authorization)
     try:
         data = guild_shop_service.sell_component(
             character_id=body.character_id, npc_id=npc_id, inventory_id=body.inventory_id,
@@ -119,7 +122,8 @@ def post_guild_sell(npc_id: int, body: GuildSellRequest):
 
 
 @router.post("/shop/{npc_id}/buy")
-def post_shop_buy(npc_id: int, body: ShopBuyRequest):
+def post_shop_buy(npc_id: int, body: ShopBuyRequest, authorization: str | None = Header(None)):
+    assert_character_owner(body.character_id, authorization)
     try:
         data = shop_service.buy_item(
             character_id=body.character_id,
@@ -133,7 +137,8 @@ def post_shop_buy(npc_id: int, body: ShopBuyRequest):
 
 
 @router.post("/shop/{npc_id}/sell")
-def post_shop_sell(npc_id: int, body: ShopSellRequest):
+def post_shop_sell(npc_id: int, body: ShopSellRequest, authorization: str | None = Header(None)):
+    assert_character_owner(body.character_id, authorization)
     try:
         # #1127: npc_id lets sell_item gate by shop hours / apply black-market ×0.6.
         data = shop_service.sell_item(

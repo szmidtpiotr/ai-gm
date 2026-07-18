@@ -14,7 +14,6 @@ in `core/jwt_auth.py` will translate to HTTPException(401).
 
 from __future__ import annotations
 
-import hashlib
 import os
 import secrets
 import time
@@ -36,24 +35,22 @@ class JWTError(Exception):
 
 
 def _secret() -> str:
-    """Return the JWT signing secret.
+    """Return the JWT signing secret from env `JWT_SECRET`.
 
-    Prefers env `JWT_SECRET`. On dev (no env set) derives a stable per-host
-    secret from a hash of `/data/ai_gm.db` + hostname so restart preserves tokens
-    but the value isn't predictable to outside parties.
+    #1426 — the previous dev fallback derived the HS256 key from a *known
+    constant* (`sha256("/data/ai_gm.db::ai_gm::dev_jwt_fallback")`, the DB path
+    is public in CLAUDE.md) → anyone could forge a token with arbitrary
+    `sub`/`is_admin:1`. There is no safe fallback: an empty secret is a
+    fail-startup condition, not a warning. DEV/PROD compose and env.test all set
+    JWT_SECRET explicitly.
     """
     env = os.environ.get("JWT_SECRET", "").strip()
-    if env:
-        return env
-    # Dev fallback — DO NOT use in prod. Log a warning so it's visible in logs.
-    # Keyed on the DB *path* (stable across rebuilds), not hostname (changes every
-    # `docker compose up --build` → ephemeral ID → all tokens invalidated).
-    db_path = os.environ.get("DATABASE_URL", "/data/ai_gm.db")
-    seed = (db_path + "::ai_gm::dev_jwt_fallback").encode("utf-8")
-    derived = hashlib.sha256(seed).hexdigest()
-    logger.warning("jwt_secret_env_missing_using_dev_fallback",
-                   hint="Set JWT_SECRET in production for stable, unpredictable signing.")
-    return derived
+    if not env:
+        raise RuntimeError(
+            "JWT_SECRET is not set — refusing to sign/verify tokens with a "
+            "predictable fallback key. Set JWT_SECRET (compose env / .env)."
+        )
+    return env
 
 
 def issue_access_token(*, user_id: int, username: str, role: str, is_admin: int) -> str:

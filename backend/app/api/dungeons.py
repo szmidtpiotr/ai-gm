@@ -2,11 +2,20 @@
 from __future__ import annotations
 import json
 import sqlite3
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+
+from app.core.jwt_auth import assert_campaign_owner, assert_character_owner
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
+
+
+def _guard_dungeon_req(character_id: int, campaign_id: int, authorization: str | None) -> None:
+    """#1424 — a dungeon action must come from the owner of BOTH the campaign and
+    the hero named in the request body."""
+    uid = assert_campaign_owner(campaign_id, authorization)
+    assert_character_owner(character_id, authorization, uid)
 
 
 def _get_db():
@@ -152,7 +161,8 @@ class DungeonEnterReq(BaseModel):
 
 
 @router.post("/dungeons/{dungeon_key}/enter")
-def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
+def enter_dungeon(dungeon_key: str, req: DungeonEnterReq, authorization: str | None = Header(None)):
+    _guard_dungeon_req(req.character_id, req.campaign_id, authorization)
     if not _is_dungeon_enabled():
         raise HTTPException(
             status_code=403,
@@ -271,12 +281,13 @@ class DungeonResolveTileReq(BaseModel):
 
 
 @router.post("/dungeons/resolve-tile")
-def resolve_dungeon_tile(req: DungeonResolveTileReq):
+def resolve_dungeon_tile(req: DungeonResolveTileReq, authorization: str | None = Header(None)):
     """L6: Resolve non-combat tile action.
 
     Returns action result. 409 when no active v2 dungeon run.
     U22 fallback: missing node returns ok=True, fallback=True (pusty korytarz).
     """
+    _guard_dungeon_req(req.character_id, req.campaign_id, authorization)
     from app.services.dungeon_tile_service import resolve_tile_action
     from app.services.dungeon_service import grant_dungeon_loot, get_active_dungeon_run
 
@@ -305,13 +316,14 @@ class DungeonMoveReq(BaseModel):
 
 
 @router.post("/dungeons/move")
-def dungeon_move(req: DungeonMoveReq):
+def dungeon_move(req: DungeonMoveReq, authorization: str | None = Header(None)):
     """L4: Move through a door in the given direction.
 
     Returns {ok, node, content, room_description, fog_discovered, is_cleared, combat, narrative}
     on success, or {ok: false, blocked: true, reason: str} when blocked.
     409 when no active v2 dungeon run.
     """
+    _guard_dungeon_req(req.character_id, req.campaign_id, authorization)
     from app.services.dungeon_tile_service import move_through_door
     try:
         result = move_through_door(req.campaign_id, req.character_id, req.direction)
@@ -329,13 +341,14 @@ class DungeonBossChoiceReq(BaseModel):
 
 
 @router.post("/dungeons/boss-choice")
-def dungeon_boss_choice(req: DungeonBossChoiceReq):
+def dungeon_boss_choice(req: DungeonBossChoiceReq, authorization: str | None = Header(None)):
     """L8: After boss defeated (boss_choice_pending=True), player chooses exit or go_deeper.
 
     exit: complete_dungeon() + 100% cooldown + return to previous campaign.
     go_deeper: extend_dungeon_for_endless() → new graph segment, cycle+=1.
     409 when no active v2 run or boss_choice_pending is False.
     """
+    _guard_dungeon_req(req.character_id, req.campaign_id, authorization)
     from app.services.dungeon_service import (
         get_active_dungeon_run, complete_dungeon, clear_dungeon_run,
     )
@@ -399,7 +412,8 @@ def dungeon_boss_choice(req: DungeonBossChoiceReq):
 # ── Death handling ────────────────────────────────────────────────────────────
 
 @router.post("/dungeons/death")
-def dungeon_death(req: DungeonEnterReq):
+def dungeon_death(req: DungeonEnterReq, authorization: str | None = Header(None)):
+    _guard_dungeon_req(req.character_id, req.campaign_id, authorization)
     from app.services.dungeon_service import handle_dungeon_death
     result = handle_dungeon_death(req.campaign_id, req.character_id)
     return {"ok": True, **result}
@@ -408,13 +422,14 @@ def dungeon_death(req: DungeonEnterReq):
 # ── Exit dungeon ──────────────────────────────────────────────────────────────
 
 @router.post("/dungeons/exit")
-def exit_dungeon(req: DungeonEnterReq):
+def exit_dungeon(req: DungeonEnterReq, authorization: str | None = Header(None)):
     """L7: Abandon dungeon or exit on win.
 
     Mid-segment: restore from last checkpoint + 50% cooldown.
     At checkpoint (boss defeated): full reward + 100% cooldown.
     Completed run (win): no restore, no extra cooldown (complete_dungeon already called).
     """
+    _guard_dungeon_req(req.character_id, req.campaign_id, authorization)
     from app.services.dungeon_service import (
         get_active_dungeon_run, clear_dungeon_run, handle_dungeon_abandon
     )

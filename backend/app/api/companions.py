@@ -5,9 +5,10 @@ a location offers, list a character's active companions. Mirrors services_shop.p
 """
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.jwt_auth import assert_campaign_owner, assert_character_owner
 from app.services import companion_service
 
 router = APIRouter(tags=["companions"])
@@ -72,7 +73,8 @@ def companions_at_location(location_key: str, character_id: int = Query(...)):
 
 
 @router.post("/characters/{character_id}/companions/hire")
-def hire_companion(character_id: int, body: HireRequest):
+def hire_companion(character_id: int, body: HireRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     conn = _get_conn()
     try:
         data = companion_service.hire(
@@ -86,7 +88,8 @@ def hire_companion(character_id: int, body: HireRequest):
 
 
 @router.post("/characters/{character_id}/companions/buy")
-def buy_companion(character_id: int, body: BuyRequest):
+def buy_companion(character_id: int, body: BuyRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     conn = _get_conn()
     try:
         data = companion_service.buy(
@@ -101,7 +104,8 @@ def buy_companion(character_id: int, body: BuyRequest):
 
 
 @router.post("/characters/{character_id}/companions/dismiss")
-def dismiss_companion(character_id: int, body: DismissRequest):
+def dismiss_companion(character_id: int, body: DismissRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     conn = _get_conn()
     try:
         data = companion_service.dismiss(conn, character_id, body.companion_id)
@@ -117,9 +121,11 @@ class MountEscapeRequest(BaseModel):
 
 
 @router.post("/campaigns/{campaign_id}/travel/escape-mounted")
-def escape_mounted(campaign_id: int, body: MountEscapeRequest):
+def escape_mounted(campaign_id: int, body: MountEscapeRequest, authorization: str | None = Header(None)):
     """TW7: próba ucieczki konno z aktywnego spotkania w podróży (test Jeździectwa).
     Sukces = walki nie ma; porażka = walka ruszy przy TRAVEL_RESUME."""
+    uid = assert_campaign_owner(campaign_id, authorization)
+    assert_character_owner(body.character_id, authorization, uid)
     conn = _get_conn()
     try:
         data = companion_service.resolve_travel_escape(conn, campaign_id, body.character_id)

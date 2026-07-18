@@ -6,7 +6,12 @@ import re
 import sqlite3
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
-from app.core.jwt_auth import current_user_optional, resolve_authed_user_id
+from app.core.jwt_auth import (
+    assert_campaign_owner,
+    assert_character_owner,
+    current_user_optional,
+    resolve_authed_user_id,
+)
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
@@ -1239,17 +1244,19 @@ def get_character_treasure_maps(character_id: int):
 
 
 @router.post("/characters")
-def create_standalone_character(req: dict = Body(...)):
+def create_standalone_character(req: dict = Body(...), authorization: str | None = Header(None)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.
     Rolls stats and skills identically to the campaign-scoped endpoint so the wizard
     steps 2 and 3 work correctly.
     """
-    user_id = req.get("user_id")
+    # #1424 — the new hero is owned by the AUTHENTICATED user; never trust a body
+    # `user_id` (it let a client mint heroes under someone else's account).
+    user_id = resolve_authed_user_id(authorization, req.get("user_id"))
     name = (req.get("name") or "").strip()
     system_id = req.get("system_id", "fantasy")
     base_sheet = dict(req.get("sheet_json") or {})
 
-    if not user_id or not name:
+    if not name:
         raise HTTPException(status_code=400, detail="user_id and name are required")
 
     archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
@@ -1509,16 +1516,18 @@ def delete_character(character_id: int, user_id: int):
 
 
 @router.post("/characters/{character_id}/assign-campaign")
-def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
+def assign_hero_to_campaign(character_id: int, req: dict = Body(...), authorization: str | None = Header(None)):
     """
     Assign an existing standalone hero to a campaign.
     Copies hero stats to a new character record for that campaign,
     or re-links if the campaign has no character yet.
     """
     campaign_id = req.get("campaign_id")
-    user_id = req.get("user_id")
-    if not campaign_id or not user_id:
+    if not campaign_id:
         raise HTTPException(status_code=400, detail="campaign_id and user_id required")
+    # #1424 — identity comes from the verified JWT, NOT the body `user_id` (which
+    # was spoofable: the old owner-check compared against a client-supplied id).
+    user_id = resolve_authed_user_id(authorization, req.get("user_id"))
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1531,10 +1540,13 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
             raise HTTPException(status_code=404, detail="Hero not found or not yours")
 
         campaign = conn.execute(
-            "SELECT id, status, title FROM campaigns WHERE id = ?", (campaign_id,)
+            "SELECT id, status, title, owner_user_id FROM campaigns WHERE id = ?", (campaign_id,)
         ).fetchone()
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
+        # A hero may only be assigned to a campaign the same user owns.
+        if int(campaign["owner_user_id"]) != int(user_id):
+            raise HTTPException(status_code=403, detail="not your campaign")
         if campaign["status"] not in ("active", "pending"):
             raise HTTPException(status_code=409, detail="Campaign is not active")
 
@@ -1868,7 +1880,8 @@ def get_character_xp(character_id: int):
 
 
 @router.post("/characters/{character_id}/xp/spend-skill")
-def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest):
+def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     from app.services import xp_service
 
     conn = sqlite3.connect(DB_PATH)
@@ -1900,14 +1913,15 @@ def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest):
 
 
 @router.post("/characters/{character_id}/spend-xp/skill")
-def spend_character_skill_xp_alias(character_id: int, req: SpendSkillXpRequest):
+def spend_character_skill_xp_alias(character_id: int, req: SpendSkillXpRequest, authorization: str | None = Header(None)):
     """C7 alias — canonical URL for spend_skill (game_mechanics.md)."""
-    return spend_character_skill_xp(character_id, req)
+    return spend_character_skill_xp(character_id, req, authorization)
 
 
 @router.post("/characters/{character_id}/xp/spend-stat")
-def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest):
+def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest, authorization: str | None = Header(None)):
     """Spend XP to increase one stat from `game_config_stats` by 1 (**T21**)."""
+    assert_character_owner(character_id, authorization)
     from app.services import xp_service
 
     conn = sqlite3.connect(DB_PATH)
@@ -1944,9 +1958,9 @@ def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest):
 
 
 @router.post("/characters/{character_id}/spend-xp/stat")
-def spend_character_stat_xp_alias(character_id: int, req: SpendStatXpRequest):
+def spend_character_stat_xp_alias(character_id: int, req: SpendStatXpRequest, authorization: str | None = Header(None)):
     """C8 alias — canonical URL for spend_stat (game_mechanics.md)."""
-    return spend_character_stat_xp(character_id, req)
+    return spend_character_stat_xp(character_id, req, authorization)
 
 
 @router.post("/characters/{character_id}/xp/grant-mg")
@@ -2336,8 +2350,9 @@ class SpellSpendRequest(BaseModel):
 
 
 @router.post("/characters/{character_id}/xp/spend-spell-learn")
-def spend_spell_learn(character_id: int, req: SpellSpendRequest):
+def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: str | None = Header(None)):
     """X8 — Scholar learns a new spell for 75 XP."""
+    assert_character_owner(character_id, authorization, req.user_id)
     from app.services.dice import parse_character_sheet
     from app.services.spell_service import learn_spell as _learn_spell
 
@@ -2374,8 +2389,9 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest):
 
 
 @router.post("/characters/{character_id}/xp/spend-spell-upgrade")
-def spend_spell_upgrade(character_id: int, req: SpellSpendRequest):
+def spend_spell_upgrade(character_id: int, req: SpellSpendRequest, authorization: str | None = Header(None)):
     """X8 — Scholar upgrades a known spell rank: R2=50 XP, R3=100 XP."""
+    assert_character_owner(character_id, authorization, req.user_id)
     from app.services.dice import parse_character_sheet
     from app.services.spell_service import upgrade_spell as _upgrade_spell
 
@@ -2783,7 +2799,8 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
 
 
 @router.patch("/characters/{character_id}/sheet")
-def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
+def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -3252,11 +3269,12 @@ def _default_playtest_sheet(name: str, archetype: str, old_sheet: dict) -> dict:
 
 
 @router.post("/characters/{character_id}/reset-progress")
-def reset_character_progress(character_id: int):
+def reset_character_progress(character_id: int, authorization: str | None = Header(None)):
     """
     Dev / playtest: clear inventory and restore sheet to wizard-style defaults
     (keeps name, archetype, background text, hidden identity secret).
     """
+    assert_character_owner(character_id, authorization)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:

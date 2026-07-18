@@ -811,6 +811,8 @@ def admin_dev_login(req: AdminDevLoginReq):
     except PermissionError as e:
         if str(e) == "inactive_user":
             raise HTTPException(status_code=403, detail="User is inactive") from None
+        if str(e) == "not_admin":
+            raise HTTPException(status_code=403, detail="Admin role required") from None
         raise HTTPException(status_code=401, detail="Invalid credentials") from None
 
 

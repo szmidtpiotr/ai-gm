@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.jwt_auth import assert_character_owner
 from app.services import loot_service
 
 router = APIRouter(tags=["inventory"])
@@ -65,7 +66,8 @@ def get_inventory_drop_comparison(character_id: int, inventory_id: int):
 
 
 @router.post("/inventory/{character_id}/equip")
-def post_inventory_equip(character_id: int, body: EquipRequest):
+def post_inventory_equip(character_id: int, body: EquipRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     # HI4 (#627): mutacja inspektora → blokada podczas walki/tury + audyt.
     # Zwykłe wywołania (gra) nie ustawiają `inspector` → ścieżka niezmieniona.
     if body.inspector:
@@ -100,7 +102,8 @@ def post_inventory_equip(character_id: int, body: EquipRequest):
 
 
 @router.post("/inventory/{character_id}/use")
-def post_inventory_use(character_id: int, body: UseRequest):
+def post_inventory_use(character_id: int, body: UseRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     try:
         data = loot_service.use_inventory_item(character_id, body.inventory_id)
         return {"ok": True, "data": data}
@@ -116,7 +119,8 @@ def post_inventory_use(character_id: int, body: UseRequest):
 
 
 @router.delete("/inventory/{character_id}/{inventory_id}")
-def delete_inventory_entry(character_id: int, inventory_id: int, force: bool = Query(False)):
+def delete_inventory_entry(character_id: int, inventory_id: int, force: bool = Query(False), authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     try:
         data = loot_service.delete_inventory_item(character_id, inventory_id, force=force)
         return {"ok": True, "data": data}
@@ -156,7 +160,8 @@ def get_character_gold(character_id: int):
 
 
 @router.post("/characters/{character_id}/gold")
-def post_character_gold_delta(character_id: int, body: GoldDeltaRequest):
+def post_character_gold_delta(character_id: int, body: GoldDeltaRequest, authorization: str | None = Header(None)):
+    assert_character_owner(character_id, authorization)
     try:
         if int(body.delta) == 0:
             raise HTTPException(status_code=400, detail="delta must be non-zero")

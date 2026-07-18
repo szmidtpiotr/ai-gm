@@ -6,9 +6,10 @@ or a deterministic pre-LLM text intercept — never via a narrator [SPEND_GOLD] 
 """
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.jwt_auth import assert_character_owner
 from app.services import location_services
 
 router = APIRouter(tags=["services"])
@@ -55,7 +56,8 @@ def get_services_at_location(location_key: str, character_id: int = Query(...)):
 
 
 @router.post("/services/{service_key}/buy")
-def post_service_buy(service_key: str, body: ServiceBuyRequest):
+def post_service_buy(service_key: str, body: ServiceBuyRequest, authorization: str | None = Header(None)):
+    assert_character_owner(body.character_id, authorization)
     conn = _get_conn()
     try:
         data = location_services.buy_service(conn, body.character_id, service_key)
@@ -67,9 +69,10 @@ def post_service_buy(service_key: str, body: ServiceBuyRequest):
 
 
 @router.post("/services/buy-batch")
-def post_services_buy_batch(body: ServiceBuyBatchRequest):
+def post_services_buy_batch(body: ServiceBuyBatchRequest, authorization: str | None = Header(None)):
     """Multi-select checkout: buy several services at once. Atomic — verifies the
     full cart is affordable before deducting anything."""
+    assert_character_owner(body.character_id, authorization)
     conn = _get_conn()
     try:
         data = location_services.buy_services_batch(conn, body.character_id, body.service_keys)

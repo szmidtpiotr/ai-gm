@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.core.jwt_auth import assert_campaign_owner
 from app.services import combat_service as combat
 from app.services.client_ui_config import is_slash_command_enabled
 
@@ -48,7 +49,8 @@ def _first_character_id(campaign_id: int) -> int:
 
 
 @router.post("/campaigns/{campaign_id}/combat/start")
-def post_start_combat(campaign_id: int, body: CombatStartRequest):
+def post_start_combat(campaign_id: int, body: CombatStartRequest, authorization: str | None = Header(None)):
+    assert_campaign_owner(campaign_id, authorization)
     if not is_slash_command_enabled("/atak"):
         raise HTTPException(
             status_code=403,
@@ -118,7 +120,8 @@ def get_combat_turns_history(campaign_id: int, limit: int = Query(500, ge=1, le=
 
 
 @router.post("/campaigns/{campaign_id}/combat/resolve-attack")
-def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
+def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest, authorization: str | None = Header(None)):
+    assert_campaign_owner(campaign_id, authorization)
     try:
         res = combat.resolve_attack(
             campaign_id,
@@ -161,8 +164,9 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
 
 
 @router.post("/campaigns/{campaign_id}/combat/zone-change")
-def post_zone_change(campaign_id: int):
+def post_zone_change(campaign_id: int, authorization: str | None = Header(None)):
     """T34 — Player toggles their combat zone (engaged ↔ ranged). Consumes the turn."""
+    assert_campaign_owner(campaign_id, authorization)
     try:
         return combat.change_player_zone(campaign_id)
     except ValueError as e:
@@ -170,9 +174,10 @@ def post_zone_change(campaign_id: int):
 
 
 @router.post("/campaigns/{campaign_id}/combat/flee")
-def post_flee(campaign_id: int):
+def post_flee(campaign_id: int, authorization: str | None = Header(None)):
     """#1210 — Player attempts to flee combat (opposed DEX vs best enemy).
     leg_wound → -2, hobbled → blocked. Success ends combat (fled); failure consumes the turn."""
+    assert_campaign_owner(campaign_id, authorization)
     res = combat.resolve_player_flee(campaign_id)
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("reason") or "flee_failed")
@@ -184,9 +189,10 @@ class UseConsumableRequest(BaseModel):
 
 
 @router.post("/campaigns/{campaign_id}/combat/use-consumable")
-def post_use_consumable(campaign_id: int, body: UseConsumableRequest):
+def post_use_consumable(campaign_id: int, body: UseConsumableRequest, authorization: str | None = Header(None)):
     """#734 — Player drinks a healing consumable from the backpack as a combat action.
     Heals (PŻ rośnie) + consumes the turn. Domyka pętlę sustain #732."""
+    assert_campaign_owner(campaign_id, authorization)
     try:
         return combat.use_consumable_in_combat(campaign_id, body.inventory_id)
     except ValueError as e:
@@ -197,10 +203,11 @@ def post_use_consumable(campaign_id: int, body: UseConsumableRequest):
 
 
 @router.post("/campaigns/{campaign_id}/combat/wrestling")
-def post_wrestling(campaign_id: int, body: dict | None = None):
+def post_wrestling(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
     """S17 — Zapasy: akcja bojowa, test przeciwny STR vs STR. Sukces nakłada kondycję na
     wroga (slowed), krytyk → stunned, krytyczna porażka → gracz sam slowed. Wymaga zwarcia
     (engaged) — cel poza zwarciem zwraca blocked bez konsumpcji tury. Konsumuje turę."""
+    assert_campaign_owner(campaign_id, authorization)
     target_ref = str((body or {}).get("target_ref") or "").strip() or None
     try:
         return combat.resolve_wrestling(campaign_id, target_ref=target_ref)
@@ -209,9 +216,10 @@ def post_wrestling(campaign_id: int, body: dict | None = None):
 
 
 @router.post("/campaigns/{campaign_id}/combat/declare-reaction")
-def post_declare_reaction(campaign_id: int, body: dict | None = None):
+def post_declare_reaction(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
     """S15 — Player pre-declares a combat reaction (e.g. dodge) toggle. Does NOT consume the turn.
     Requires the player's turn and the matching skill rank >= 1 (skill-gated)."""
+    assert_campaign_owner(campaign_id, authorization)
     rt = str((body or {}).get("reaction_type") or "dodge").strip().lower()
     try:
         return combat.declare_player_reaction(campaign_id, rt)
@@ -220,12 +228,13 @@ def post_declare_reaction(campaign_id: int, body: dict | None = None):
 
 
 @router.post("/campaigns/{campaign_id}/combat/resolve-reaction")
-def post_resolve_reaction(campaign_id: int, body: dict | None = None):
+def post_resolve_reaction(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
     """SF10 (#633) — rozlicza okno reakcji otwarte przez trafienie wroga.
 
     Body: ``{"choice": "take"|"dodge"|"block"}``. Brak choice → "take" (domyślne,
     tym samym wysyła frontend po timeout 8 s). Wymaga aktywnego `pending_reaction`.
     Po rozliczeniu ZAAWANSOWUJE turę (advance_turn) — turę wstrzymano przy oknie."""
+    assert_campaign_owner(campaign_id, authorization)
     choice = str((body or {}).get("choice") or "take").strip().lower()
     try:
         res = combat.resolve_reaction(campaign_id, choice)
@@ -260,7 +269,8 @@ def post_resolve_reaction(campaign_id: int, body: dict | None = None):
 
 
 @router.post("/campaigns/{campaign_id}/combat/enemy-turn")
-def post_enemy_turn(campaign_id: int):
+def post_enemy_turn(campaign_id: int, authorization: str | None = Header(None)):
+    assert_campaign_owner(campaign_id, authorization)
     try:
         res = combat.resolve_attack(campaign_id, 0, attacker="enemy")
     except ValueError as e:
@@ -300,10 +310,11 @@ def post_enemy_turn(campaign_id: int):
 
 
 @router.post("/campaigns/{campaign_id}/combat/summon-turn")
-def post_summon_turn(campaign_id: int):
+def post_summon_turn(campaign_id: int, authorization: str | None = Header(None)):
     """B15 (#821) — przetwórz turę summona (auto-atak najbliższego wroga), potem
     zaawansuj kolejkę. Frontend woła ten endpoint, gdy current_turn zaczyna się od
     'summon:' (analogicznie do /enemy-turn dla wrogów)."""
+    assert_campaign_owner(campaign_id, authorization)
     try:
         res = combat.resolve_summon_turn(campaign_id)
     except ValueError as e:
@@ -322,12 +333,13 @@ def post_summon_turn(campaign_id: int):
 
 
 @router.post("/campaigns/{campaign_id}/combat/flee")
-def post_flee(campaign_id: int):
+def post_flee(campaign_id: int, authorization: str | None = Header(None)):
     """
     End active combat as fled. Returns 409 if there is no active combat row
     (distinct from a missing HTTP route — avoids confusion with literal 404).
     Idempotent: if combat already ended with reason fled, returns 200 with already_ended.
     """
+    assert_campaign_owner(campaign_id, authorization)
     if combat.get_active_combat(campaign_id):
         combat.end_combat(campaign_id, "fled")
         return {
@@ -357,8 +369,9 @@ class CastSpellRequest(BaseModel):
 
 
 @router.post("/campaigns/{campaign_id}/cast-spell")
-def post_cast_spell(campaign_id: int, body: CastSpellRequest):
+def post_cast_spell(campaign_id: int, body: CastSpellRequest, authorization: str | None = Header(None)):
     """Cast a non-offensive spell (heal/defense/narrative) outside active combat."""
+    assert_campaign_owner(campaign_id, authorization)
     from app.services import spell_service
     char_id = body.character_id if body.character_id is not None else _first_character_id(campaign_id)
     try:
@@ -375,13 +388,15 @@ def get_combat_ammo_spent(campaign_id: int):
 
 
 @router.post("/campaigns/{campaign_id}/combat/recover-ammo")
-def post_recover_ammo(campaign_id: int):
+def post_recover_ammo(campaign_id: int, authorization: str | None = Header(None)):
     """#765: odzyskaj część wystrzelonej amunicji (rzut per sztuka, 40% startowo)."""
+    assert_campaign_owner(campaign_id, authorization)
     return {"ok": True, "data": combat.recover_combat_ammo(campaign_id)}
 
 
 @router.post("/campaigns/{campaign_id}/combat/loot/claim")
-def post_claim_loot(campaign_id: int, body: ClaimLootRequest):
+def post_claim_loot(campaign_id: int, body: ClaimLootRequest, authorization: str | None = Header(None)):
+    assert_campaign_owner(campaign_id, authorization)
     try:
         out = combat.claim_post_combat_loot(
             campaign_id,
