@@ -19,25 +19,86 @@ const _mechLoaded = new Set();
 
 // ── Encounter config ──────────────────────────────────────────────────────────
 
+// BL-A7 (#1423) — presety trudności (label → mnożnik), zsynchronizowane z backendem.
+const _ENC_DIFFICULTY_PRESETS = { latwy: 0.75, normalny: 1.0, trudny: 1.35, hardcore: 1.75 };
+
+function _syncEncPresetButtons(root, mult) {
+  const m = Number(mult);
+  root.querySelectorAll('.enc-preset-btn').forEach(b => {
+    const active = Math.abs(Number(b.dataset.mult) - m) < 0.001;
+    b.classList.toggle('btn-primary', active);
+    b.classList.toggle('btn-ghost', !active);
+  });
+}
+
 async function _loadEncounterConfig(root) {
   try {
     const c = await apiFetch('/api/admin/world/encounter-config');
-    const i = root.querySelector('#enc-cfg-interval'); if (i) i.value = c.n_turns_interval ?? 20;
-    const d = root.querySelector('#enc-cfg-dwell'); if (d) d.value = c.dwell_settle_turns ?? 3;
+    const set = (id, v) => { const el = root.querySelector(id); if (el && v != null) el.value = v; };
+    set('#enc-cfg-interval', c.n_turns_interval ?? 20);
+    set('#enc-cfg-dwell', c.dwell_settle_turns ?? 3);
+    set('#enc-cfg-difficulty', c.difficulty_mult ?? 1.0);
+    set('#enc-cfg-budget-base', c.threat_budget_base ?? 30);
+    set('#enc-cfg-budget-power', c.threat_budget_per_power ?? 25);
+    set('#enc-cfg-pool-min', c.pool_min_size ?? 6);
+    set('#enc-cfg-repeat', c.repeat_penalty ?? 0.25);
+    _syncEncPresetButtons(root, c.difficulty_mult ?? 1.0);
   } catch (_) { /* ignore */ }
 }
 
 async function _saveEncounterConfig(root) {
   const st = root.querySelector('#enc-cfg-status');
+  const numOr = (id, d) => { const v = parseFloat(root.querySelector(id)?.value); return Number.isFinite(v) ? v : d; };
   const body = {
     n_turns_interval: parseInt(root.querySelector('#enc-cfg-interval')?.value) || 20,
     dwell_settle_turns: parseInt(root.querySelector('#enc-cfg-dwell')?.value) || 3,
+    difficulty_mult: numOr('#enc-cfg-difficulty', 1.0),
+    threat_budget_base: numOr('#enc-cfg-budget-base', 30),
+    threat_budget_per_power: numOr('#enc-cfg-budget-power', 25),
+    pool_min_size: parseInt(root.querySelector('#enc-cfg-pool-min')?.value) || 6,
+    repeat_penalty: numOr('#enc-cfg-repeat', 0.25),
   };
   try {
     const r = await apiFetch('/api/admin/world/encounter-config', { method: 'POST', body: JSON.stringify(body) });
-    if (st) { st.textContent = `✓ zapisano (interwał ${r.n_turns_interval})`; st.style.color = 'var(--green)'; }
+    _syncEncPresetButtons(root, r.difficulty_mult ?? 1.0);
+    if (st) { st.textContent = `✓ zapisano (trudność ×${r.difficulty_mult})`; st.style.color = 'var(--green)'; }
   } catch (e) {
     if (st) { st.textContent = '✕ ' + (e.message || 'błąd'); st.style.color = 'var(--red)'; }
+  }
+}
+
+function _applyEncPreset(root, mult) {
+  const el = root.querySelector('#enc-cfg-difficulty');
+  if (el) el.value = mult;
+  _syncEncPresetButtons(root, mult);
+  _saveEncounterConfig(root);
+}
+
+async function _runEncounterPreview(root) {
+  const box = root.querySelector('#enc-preview-out');
+  if (!box) return;
+  const level = parseInt(root.querySelector('#enc-preview-level')?.value) || 1;
+  const hexType = (root.querySelector('#enc-preview-terrain')?.value || '').trim() || null;
+  box.innerHTML = '<div style="color:var(--t3);font-size:.78rem;padding:6px">Losuję…</div>';
+  try {
+    const r = await apiFetch('/api/admin/world/encounter-preview', {
+      method: 'POST', body: JSON.stringify({ level, hex_type: hexType, samples: 3 }),
+    });
+    if (r.empty_pool) {
+      box.innerHTML = `<div style="color:var(--red);font-size:.78rem;padding:6px">Pusta pula wrogów dla poz. ${level}${hexType ? ' / ' + _esc(hexType) : ''}.</div>`;
+      return;
+    }
+    const head = `<div style="font-size:.72rem;color:var(--t3);margin-bottom:4px">Budżet f(poz. ${level}) = ${r.threat_budget} · trudność ×${r.difficulty_mult}</div>`;
+    box.innerHTML = head + (r.samples || []).map(s => {
+      const enemies = (s.enemies || []).map(e =>
+        `${e.count > 1 ? e.count + '× ' : ''}${_esc(e.name || e.enemy_key)}${e.rank ? ' <span style="color:var(--amber)">[' + _esc(e.rank) + ']</span>' : ''}`
+      ).join(', ');
+      return `<div style="padding:5px 7px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:.8rem">
+        <span class="badge" style="font-size:.66rem">${_esc(s.pattern || '?')}</span>
+        ${enemies} <span style="color:var(--t3);font-size:.7rem">(zagr. ${s.threat_spent}/${s.threat_budget})</span></div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--red);font-size:.78rem;padding:6px">Błąd: ${_esc(e.message || 'błąd')}</div>`;
   }
 }
 
@@ -480,8 +541,42 @@ function _sectionHtml() {
           <label style="font-size:.78rem;color:var(--t3)">Osiedlenie (tury → spadek szansy)</label>
           <input id="enc-cfg-dwell" type="number" min="1" max="50" class="field-input" style="width:70px">
         </div>
-        <button class="btn btn-primary btn-sm" id="enc-cfg-save">Zapisz</button>
-        <span id="enc-cfg-status" style="font-size:.75rem;color:var(--t3)"></span>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="padding:12px 14px">
+        <div style="font-weight:600;margin-bottom:8px">🎚 Trudność spotkań <span style="font-weight:400;color:var(--t3);font-size:.74rem">— skaluje siłę i liczebność wrogów w podróży (bez deployu)</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span style="font-size:.78rem;color:var(--t3)">Preset:</span>
+          <button class="btn btn-sm btn-ghost enc-preset-btn" data-mult="0.75">Łatwy</button>
+          <button class="btn btn-sm btn-ghost enc-preset-btn" data-mult="1.0">Normalny</button>
+          <button class="btn btn-sm btn-ghost enc-preset-btn" data-mult="1.35">Trudny</button>
+          <button class="btn btn-sm btn-ghost enc-preset-btn" data-mult="1.75">Hardcore</button>
+          <span style="font-size:.78rem;color:var(--t3);margin-left:8px">Mnożnik:</span>
+          <input id="enc-cfg-difficulty" type="number" min="0.25" max="3" step="0.05" class="field-input" style="width:80px">
+          <button class="btn btn-primary btn-sm" id="enc-cfg-save">Zapisz</button>
+          <span id="enc-cfg-status" style="font-size:.75rem;color:var(--t3)"></span>
+        </div>
+        <details style="margin-bottom:8px">
+          <summary style="cursor:pointer;font-size:.78rem;color:var(--t3)">Zaawansowane (budżet zagrożenia, pula)</summary>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
+            <div style="display:flex;align-items:center;gap:6px"><label style="font-size:.74rem;color:var(--t3)">Budżet bazowy</label><input id="enc-cfg-budget-base" type="number" min="5" max="200" step="1" class="field-input" style="width:70px"></div>
+            <div style="display:flex;align-items:center;gap:6px"><label style="font-size:.74rem;color:var(--t3)">Przyrost / pkt Power</label><input id="enc-cfg-budget-power" type="number" min="0" max="100" step="1" class="field-input" style="width:70px"></div>
+            <div style="display:flex;align-items:center;gap:6px"><label style="font-size:.74rem;color:var(--t3)">Min. rozmiar puli</label><input id="enc-cfg-pool-min" type="number" min="1" max="30" step="1" class="field-input" style="width:60px"></div>
+            <div style="display:flex;align-items:center;gap:6px"><label style="font-size:.74rem;color:var(--t3)">Kara powtórek</label><input id="enc-cfg-repeat" type="number" min="0" max="1" step="0.05" class="field-input" style="width:60px"></div>
+          </div>
+        </details>
+        <div style="border-top:1px solid var(--border);padding-top:8px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="font-size:.78rem;color:var(--t3)">Podgląd składu:</span>
+            <label style="font-size:.74rem;color:var(--t3)">Poziom</label>
+            <input id="enc-preview-level" type="number" min="1" max="20" value="10" class="field-input" style="width:60px">
+            <label style="font-size:.74rem;color:var(--t3)">Teren</label>
+            <input id="enc-preview-terrain" type="text" placeholder="road / forest / …" class="field-input" style="width:130px">
+            <button class="btn btn-sm btn-ghost" id="enc-preview-btn">Losuj skład</button>
+          </div>
+          <div id="enc-preview-out"></div>
+        </div>
       </div>
     </div>
     <div class="card" style="overflow:visible">
@@ -576,9 +671,12 @@ export async function init(panel) {
   panel.innerHTML = _sectionHtml();
   const root = panel.querySelector('#section-mechanics');
 
-  // Encounter config
+  // Encounter config + BL-A7 (#1423) trudność/podgląd
   _loadEncounterConfig(root);
   root.querySelector('#enc-cfg-save').addEventListener('click', () => _saveEncounterConfig(root));
+  root.querySelectorAll('.enc-preset-btn').forEach(b =>
+    b.addEventListener('click', () => _applyEncPreset(root, parseFloat(b.dataset.mult))));
+  root.querySelector('#enc-preview-btn')?.addEventListener('click', () => _runEncounterPreview(root));
 
   // Stab bar
   root.querySelector('#mech-stab-bar').querySelectorAll('.stab[data-mtab]').forEach(btn => {

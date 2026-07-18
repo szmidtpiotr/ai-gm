@@ -1066,6 +1066,28 @@ def resolve_chain_travel(
         hex_data = step.data
         _mult = _step_mult(hex_data) * _trip_cap_mult
         if _roll_encounter(hex_data, hex_type_cfg, chance_mult=_mult):
+            # BL-A7 (#1423): composer skalowany f(Power) — wataha/herszt zamiast
+            # jednego wroga poz. 1-2. Pusto → legacy single-pick (zero regresji).
+            try:
+                from app.services import encounter_service as _enc_svc
+                composed = _enc_svc.compose_travel_encounter(conn, campaign_id, hex_data)
+            except Exception as _cmp_err:
+                logger.warning("travel_composer_failed", error=str(_cmp_err))
+                composed = None
+            if composed and composed.get("enemies"):
+                _enemies = composed["enemies"]
+                _leader = str(_enemies[0].get("enemy_key") or "") or None
+                return {
+                    "enemy_key": _leader,
+                    "enemies": _enemies,
+                    "label": composed.get("label"),
+                    "composition_pattern": composed.get("composition_pattern"),
+                    "threat_budget": composed.get("threat_budget"),
+                    "threat_spent": composed.get("threat_spent"),
+                    "hex_type": hex_data.get("hex_type", "plains"),
+                    "hex_label": hex_data.get("label"),
+                    "atmosphere": hex_data.get("atmosphere"),
+                }
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:
                 return {
@@ -1387,6 +1409,11 @@ def resolve_chain_travel(
                     # [COMBAT_START] injection (turns.py) knows whom to spawn even
                     # when the narrator ignores the encounter fact.
                     "enemy_key": (encounter_result or {}).get("enemy_key"),
+                    # BL-A7 (#1423): pełna GRUPA skomponowanego spotkania (enemies z
+                    # count/rank). Injection rozwija ją do [COMBAT_START:k1,k2,…];
+                    # enemy_key powyżej = lider (kompatybilność wstecz notice/fizzle).
+                    "enemies": (encounter_result or {}).get("enemies"),
+                    "encounter_label": (encounter_result or {}).get("label"),
                     # PT-F1 #1135: the encounter combat spawns POST-LLM (from the
                     # narrator's [COMBAT_START] tag or the #1146 injection), so on
                     # this very turn no active_combat row exists yet. These fields let
@@ -1399,6 +1426,16 @@ def resolve_chain_travel(
                     # *_prompted state is dropped after PLAN_TTL_TURNS turns.
                     "age": 0,
                 }
+                # BL-A7 (#1423): zapisz sygnaturę skomponowanej grupy do pamięci
+                # anti-repeat (#1329/#1369), by kolejne zasadzki w podróży nie
+                # powtarzały tego samego składu. Mutuje sf_tp — leci w tym samym UPDATE.
+                _grp = (encounter_result or {}).get("enemies")
+                if _grp:
+                    try:
+                        from app.services.encounter_service import record_encounter_signature
+                        record_encounter_signature(conn, sf_tp, _grp)
+                    except Exception as _sig_err:
+                        logger.warning("travel_encounter_sig_failed", error=str(_sig_err))
             elif _budget_interrupt and _budget_reason:
                 # PT7: dusk or forced_camp interrupt
                 dest_loc_key, dest_label = _resolve_dest_label()

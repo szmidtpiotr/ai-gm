@@ -642,6 +642,57 @@ def _pending_engine_encounter_enemy(conn: sqlite3.Connection, campaign_id: int) 
     return None
 
 
+# BL-A7 (#1423): górny limit wrogów w jednej zasadzce podróży — composer + skalowanie
+# drużyny nie może wypuścić 10-osobowej masakry. Wataha 2-4 / herszt 1+3 mieszczą się.
+_TRAVEL_GROUP_ENEMY_CAP = 6
+
+
+def _pending_engine_encounter_enemies(
+    conn: sqlite3.Connection, campaign_id: int
+) -> list[str] | None:
+    """BL-A7 (#1423): PEŁNA lista enemy_key (rozwinięta po `count`) skomponowanego
+    spotkania czekającego na walkę, albo None.
+
+    Preferuje grupę composera (`travel_plan.enemies` / `local_travel_hint.enemies`,
+    zapisane przez silnik ruchu); gdy brak grupy — spada do pojedynczego `enemy_key`
+    (legacy #1146). Bramka „widzenia" walki identyczna z
+    `_pending_engine_encounter_enemy` (combat_seen / interrupt_reason)."""
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return None
+        sf = json.loads(row["session_flags"] or "{}")
+        candidates: list[dict] = []
+        tp = sf.get("travel_plan") or {}
+        if tp.get("interrupt_reason") == "encounter" and not tp.get("combat_seen"):
+            candidates.append(tp)
+        lh = sf.get("local_travel_hint") or {}
+        if lh.get("kind") in ("combat", "combat_escalated") and not lh.get("combat_seen"):
+            candidates.append(lh)
+        for blk in candidates:
+            enemies = blk.get("enemies")
+            if isinstance(enemies, list) and enemies:
+                out: list[str] = []
+                for e in enemies:
+                    k = str((e or {}).get("enemy_key") or "").strip()
+                    if not k:
+                        continue
+                    out.extend([k] * max(1, int((e or {}).get("count") or 1)))
+                    if len(out) >= _TRAVEL_GROUP_ENEMY_CAP:
+                        break
+                if out:
+                    return out[:_TRAVEL_GROUP_ENEMY_CAP]
+            k = str(blk.get("enemy_key") or "").strip()
+            if k:
+                return [k]
+    except Exception:
+        pass
+    return None
+
+
 def _ensure_combat_start_tag(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -706,23 +757,34 @@ def _ensure_combat_start_tag(
     # falling through to scene inference resolved to unknown_attacker →
     # combat_target_not_present → the whole encounter fizzled.
     if pending_enemy:
-        try:
-            _cat = conn.execute(
-                "SELECT 1 FROM game_config_enemies WHERE key = ? AND is_active = 1 LIMIT 1",
-                (pending_enemy,),
-            ).fetchone()
-        except sqlite3.OperationalError:
-            _cat = None
-        _enc_enemy = pending_enemy if _cat else "unknown_attacker"
+        # BL-A7 (#1423): spawnuj CAŁĄ grupę skomponowanego spotkania (wataha/herszt),
+        # nie tylko lidera. Rozwinięte klucze walidowane per sztuka wobec katalogu;
+        # nieznane odsiane, a gdy nic nie zostanie — fallback do pojedynczego lidera.
+        _pending_list = _pending_engine_encounter_enemies(conn, campaign_id) or [pending_enemy]
+        _valid_keys: list[str] = []
+        for _pk in _pending_list:
+            try:
+                _cat = conn.execute(
+                    "SELECT 1 FROM game_config_enemies WHERE key = ? AND is_active = 1 LIMIT 1",
+                    (_pk,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                _cat = None
+            if _cat:
+                _valid_keys.append(_pk)
+        if not _valid_keys:
+            _valid_keys = ["unknown_attacker"]
         logger.info(
             "combat_start_tag_injected",
             campaign_id=campaign_id,
-            enemy_key=_enc_enemy,
+            enemy_key=_valid_keys[0],
+            enemy_keys=_valid_keys,
+            enemy_count=len(_valid_keys),
             trigger="engine_encounter",
             player_snippet=(player_text or "")[:80],
         )
         sep = "\n\n" if not (assistant_text or "").endswith("\n") else ""
-        return f"{assistant_text or ''}{sep}[COMBAT_START:{_enc_enemy}]"
+        return f"{assistant_text or ''}{sep}[COMBAT_START:{','.join(_valid_keys)}]"
 
     # #1023 — resolve hero level for enemy level-gate filtering
     _hero_level = 20
@@ -1659,7 +1721,14 @@ def _maybe_start_combat_from_gm_tag(
             ).fetchone()
         if _rk_row and _rk_row["session_flags"]:
             _rk_sf = _rkj.loads(_rk_row["session_flags"]) or {}
-            for _en in ((_rk_sf.get("active_encounter") or {}).get("enemies") or []):
+            # BL-A7 (#1423): rangi też ze skomponowanej grupy podróży/ruchu lokalnego
+            # (herszt = weteran/elitarny), nie tylko z active_encounter.
+            _rk_sources = [
+                (_rk_sf.get("active_encounter") or {}).get("enemies") or [],
+                (_rk_sf.get("travel_plan") or {}).get("enemies") or [],
+                (_rk_sf.get("local_travel_hint") or {}).get("enemies") or [],
+            ]
+            for _en in [e for _src in _rk_sources for e in _src]:
                 _ekk = str(_en.get("enemy_key") or "").strip()
                 _rkk = str(_en.get("rank") or "").strip().lower()
                 if _ekk and _rkk in ("weteran", "elitarny"):
@@ -9617,7 +9686,8 @@ _TRAVEL_NOTICE_BY_REASON = {
 
 
 def _encounter_enemy_notice(
-    conn: "sqlite3.Connection", campaign_id: int, enemy_key: str
+    conn: "sqlite3.Connection", campaign_id: int, enemy_key: str,
+    enemies: "list[dict] | None" = None,
 ) -> dict | None:
     """WALKA-T1 (#1349): dane wroga dla modalu zasadzki.
 
@@ -9626,7 +9696,10 @@ def _encounter_enemy_notice(
     zagrożenia (jak #1344 — wartość stała, nie z rankowanego combatanta). Do gracza
     trafia TYLKO glyph+label+tier (surowy ratio ukryty). None gdy enemy_key
     pusty/nieznany → caller zostaje przy generycznym stringu. Nigdy nie rzuca.
-    """
+
+    BL-A7 (#1423): gdy `enemies` (grupa composera) podane i liczy >1 sztukę —
+    `count` = suma, wskaźnik zagrożenia liczony na CAŁEJ grupie, komunikat „Grupa
+    wrogów (N) …". Obrazek/label nadal lidera (`enemy_key`)."""
     key = str(enemy_key or "").strip()
     if not key or conn is None or campaign_id is None:
         return None
@@ -9642,20 +9715,34 @@ def _encounter_enemy_notice(
     label = (row["label"] if "label" in row.keys() else None) or key
     image_url = row["image_url"] if "image_url" in row.keys() else None
 
+    # BL-A7 — policz łączną liczebność + listę statblocków do wskaźnika zagrożenia.
+    total_count = 1
+    threat_input = [{"type": "enemy", "enemy_key": key}]
+    if isinstance(enemies, list) and enemies:
+        total_count = sum(max(1, int((e or {}).get("count") or 1)) for e in enemies)
+        threat_input = [
+            {"type": "enemy", "enemy_key": str((e or {}).get("enemy_key") or "").strip()}
+            for e in enemies if str((e or {}).get("enemy_key") or "").strip()
+        ] or threat_input
+
     rt_out = None
     try:
         from app.services import threat_display_service as _tds
 
-        _rt = _tds.relative_threat(conn, campaign_id, [{"type": "enemy", "enemy_key": key}])
+        _rt = _tds.relative_threat(conn, campaign_id, threat_input)
         if _rt:
             rt_out = {k: _rt[k] for k in ("glyph", "label", "tier")}
     except Exception:
         rt_out = None
 
+    if total_count > 1:
+        message = f"Grupa wrogów ({total_count}) zastąpiła ci drogę. Stań do walki."
+    else:
+        message = f"{label} stanął ci na drodze. Stań do walki."
     return {
-        "enemy": {"key": key, "label": label, "image_url": image_url, "count": 1},
+        "enemy": {"key": key, "label": label, "image_url": image_url, "count": total_count},
         "relative_threat": rt_out,
-        "message": f"{label} stanął ci na drodze. Stań do walki.",
+        "message": message,
     }
 
 
@@ -9695,7 +9782,9 @@ def _travel_notice_for(
     # Tylko PRZED walką (reason=encounter) — po walce (encounter_prompted) wróg już
     # pokonany, obrazek/badge zagrożenia byłyby mylące.
     if reason == "encounter":
-        enemy_notice = _encounter_enemy_notice(conn, campaign_id, tp.get("enemy_key"))
+        enemy_notice = _encounter_enemy_notice(
+            conn, campaign_id, tp.get("enemy_key"), enemies=tp.get("enemies"),
+        )
         if enemy_notice:
             notice.update(enemy_notice)
         # #1192 TW7: pokaż przycisk „Uciekaj konno" tylko gdy gracz ma najedzonego

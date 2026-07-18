@@ -128,26 +128,90 @@ _PENDING_FETCHER = {
 class EncounterConfigReq(_BaseModel):
     n_turns_interval: int | None = None
     dwell_settle_turns: int | None = None
+    # BL-A7 (#1423) — trudność + zaawansowane strojenie composera
+    difficulty_mult: float | None = None
+    threat_budget_base: float | None = None
+    threat_budget_per_power: float | None = None
+    pool_min_size: int | None = None
+    repeat_penalty: float | None = None
+
+
+class EncounterPreviewReq(_BaseModel):
+    level: int = 1
+    hex_type: str | None = None
+    samples: int = 3
 
 
 @router.get("/encounter-config")
 def get_encounter_config_ep():
-    """D7 (#382) — bieżący config encounterów (interwał n_turns, dwell)."""
+    """D7 (#382) / BL-A7 (#1423) — bieżący config encounterów (interwał, dwell,
+    trudność + zaawansowane strojenie composera)."""
     from app.services.encounter_config_service import get_encounter_config
     return get_encounter_config()
 
 
 @router.post("/encounter-config")
 def set_encounter_config_ep(req: EncounterConfigReq):
-    """D7 (#382) — strojenie częstotliwości encounterów z admin3."""
+    """D7 (#382) / BL-A7 (#1423) — strojenie częstotliwości I trudności encounterów."""
     from app.services.encounter_config_service import set_encounter_config
     try:
         return set_encounter_config(
             n_turns_interval=req.n_turns_interval,
             dwell_settle_turns=req.dwell_settle_turns,
+            difficulty_mult=req.difficulty_mult,
+            threat_budget_base=req.threat_budget_base,
+            threat_budget_per_power=req.threat_budget_per_power,
+            pool_min_size=req.pool_min_size,
+            repeat_penalty=req.repeat_penalty,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.post("/encounter-preview")
+def encounter_preview_ep(req: EncounterPreviewReq):
+    """BL-A7 (#1423) — podgląd składu spotkania dla poziomu + terenu (dry-run).
+
+    Woła composer N razy (bez zapisu, bez kampanii) z bieżącą trudnością z admina —
+    designer widzi efekt suwaka natychmiast. Budżet liczony f(level) (brak Power
+    Score bez konkretnego bohatera). Zwraca listę kompozycji + użyty budżet."""
+    from app.services.encounter_service import (
+        encounter_composer, threat_budget_for_level,
+    )
+    from app.services.encounter_config_service import get_encounter_config
+    conn = _get_db()
+    try:
+        level = max(1, int(req.level or 1))
+        samples = max(1, min(8, int(req.samples or 3)))
+        budget = threat_budget_for_level(conn, level)
+        out = []
+        for _ in range(samples):
+            enc = encounter_composer(
+                conn, level=level, hex_type=(req.hex_type or None), power=None,
+            )
+            if not enc:
+                continue
+            out.append({
+                "label": enc.get("label"),
+                "pattern": enc.get("composition_pattern"),
+                "threat_budget": enc.get("threat_budget"),
+                "threat_spent": enc.get("threat_spent"),
+                "enemies": [
+                    {"enemy_key": e.get("enemy_key"), "name": e.get("name"),
+                     "count": e.get("count"), "rank": e.get("rank")}
+                    for e in (enc.get("enemies") or [])
+                ],
+            })
+        return {
+            "level": level,
+            "hex_type": req.hex_type,
+            "threat_budget": round(budget, 2),
+            "difficulty_mult": get_encounter_config(conn=conn).get("difficulty_mult"),
+            "samples": out,
+            "empty_pool": not out,
+        }
+    finally:
+        conn.close()
 
 
 @router.get("/encounter-templates")

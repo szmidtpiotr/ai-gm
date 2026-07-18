@@ -432,7 +432,26 @@ i <b>⚓ Osadź</b> na pasującym terenie</td></tr>
       },
     ],
   },
-  { ico: '⚙', label: 'Mechanika',  chapters: [{ id: 'mechanika',  title: 'Statystyki, umiejętności, DC', body: STUB }] },
+  { ico: '⚙', label: 'Mechanika',  chapters: [{ id: 'mechanika',  title: 'Statystyki, umiejętności, DC, trudność spotkań', body: `
+<h3>🎚 Trudność spotkań</h3>
+<p>Karta <b>Trudność spotkań</b> (na górze zakładki <b>Mechanika</b>) steruje siłą i liczebnością
+wrogów w losowych zasadzkach podczas <b>podróży po mapie</b>. Zmiana działa od razu, bez wdrożenia.</p>
+<ul>
+<li><b>Preset</b> — <b>Łatwy</b> / <b>Normalny</b> / <b>Trudny</b> / <b>Hardcore</b>. Jeden klik ustawia mnożnik
+i zapisuje. Aktywny preset jest podświetlony.</li>
+<li><b>Mnożnik</b> — ręczna wartość (0.25–3.0). Skaluje „budżet zagrożenia": im wyżej, tym silniejsza
+grupa (wataha, herszt z poplecznikami) na ten sam poziom bohatera. Po zmianie kliknij <b>Zapisz</b>.</li>
+<li><b>Zaawansowane</b> — budżet bazowy, przyrost na punkt Power bohatera, minimalny rozmiar puli wrogów,
+kara za powtórki tego samego składu. Rusz tylko gdy wiesz, co robisz — presety zwykle wystarczą.</li>
+<li><b>Podgląd składu</b> — wybierz poziom bohatera i teren (np. <code>road</code>, <code>forest</code>),
+kliknij <b>Losuj skład</b> i zobacz 3 przykładowe grupy, które gra by wygenerowała. Sprawdź efekt
+suwaka zanim zapiszesz.</li>
+</ul>
+<p>Skala celuje w <b>Power Score</b> bohatera (ekwipunek, rangi, czary), nie w sam poziom — rozbudowana
+postać dostaje twardsze spotkania automatycznie. Na dole skali (poziom 1) skład zostaje pojedynczym
+słabym wrogiem, żeby świeży gracz nie oberwał watahą na starcie.</p>
+<p>Zakładki poniżej (Statystyki, Umiejętności, Poziomy DC, Kondycje, Archetypy, Nagrody XP) to definicje
+systemowe — edytuj nazwę/opis/wartości, klucze są zablokowane.</p>` }] },
   { ico: '⛓', label: 'Lochy',      chapters: [{ id: 'lochy',      title: 'Ziarna lochów i przebiegi', body: STUB }] },
   { ico: '⚒', label: 'Kuźnia',     chapters: [{ id: 'kuznia',     title: 'Szablony przygód', body: STUB }] },
   { ico: '🛠', label: 'Narzędzia',  chapters: [{ id: 'narzedzia',  title: 'Test Runner i narzędzia bazy', body: STUB }] },

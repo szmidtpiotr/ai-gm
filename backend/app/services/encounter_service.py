@@ -715,16 +715,27 @@ def _meta_float(conn: sqlite3.Connection, key: str, default: float) -> float:
         return default
 
 
+def _difficulty_mult(conn: sqlite3.Connection) -> float:
+    """BL-A7 (#1423) — mnożnik trudności spotkań z admina (encounter_difficulty_mult).
+
+    Aplikowany na wynik budżetu zagrożenia (f(level)/f(power)) → jeden suwak
+    steruje CAŁYM pipeline'em composera (podróż, ruch narracyjny, katalog). Clamp
+    0.25–3.0 spójny z walidacją w encounter_config_service. Default 1.0 = bez zmian.
+    """
+    return min(3.0, max(0.25, _meta_float(conn, "encounter_difficulty_mult", 1.0)))
+
+
 def threat_budget_for_level(conn: sqlite3.Connection, level: int) -> float:
     """BL-A2 (#1328) — budżet zagrożenia dla poziomu bohatera (solo baseline).
 
     f(level) = base + per_level × (level − 1). Skalowanie liczebności per drużyna
     (#824) działa NA wyniku kompozycji, więc budżet celuje w solo. base/per_level
     strojlne z game_config_meta. Fallback gdy Power Score niedostępny (BL-A5).
+    BL-A7 (#1423): × mnożnik trudności z admina.
     """
     base = _meta_float(conn, "encounter_threat_budget_base", THREAT_BUDGET_BASE)
     per = _meta_float(conn, "encounter_threat_budget_per_level", THREAT_BUDGET_PER_LEVEL)
-    return max(1.0, base + per * (max(1, int(level or 1)) - 1))
+    return max(1.0, (base + per * (max(1, int(level or 1)) - 1)) * _difficulty_mult(conn))
 
 
 def threat_budget_for_power(conn: sqlite3.Connection, power: float) -> float:
@@ -733,10 +744,11 @@ def threat_budget_for_power(conn: sqlite3.Connection, power: float) -> float:
     f(power) = base + per_power × (power − 1). Ta sama `base` co f(level), osobny
     przyrost/pkt power (encounter_threat_budget_per_power). Skalowanie liczebności
     per drużyna (#824) nadal działa NA wyniku kompozycji, więc budżet celuje w solo.
+    BL-A7 (#1423): × mnożnik trudności z admina.
     """
     base = _meta_float(conn, "encounter_threat_budget_base", THREAT_BUDGET_BASE)
     per = _meta_float(conn, "encounter_threat_budget_per_power", THREAT_BUDGET_PER_POWER)
-    return max(1.0, base + per * (max(1.0, float(power or 1.0)) - 1.0))
+    return max(1.0, (base + per * (max(1.0, float(power or 1.0)) - 1.0)) * _difficulty_mult(conn))
 
 
 def _hero_power_for_campaign(
@@ -928,8 +940,21 @@ def _filter_by_terrain(rows: list[dict], hex_type: str | None) -> list[dict]:
     return out
 
 
+def _apply_pool_keys(pool: list[dict], pool_keys: set[str] | None) -> list[dict]:
+    """BL-A7 (#1423) — zawęź pulę do autorskiej listy kluczy hexa (przecięcie).
+
+    Gdy przecięcie PUSTE, ignoruj listę (zwróć pulę bez zmian) — autorska pula
+    hexa jest miękkim filtrem, nie może wyzerować spotkania (parytet z zasadą
+    „teren ważniejszy niż pustka")."""
+    if not pool_keys:
+        return pool
+    filtered = [d for d in pool if d["key"] in pool_keys]
+    return filtered if filtered else pool
+
+
 def eligible_enemy_pool(
-    conn: sqlite3.Connection, *, level: int, hex_type: str | None
+    conn: sqlite3.Connection, *, level: int, hex_type: str | None,
+    pool_keys: set[str] | None = None,
 ) -> list[dict]:
     """BL-A2 (#1328) — pula wrogów do kompozycji.
 
@@ -941,7 +966,11 @@ def eligible_enemy_pool(
     #1345 (SMOKE-A P1): gdy pula < POOL_MIN_SIZE (dziura pasm — np. cap lvl 10 =
     same bossy), poszerz OKNO POZIOMÓW o ±delta (do POOL_WIDEN_MAX_DELTA) trzymając
     scope i teren; przy delta=0 i wystarczającej puli zachowanie bez zmian. Gdy
-    nadal za mało po max delta — LUZUJ teren (ostateczność, logowane)."""
+    nadal za mało po max delta — LUZUJ teren (ostateczność, logowane).
+
+    BL-A7 (#1423): `pool_keys` (autorska pula hexa) zawęża pulę PO każdym filtrze —
+    miękko (przecięcie; puste = ignoruj), by autorskie hexy trzymały klimat, nie
+    kasując skalowania."""
     try:
         min_size = max(1, int(_meta_float(conn, "encounter_pool_min_size", POOL_MIN_SIZE)))
         max_delta = max(0, int(_meta_float(conn, "encounter_pool_widen_max_delta", POOL_WIDEN_MAX_DELTA)))
@@ -949,7 +978,7 @@ def eligible_enemy_pool(
         best: list[dict] = []
         for delta in range(0, max_delta + 1):
             rows = _query_scoped_enemies(conn, level - delta, level + delta)
-            pool = _filter_by_terrain(rows, hex_type)
+            pool = _apply_pool_keys(_filter_by_terrain(rows, hex_type), pool_keys)
             if len(pool) > len(best):
                 best = pool
             if len(best) >= min_size:
@@ -959,8 +988,11 @@ def eligible_enemy_pool(
         # teren, byle nie pustka (inaczej composer spada do legacy szablonów). Małą,
         # ale niepustą pulę terenową zostawiamy — teren ważniejszy niż dobicie do min.
         if not best:
-            relaxed = _filter_by_terrain(
-                _query_scoped_enemies(conn, level - max_delta, level + max_delta), None
+            relaxed = _apply_pool_keys(
+                _filter_by_terrain(
+                    _query_scoped_enemies(conn, level - max_delta, level + max_delta), None
+                ),
+                pool_keys,
             )
             if len(relaxed) > len(best):
                 logger.info(
@@ -1100,6 +1132,7 @@ def encounter_composer(
     rng=random,
     recent_sigs: list[str] | None = None,
     power: float | None = None,
+    pool_keys: set[str] | None = None,
 ) -> dict | None:
     """BL-A2 (#1328) — złóż spotkanie z puli wrogów pod budżet zagrożenia.
 
@@ -1115,7 +1148,7 @@ def encounter_composer(
     f(level). Pula wrogów nadal filtrowana pasmem POZIOMÓW (min/max_level), bo pasma
     to dane wroga; f(power) skaluje tylko ILE budżetu wydać. None → fallback f(level).
     """
-    pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type)
+    pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type, pool_keys=pool_keys)
     if not pool:
         return None
     if power is not None:
@@ -1228,3 +1261,72 @@ def select_encounter_template(
     """D7 (#382) — pick ONE matching template at random (for actual injection)."""
     candidates = match_encounter_templates(conn, level=level, location_tag=location_tag)
     return random.choice(candidates) if candidates else None
+
+
+def _authored_pool_keys(hex_data: dict) -> set[str] | None:
+    """BL-A7 (#1423) — autorska pula wrogów hexa (world_hexes.encounter_pool) jako
+    zbiór kluczy, albo None gdy pusta. Akceptuje listę JSON lub CSV."""
+    raw = (hex_data or {}).get("encounter_pool")
+    keys: list[str] = []
+    if isinstance(raw, list):
+        keys = [str(k).strip() for k in raw if str(k).strip()]
+    elif isinstance(raw, str) and raw.strip():
+        try:
+            v = json.loads(raw)
+            if isinstance(v, list):
+                keys = [str(k).strip() for k in v if str(k).strip()]
+        except Exception:
+            keys = [k.strip() for k in raw.split(",") if k.strip()]
+    return set(keys) or None
+
+
+def compose_travel_encounter(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    hex_data: dict,
+    *,
+    rng=random,
+) -> dict | None:
+    """BL-A7 (#1423) — złóż SKALOWANE spotkanie dla zasadzki w podróży.
+
+    Zamiast losować pojedynczy klucz z zaszytej puli terenowej (stary
+    `hex_travel_service._pick_encounter_enemy`), używa composera BL: budżet
+    zagrożenia f(Power Score) bohatera → wzorzec solo / wataha / herszt+poplecznicy.
+    Teren z `hex_data.hex_type`; anty-powtórki z session_flags.recent_encounters;
+    autorska pula hexa (`encounter_pool`) zawęża pulę miękko.
+
+    Zwraca dict spotkania (`enemies` z `count`/`rank`, `label`, budżet) albo None,
+    gdy pula pusta / błąd — wtedy caller zostaje przy legacy single-pick (zero
+    regresji). Skalowanie liczebności per drużyna (#824) aplikowane na wyniku.
+
+    GOTCHA (#1390): działa na PRZEKAZANYM `conn` (transakcja podróży) — żadnego
+    zagnieżdżonego connect, inaczej „database is locked"."""
+    try:
+        level = _hero_level_for_campaign(conn, campaign_id)
+        power = _hero_power_for_campaign(conn, campaign_id, level)
+        hex_type = str(hex_data.get("hex_type") or "plains")
+        try:
+            row = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            sf = json.loads(row["session_flags"] or "{}") if row else {}
+        except Exception:
+            sf = {}
+        recent = recent_signatures(sf)
+        pool_keys = _authored_pool_keys(hex_data)
+        enc = encounter_composer(
+            conn, level=level, hex_type=hex_type, rng=rng,
+            recent_sigs=recent, power=power, pool_keys=pool_keys,
+        )
+        if not enc or not enc.get("enemies"):
+            return None
+        # #824 — skalowanie liczebności per rozmiar drużyny (parytet z katalogiem)
+        party_size = _party_size_for_campaign(conn, campaign_id)
+        if party_size > 1:
+            enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
+        enc = ensure_encounter_enemies_in_db(conn, enc)
+        return enc
+    except Exception as exc:  # nigdy nie wysadzaj podróży — legacy fallback
+        logger.warning("compose_travel_encounter_error", error=str(exc), campaign_id=campaign_id)
+        return None
