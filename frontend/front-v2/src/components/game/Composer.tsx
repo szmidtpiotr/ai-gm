@@ -44,6 +44,24 @@ export function Composer({
   const vs = useVoice();
   const onSendRef = useRef(onSend);
   onSendRef.current = onSend;
+
+  // Desktop: rząd chipów przewija się poziomo, a kółko myszy daje deltaY (pion) —
+  // bez tego chipów poza ekranem nie da się dosięgnąć. Mapujemy pionowe kółko na
+  // scrollLeft. Natywny listener z { passive: false }, bo React rejestruje onWheel
+  // jako passive → preventDefault() byłby no-opem (i sypałby ostrzeżeniem w konsoli).
+  const chipRowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = chipRowRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return; // nic do przewijania
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // gest poziomy → natywnie
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [chips.length]);
   useEffect(() => {
     voice.onTranscript = (text, autosend) => {
       setValue(text);
@@ -92,6 +110,7 @@ export function Composer({
     requestAnimationFrame(autoGrow);
   }
 
+
   return (
     <div className="shrink-0 border-t border-line bg-surface px-3.5 pb-2 pt-2.5">
       {/* F-72: overlay „Czytam…" (TTS aktywny) — z przyciskiem zatrzymania. */}
@@ -112,7 +131,10 @@ export function Composer({
 
       {/* quick-action chips — jeden poziomy rząd z przewijaniem (bez zawijania) */}
       {chips.length > 0 && (
-        <div className="mx-auto mb-2 flex max-w-[660px] gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          ref={chipRowRef}
+          className="mx-auto mb-2 flex max-w-[660px] gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {chips.map((c, i) => {
             const off = disabled || c.enabled === false;
             return (
