@@ -382,6 +382,120 @@ async function saveEnemyForm(existingKey, btn) {
   }
 }
 
+// ── Towarzysze (#1192 FAZA TW) ───────────────────────────────────────────────
+const _COMPANION_TYPE_BADGE = {
+  mount:    '<span class="badge badge-blue">🐴 Wierzchowiec</span>',
+  hireling: '<span class="badge badge-amber">🗡 Najemnik</span>',
+  animal:   '<span class="badge badge-green">🐕 Zwierzę</span>',
+};
+
+async function _loadCompanions() {
+  const tbody = document.querySelector('#world-companions-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = _loading(7);
+  try {
+    const d = await apiFetch('/api/admin/companions');
+    const items = d.items || [];
+    if (!items.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--t3)">Brak towarzyszy</td></tr>`; return; }
+    tbody.innerHTML = items.map(c => {
+      const enc = encodeURIComponent(JSON.stringify(c));
+      return `<tr data-key="${_esc(c.key)}">
+        <td class="td-sticky td-name">${_esc(c.label||c.key)}</td>
+        <td data-label="Typ">${_COMPANION_TYPE_BADGE[c.type]||_esc(c.type||'—')}</td>
+        <td class="td-mono" data-label="HP">${c.hp_base??'—'}</td>
+        <td class="td-mono" data-label="Najem/dz">${c.daily_cost?c.daily_cost+' zł':'—'}</td>
+        <td class="td-mono" data-label="Kupno">${c.buy_cost!=null?c.buy_cost+' zł':'—'}</td>
+        <td class="td-mono" data-label="Pasza/dz">${c.upkeep_cost?c.upkeep_cost+' zł':'—'}</td>
+        <td class="td-actions">
+          <button class="btn-icon" title="Edytuj" onclick="window._worldCompanionForm('${enc}')">✎</button>
+          <button class="btn-icon danger" title="Usuń" onclick="window._worldDeleteCompanion('${_esc(c.key)}',this)">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) { tbody.innerHTML = _errRow(7, e.message); }
+}
+
+async function deleteCompanion(key, btn) {
+  if (!confirm(`Usunąć towarzysza "${key}"?`)) return;
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/admin/companions/${key}`, { method: 'DELETE' });
+    _loaded.delete('companions');
+    await _loadCompanions();
+    _showToast('Usunięto towarzysza.', 'success');
+  } catch(e) { _showToast(e.message || 'Błąd usuwania.', 'error'); btn.disabled = false; }
+}
+
+function openCompanionFormModal(prefillOrNull) {
+  const p = typeof prefillOrNull === 'string' ? JSON.parse(decodeURIComponent(prefillOrNull)) : (prefillOrNull || {});
+  const isEdit = !!p.key;
+  const TYPES = ['hireling','animal','mount'];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.onclick = ev => { if (ev.target === overlay) overlay.remove(); };
+  const pj = v => v ? _esc(typeof v === 'string' ? v : JSON.stringify(v)) : '';
+  overlay.innerHTML = `<div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">${isEdit ? 'Edytuj towarzysza: '+_esc(p.label||p.key) : 'Nowy towarzysz'}</div>
+      <button class="btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;max-height:calc(100vh - 140px)">
+      <div class="form-grid">
+        ${isEdit ? '' : `<div class="form-field form-full"><label class="form-label required">Klucz</label><input id="cf-key" class="form-input mono" placeholder="np. war_horse" /></div>`}
+        <div class="form-field form-full"><label class="form-label required">Nazwa</label><input id="cf-label" class="form-input" value="${_esc(p.label||'')}" /></div>
+        <div class="form-field"><label class="form-label">Typ</label>
+          <select id="cf-type" class="form-select">${TYPES.map(t=>`<option value="${t}"${p.type===t?' selected':''}>${t}</option>`).join('')}</select>
+        </div>
+        <div class="form-field"><label class="form-label">HP bazowe</label><input id="cf-hp" class="form-input mono" type="number" min="1" value="${p.hp_base??10}" /></div>
+        <div class="form-field"><label class="form-label" title="0 = nie do najęcia">Najem/dzień</label><input id="cf-daily" class="form-input mono" type="number" min="0" value="${p.daily_cost??0}" /></div>
+        <div class="form-field"><label class="form-label" title="puste = nie do kupienia">Kupno</label><input id="cf-buy" class="form-input mono" type="number" min="0" value="${p.buy_cost??''}" /></div>
+        <div class="form-field"><label class="form-label" title="pasza dla kupionego">Utrzymanie/dz</label><input id="cf-upkeep" class="form-input mono" type="number" min="0" value="${p.upkeep_cost??0}" /></div>
+        <div class="form-field form-full"><label class="form-label" title="JSON ataku dla walczących; puste dla wierzchowców">Atak (JSON)</label><input id="cf-attack" class="form-input mono" placeholder='{"attack_bonus":3,"damage_dice":"1d6","zone":"engaged"}' value="${pj(p.attack_json)}" /></div>
+        <div class="form-field form-full"><label class="form-label" title="pasywy: travel_speed_mult, daily_cap_bonus_h, escape_enabled, encounter_chance_mult, terrain_speed_mult">Pasywy (JSON)</label><input id="cf-passive" class="form-input mono" placeholder='{"travel_speed_mult":0.75,"escape_enabled":true}' value="${pj(p.passive_json)}" /></div>
+        <div class="form-field form-full"><label class="form-label" title="CSV regionów; puste = wszędzie">Regiony</label><input id="cf-regions" class="form-input mono" value="${_esc(p.region_tags||'')}" /></div>
+        <div class="form-field form-full"><label class="form-label">Opis</label><input id="cf-desc" class="form-input" value="${_esc(p.description||'')}" /></div>
+        <div class="form-field form-full"><label class="form-label">Notatka MG</label><input id="cf-note" class="form-input" value="${_esc(p.note||'')}" /></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-primary" onclick="window._worldSaveCompanion('${isEdit?_esc(p.key):''}',this)">Zapisz</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function saveCompanionForm(existingKey, btn) {
+  const g = id => document.getElementById(id);
+  const label = g('cf-label')?.value?.trim();
+  if (!label) { _showToast('Wypełnij nazwę.', 'error'); return; }
+  const key = existingKey || g('cf-key')?.value?.trim();
+  if (!key) { _showToast('Wypełnij klucz.', 'error'); return; }
+  const trimOrNull = v => { const s = (v||'').trim(); return s || null; };
+  const body = {
+    label, key,
+    type: g('cf-type')?.value || 'hireling',
+    hp_base: parseInt(g('cf-hp')?.value) || 10,
+    daily_cost: parseInt(g('cf-daily')?.value) || 0,
+    buy_cost: g('cf-buy')?.value !== '' ? parseInt(g('cf-buy').value) : null,
+    upkeep_cost: parseInt(g('cf-upkeep')?.value) || 0,
+    attack_json: trimOrNull(g('cf-attack')?.value),
+    passive_json: trimOrNull(g('cf-passive')?.value),
+    region_tags: trimOrNull(g('cf-regions')?.value),
+    description: trimOrNull(g('cf-desc')?.value),
+    note: trimOrNull(g('cf-note')?.value),
+  };
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    if (existingKey) await apiFetch(`/api/admin/companions/${existingKey}`, { method: 'PATCH', body: JSON.stringify(body) });
+    else await apiFetch('/api/admin/companions', { method: 'POST', body: JSON.stringify(body) });
+    btn.closest('.modal-overlay').remove();
+    _loaded.delete('companions');
+    await _loadCompanions();
+    _showToast(existingKey ? 'Zapisano towarzysza.' : 'Dodano towarzysza.', 'success');
+  } catch(e) { _showToast(e.message || 'Błąd zapisu.', 'error'); btn.disabled = false; btn.textContent = 'Zapisz'; }
+}
+
 // ── Loot tables ────────────────────────────────────────────────────────────────
 async function _loadBestiaryLoot() {
   const container = document.getElementById('world-loot-container');
@@ -1783,6 +1897,7 @@ function _sectionHtml() {
       <div class="section-tabs" id="world-tabs">
         <button class="stab active" data-wtab="npcs">NPC</button>
         <button class="stab" data-wtab="enemies">Wrogowie</button>
+        <button class="stab" data-wtab="companions">Towarzysze</button>
         <button class="stab" data-wtab="loot">Tabele Łupów</button>
         <button class="stab" data-wtab="events">Wydarzenia</button>
         <button class="stab" data-wtab="rumors">Plotki</button>
@@ -1843,6 +1958,32 @@ function _sectionHtml() {
         </div>
       </div>
 
+      <!-- Towarzysze (#1192 FAZA TW) -->
+      <div class="stab-panel" id="wtab-companions">
+        <div class="section-sub" style="margin-bottom:8px">Towarzysze podróży i wierzchowce — najemnicy, tropiciele, psy (walczą) oraz konie/muły (podróż). Typ <b>mount</b> nie walczy; koszty i pasywy to wartości startowe.</div>
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="search-box-icon">🔍</span>
+            <input type="text" placeholder="Szukaj towarzyszy…" oninput="window._worldFilterTable(this,'world-companions-table','td-name')">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="window._worldCompanionForm(null)">+ Dodaj towarzysza</button>
+        </div>
+        <div class="data-table--cards table-wrap">
+          <table class="data-table" id="world-companions-table">
+            <thead><tr>
+              <th class="td-sticky"><div class="th-inner">Nazwa</div></th>
+              <th><div class="th-inner">Typ</div></th>
+              <th><div class="th-inner">HP</div></th>
+              <th><div class="th-inner">Najem/dz</div></th>
+              <th><div class="th-inner">Kupno</div></th>
+              <th><div class="th-inner">Pasza/dz</div></th>
+              <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
+            </tr></thead>
+            <tbody><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Tabele Łupów -->
       <div class="stab-panel" id="wtab-loot">
         <div class="toolbar">
@@ -1887,6 +2028,7 @@ function _sectionHtml() {
 const _TAB_LOADERS = {
   npcs:    () => { if (!_loaded.has('npcs'))    { _loaded.add('npcs');    _loadNPCs().catch(()=>_loaded.delete('npcs')); } },
   enemies: () => { if (!_loaded.has('enemies')) { _loaded.add('enemies'); _loadEnemies().catch(()=>_loaded.delete('enemies')); } },
+  companions: () => { if (!_loaded.has('companions')) { _loaded.add('companions'); _loadCompanions().catch(()=>_loaded.delete('companions')); } },
   loot:    () => { if (!_loaded.has('loot'))    { _loaded.add('loot');    _loadBestiaryLoot().catch(()=>_loaded.delete('loot')); } },
   events:  () => { _loadWorldEvents(); },  // #1193 — zawsze świeże (stan eventów żyje)
   rumors:  () => { _initRumorTab(); },     // #1190 — plotki per kampania
@@ -2013,6 +2155,9 @@ export async function init(panel) {
   window._worldEnemyForm      = (p) => openEnemyFormModal(p);
   window._worldSaveEnemy      = (key, btn) => saveEnemyForm(key, btn);
   window._worldDeleteEnemy    = (key, btn) => deleteEnemy(key, btn);
+  window._worldCompanionForm  = (p) => openCompanionFormModal(p);
+  window._worldSaveCompanion  = (key, btn) => saveCompanionForm(key, btn);
+  window._worldDeleteCompanion = (key, btn) => deleteCompanion(key, btn);
   window._worldShopInv        = (id, btn) => openShopInventoryModal(id, btn);
   window._worldNpcImage       = (id, enc) => openNpcImageModal(id, enc);
   window._worldReviewEntity   = (type, key, action, btn) => reviewEntityBestiary(type, key, action, btn);
@@ -2058,6 +2203,9 @@ export async function init(panel) {
   document.addEventListener('smart-entry-saved', e => {
     if (e.detail?.table === 'game_config_enemies') {
       _loaded.delete('enemies'); _loadEnemies();
+    }
+    if (e.detail?.table === 'game_config_companions') {
+      _loaded.delete('companions'); _loadCompanions();
     }
   });
 
