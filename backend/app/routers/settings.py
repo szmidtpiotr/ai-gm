@@ -28,6 +28,11 @@ from app.services.user_llm_settings import (
     get_user_llm_settings_masked,
     upsert_user_llm_settings,
 )
+from app.services.quick_chips_settings import (
+    get_quick_chips_settings,
+    set_quick_chips_settings,
+)
+from app.services.user_preferences import get_all_preferences, set_preference
 
 router = APIRouter()
 DB_PATH = resolve_db_path()
@@ -168,6 +173,24 @@ def patch_content_llm_settings(
     return {"ok": True, "data": _content_llm_view()}
 
 
+# ── #1215 Szybkie akcje — flaga globalna + tuning liczby chipów LLM ───────────
+
+class QuickChipsPatchReq(BaseModel):
+    enabled: bool | None = None
+    max: int | None = Field(default=None, ge=0, le=5)
+
+
+@router.get("/settings/quick-chips")
+def get_quick_chips(_: None = Depends(_require_admin_bearer)):
+    return {"ok": True, "data": get_quick_chips_settings()}
+
+
+@router.patch("/settings/quick-chips")
+def patch_quick_chips(req: QuickChipsPatchReq, _: None = Depends(_require_admin_bearer)):
+    data = set_quick_chips_settings(enabled=req.enabled, max_n=req.max)
+    return {"ok": True, "data": data}
+
+
 class LlmSettingsReq(BaseModel):
     provider: str
     base_url: str
@@ -304,6 +327,27 @@ def put_user_llm_settings(user_id: int, req: UserLlmSettingsReq):
         "ok": True,
         "settings": get_user_llm_settings_masked(user_id=user_id),
     }
+
+
+# ── #1215 Preferencje gracza (per-user toggle chipów LLM) ─────────────────────
+
+class QuickChipsPrefReq(BaseModel):
+    enabled: bool
+
+
+@router.get("/users/{user_id}/preferences")
+def get_user_preferences(user_id: int):
+    """Preferencje gracza (klucz/wartość). quick_chips: '1'/'0' — chipy LLM."""
+    prefs = get_all_preferences(user_id)
+    return {"ok": True, "preferences": prefs, "quick_chips": prefs.get("quick_chips", "1") != "0"}
+
+
+@router.put("/users/{user_id}/preferences/quick-chips")
+def put_user_quick_chips_pref(user_id: int, req: QuickChipsPrefReq):
+    """Włącz/wyłącz chipy szybkich akcji GENEROWANE PRZEZ LLM dla tego gracza.
+    Nie wpływa na chipy regułowe (podróż/odpoczynek/usługi)."""
+    set_preference(user_id, "quick_chips", "1" if req.enabled else "0")
+    return {"ok": True, "quick_chips": req.enabled}
 
 
 @router.get("/users/{user_id}/llm-settings/internal",

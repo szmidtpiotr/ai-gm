@@ -188,6 +188,8 @@ export interface SuggestedAction {
   reason?: string | null;
   type?: string | null;
   icon?: string | null;
+  /** #1215 "llm" dla chipów z narratora — filtrowane per-user toggle. */
+  source?: string | null;
   [k: string]: unknown;
 }
 

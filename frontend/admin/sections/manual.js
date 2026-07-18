@@ -411,7 +411,20 @@ i <b>⚓ Osadź</b> na pasującym terenie</td></tr>
   { ico: '⛓', label: 'Lochy',      chapters: [{ id: 'lochy',      title: 'Ziarna lochów i przebiegi', body: STUB }] },
   { ico: '⚒', label: 'Kuźnia',     chapters: [{ id: 'kuznia',     title: 'Szablony przygód', body: STUB }] },
   { ico: '🛠', label: 'Narzędzia',  chapters: [{ id: 'narzedzia',  title: 'Test Runner i narzędzia bazy', body: STUB }] },
-  { ico: '⎔', label: 'System',     chapters: [{ id: 'system',     title: 'Presety LLM i konfiguracja', body: STUB }] },
+  { ico: '⎔', label: 'System',     chapters: [{ id: 'system',     title: 'Presety LLM i konfiguracja', body: `
+<h3>Szybkie akcje (chipy)</h3>
+<p>W zakładce <b>System → LLM</b>, w karcie <b>⚡ Szybkie akcje (chipy)</b>, sterujesz podpowiedziami akcji,
+które pojawiają się graczowi pod polem tekstowym.</p>
+<ul>
+<li><b>Włącz chipy generowane przez LLM</b> — narrator sam proponuje 1–3 oczywiste akcje sceny
+(np. „Przeszukaj ciała", „Porozmawiaj z karczmarzem"). Wyłączenie zostawia tylko chipy regułowe
+(podróż, odpoczynek, usługi) — te są widoczne zawsze, niezależnie od tego przełącznika.</li>
+<li><b>Maks. chipów LLM</b> — ile takich podpowiedzi maks. dołożyć (wartość startowa: 3).</li>
+</ul>
+<p>System twardo odrzuca sugestie, które zdradzałyby rozwiązanie zagadki, hasło albo wynik testu —
+chipy mają podpowiadać oczywistości, nie wyręczać gracza. Każdy gracz może też wyłączyć te chipy
+u siebie w <b>Profilu → Rozgrywka → Szybkie akcje</b>.</p>
+` }] },
 ];
 
 function _esc(s) {

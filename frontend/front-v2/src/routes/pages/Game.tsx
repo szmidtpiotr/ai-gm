@@ -17,6 +17,7 @@ import {
   useTravel,
   useTravelResume,
   useTurnStream,
+  useQuickChipsPref,
   useWait,
   type TravelNotice as TravelNoticeData,
 } from "@/hooks/useGameData";
@@ -118,6 +119,7 @@ export default function Game() {
   const restLong = useRestLong(campaignId, characterId, currentUser?.id);
   const waitMutation = useWait(campaignId, characterId, currentUser?.id);
   const travel = useTravel(campaignId);
+  const quickChipsPref = useQuickChipsPref(currentUser?.id);
   const clock = useCampaignClock(campaignId);
   const { toast } = useToast();
   // FE9 (#1236): stan walki — poll tylko gdy aktywna. Aktywna → ekran walki.
@@ -733,8 +735,11 @@ export default function Game() {
       : streamChips;
   // #1291 WAIT-4 — dodaj chip Czekaj gdy safe_for_rest i nie ma walki (deterministyczny,
   // nie pochodzi z LLM — zawsze obecny w bezpiecznej lokacji).
+  // #1215 — gdy gracz wyłączył chipy LLM, ukryj tylko source==="llm" (regułowe
+  // podróż/odpoczynek/usługi zostają). Domyślnie włączone (pref !== false).
+  const quickChipsOn = quickChipsPref.data?.quick_chips !== false;
   const shownChips = useMemo(() => {
-    let base = baseChips;
+    let base = quickChipsOn ? baseChips : baseChips.filter((c) => c.source !== "llm");
     // #1415 — gdy backend WYMAGA obozu (REST:long wyłączony) a BUILD_CAMP dostępny,
     // pokaż „Rozbij obóz" PRZED „Odpocznij". Rząd chipów przewija się poziomo, więc
     // obóz jako ostatni (kolejność backendu) bywał poza ekranem — gracz widział tylko
@@ -755,7 +760,7 @@ export default function Game() {
     const hasWait = base.some((c) => (c.action ?? c.text ?? "").startsWith("WAIT"));
     if (hasWait) return base;
     return [...base, { label: "⏳ Czekaj…", text: "WAIT:open", action: "WAIT:open", enabled: true }];
-  }, [baseChips, character.data?.safe_for_rest, activeCombat]);
+  }, [baseChips, character.data?.safe_for_rest, activeCombat, quickChipsOn]);
   const vitals = useMemo(
     () => readVitals(character.data?.sheet_json),
     [character.data?.sheet_json],

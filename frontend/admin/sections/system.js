@@ -101,6 +101,33 @@ const _HTML = `
             </div>
           </div>
         </div>
+
+        <!-- #1215 Szybkie akcje (chipy LLM pod composerem) -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚡ Szybkie akcje (chipy)</span>
+            <span class="card-count" id="qc-status">—</span>
+          </div>
+          <p style="font-size:0.78rem;color:var(--t3,#888);padding:4px 0 8px">
+            Kontekstowe chipy podpowiedzi pod polem tekstowym gracza, generowane przez
+            narratora w tej samej odpowiedzi co narracja. Ten przełącznik steruje TYLKO
+            chipami od LLM — chipy regułowe (podróż, odpoczynek, usługi) są zawsze widoczne.
+            Twardy filtr i tak odrzuca sugestie zdradzające zagadki/testy. Gracz może je
+            dodatkowo wyłączyć u siebie w profilu.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:10px;max-width:520px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem">
+              <input type="checkbox" id="qc-enabled" /> Włącz chipy generowane przez LLM
+            </label>
+            <label style="font-size:0.78rem;color:var(--t3,#888)">Maks. chipów LLM (wartość startowa: 3)
+              <input type="number" id="qc-max" min="0" max="5" step="1"
+                     style="width:80px;margin-top:3px;padding:6px;font-size:0.82rem" />
+            </label>
+            <div>
+              <button class="btn btn-sm btn-primary" onclick="sysSaveQuickChips(this)">Zapisz</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Database tab -->
@@ -825,6 +852,7 @@ async function _loadSysLlm() {
       }
     }
     await _loadContentLlm();
+    await _loadQuickChips();
   } catch(e) {
     console.warn('_loadSysLlm', e.message);
     const grid = document.getElementById('sys-preset-grid');
@@ -859,6 +887,35 @@ async function sysSaveContentLlm(btn) {
     await apiFetch('/api/settings/content-llm', { method: 'PATCH', body: JSON.stringify(body) });
     showToast('Zapisano profil LLM treści', 'success');
     await _loadContentLlm();
+  } catch(e) {
+    showToast('Błąd zapisu: ' + e.message, 'error');
+  } finally { if (btn) btn.disabled = false; }
+}
+
+// #1215 — Szybkie akcje: flaga globalna + tuning liczby chipów LLM.
+async function _loadQuickChips() {
+  try {
+    const r = await apiFetch('/api/settings/quick-chips');
+    const d = (r && r.data) || {};
+    const en = document.getElementById('qc-enabled');
+    const mx = document.getElementById('qc-max');
+    const st = document.getElementById('qc-status');
+    if (en) en.checked = d.enabled !== false;
+    if (mx) mx.value = (d.max ?? 3);
+    if (st) st.textContent = d.enabled !== false ? `● maks. ${d.max ?? 3}` : 'wyłączone';
+  } catch(e) { console.warn('_loadQuickChips', e.message); }
+}
+
+async function sysSaveQuickChips(btn) {
+  const body = {
+    enabled: document.getElementById('qc-enabled')?.checked || false,
+    max: Number(document.getElementById('qc-max')?.value ?? 3),
+  };
+  if (btn) btn.disabled = true;
+  try {
+    await apiFetch('/api/settings/quick-chips', { method: 'PATCH', body: JSON.stringify(body) });
+    showToast('Zapisano ustawienia szybkich akcji', 'success');
+    await _loadQuickChips();
   } catch(e) {
     showToast('Błąd zapisu: ' + e.message, 'error');
   } finally { if (btn) btn.disabled = false; }
@@ -2315,6 +2372,6 @@ export async function init(panel) {
     _pingImageGen, _refreshImageGenModels,
     togglePromptEdit, setTone, saveGameModes,
     _saveDiceConfig, _resetDiceConfig, _previewDiceRoll,
-    sysSaveContentLlm,
+    sysSaveContentLlm, sysSaveQuickChips,
   });
 }

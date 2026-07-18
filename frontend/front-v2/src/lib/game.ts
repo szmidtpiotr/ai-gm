@@ -507,6 +507,8 @@ export interface Chip {
   /** F-80: przycisk może być wyłączony (np. Kontynuuj podróż po forced_camp). */
   enabled?: boolean;
   reason?: string;
+  /** #1215 "llm" = chip z narratora (per-user toggle go chowa); undefined = regułowy. */
+  source?: string;
 }
 
 export function normalizeChips(actions: SuggestedAction[] | undefined): Chip[] {
@@ -525,6 +527,7 @@ export function normalizeChips(actions: SuggestedAction[] | undefined): Chip[] {
         icon: a.icon ?? undefined,
         enabled: a.enabled !== false,
         reason: a.reason ?? undefined,
+        source: (a.source as string) ?? undefined,
       };
     })
     .filter((x): x is Chip => x !== null)

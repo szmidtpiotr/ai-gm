@@ -840,6 +840,25 @@ ADMIN_MIGRATIONS = [
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('location_auto_create_enabled', '1')
     """,
+    # #1215 — Szybkie akcje (chipy LLM pod composerem). Flaga globalna + tuning liczby.
+    # Steruje TYLKO domieszką chipów generowanych przez narratora; chipy regułowe
+    # (podróż/odpoczynek/usługi) są zawsze dostępne. quick_chips_max = wartość startowa 3.
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value) VALUES
+        ('quick_chips_enabled', '1'),
+        ('quick_chips_max', '3')
+    """,
+    # #1215 — generyczne preferencje per-gracz (klucz/wartość). Pierwszy klient:
+    # 'quick_chips' ('1'/'0') — czy pokazywać chipy LLM temu graczowi (regułowe zostają).
+    """
+    CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id INTEGER NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, key)
+    )
+    """,
     # Phase 8F-1 — economy: weapon catalog prices (rows still at 0 GP after seed)
     """
     UPDATE game_config_weapons

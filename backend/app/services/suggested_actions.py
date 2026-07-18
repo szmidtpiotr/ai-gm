@@ -16,9 +16,51 @@ import structlog
 from dataclasses import dataclass, field
 from typing import Optional
 
+from app.core.text_utils import fold
+
 logger = structlog.get_logger()
 
 MAX_ACTIONS = 5
+
+# #1215 — startowe wartości (Numbers Policy). Ile chipów GENEROWANYCH PRZEZ LLM
+# wolno domieszać (osobno od MAX_ACTIONS dla chipów regułowych). Admin-tunable
+# przez game_config_meta:quick_chips_max.
+QUICK_CHIPS_MAX_DEFAULT = 3
+
+# #1215 — twardy filtr: chip LLM zawierający którekolwiek z tych słów (bez ogonków,
+# lowercase — przez fold()) jest ODRZUCANY. Chroni przed sugerowaniem rozwiązania
+# zagadki/testu/decyzji fabularnej (design constraint z issue). Wzorce w ASCII.
+_RISK_KEYWORDS = (
+    "zagadk", "haslo", "odpowiedz", "rozwiaz", "sprawdzian", "sekret",
+    "tajemnic", "test ", "rzut", " dc", "dc ", "kod", "szyfr", "wskazowk",
+)
+
+
+def _quick_chips_config(conn: sqlite3.Connection) -> tuple[bool, int]:
+    """#1215 — (enabled, max) z game_config_meta. enabled steruje TYLKO domieszką
+    chipów LLM; chipy regułowe (podróż/odpoczynek/usługi) są zawsze dostępne."""
+    enabled, max_n = True, QUICK_CHIPS_MAX_DEFAULT
+    try:
+        rows = conn.execute(
+            "SELECT key, value FROM game_config_meta "
+            "WHERE key IN ('quick_chips_enabled', 'quick_chips_max')"
+        ).fetchall()
+        meta = {r[0]: r[1] for r in rows}
+        if "quick_chips_enabled" in meta:
+            enabled = str(meta["quick_chips_enabled"]).strip().lower() not in (
+                "0", "false", "no", "off", "",
+            )
+        if "quick_chips_max" in meta:
+            max_n = max(0, int(str(meta["quick_chips_max"]).strip() or QUICK_CHIPS_MAX_DEFAULT))
+    except Exception:
+        pass
+    return enabled, max_n
+
+
+def _is_risky_suggestion(label: str, action: str) -> bool:
+    """True gdy sugestia LLM sugeruje rozwiązanie zagadki/testu — do odrzucenia."""
+    blob = fold(f"{label} {action}")
+    return any(kw in blob for kw in _RISK_KEYWORDS)
 
 
 @dataclass
@@ -29,6 +71,7 @@ class SuggestedAction:
     reason: Optional[str] = None   # tooltip when disabled
     icon: Optional[str] = None
     type: Optional[str] = None    # "travel" for travel pills (UI highlighting)
+    source: Optional[str] = None  # #1215 "llm" dla chipów z narratora (per-user toggle)
 
     def to_dict(self) -> dict:
         d: dict = {"label": self.label, "action": self.action, "enabled": self.enabled}
@@ -38,6 +81,8 @@ class SuggestedAction:
             d["icon"] = self.icon
         if self.type:
             d["type"] = self.type
+        if self.source:
+            d["source"] = self.source
         return d
 
 
@@ -65,26 +110,39 @@ def build_suggested_actions(
         else:
             actions = []
 
-        # Merge LLM-suggested actions (appended after rule-based, dedup by action string)
+        # #1215 — domieszka chipów GENEROWANYCH PRZEZ LLM (po regułowych, dedup po
+        # action). Bramkowana globalną flagą quick_chips_enabled; twardy filtr
+        # odrzuca sugestie zagadek/testów; cap = quick_chips_max; znacznik source="llm"
+        # pozwala frontowi wyłączyć TYLKO te chipy per-user (regułowe zostają).
         if llm_suggested:
-            seen = {a.action for a in actions}
-            for item in llm_suggested:
-                if not isinstance(item, dict):
-                    continue
-                action_str = str(item.get("action") or "").strip()
-                label_str = str(item.get("label") or "").strip()
-                if not action_str or not label_str:
-                    continue
-                if action_str in seen:
-                    continue
-                seen.add(action_str)
-                actions.append(SuggestedAction(
-                    label=label_str,
-                    action=action_str,
-                    enabled=bool(item.get("enabled", True)),
-                    reason=item.get("reason"),
-                    icon=item.get("icon"),
-                ))
+            llm_enabled, llm_max = _quick_chips_config(conn)
+            if llm_enabled and llm_max > 0:
+                seen = {a.action for a in actions}
+                added = 0
+                for item in llm_suggested:
+                    if added >= llm_max:
+                        break
+                    if not isinstance(item, dict):
+                        continue
+                    action_str = str(item.get("action") or "").strip()
+                    label_str = str(item.get("label") or "").strip()
+                    if not action_str or not label_str:
+                        continue
+                    if action_str in seen:
+                        continue
+                    if _is_risky_suggestion(label_str, action_str):
+                        logger.info("quick_chip_filtered", label=label_str, action=action_str)
+                        continue
+                    seen.add(action_str)
+                    actions.append(SuggestedAction(
+                        label=label_str,
+                        action=action_str,
+                        enabled=bool(item.get("enabled", True)),
+                        reason=item.get("reason"),
+                        icon=item.get("icon"),
+                        source="llm",
+                    ))
+                    added += 1
 
         # Cap at MAX_ACTIONS
         actions = actions[:MAX_ACTIONS]

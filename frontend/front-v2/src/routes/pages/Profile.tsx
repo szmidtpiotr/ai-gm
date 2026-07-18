@@ -14,8 +14,14 @@ import {
   SignOut,
   type Icon,
 } from "@phosphor-icons/react";
+import { Lightning } from "@phosphor-icons/react";
 import { useAppStore } from "@/store/appStore";
-import { useHeroes, useLlmSettings } from "@/hooks/useGameData";
+import {
+  useHeroes,
+  useLlmSettings,
+  useQuickChipsPref,
+  useSetQuickChipsPref,
+} from "@/hooks/useGameData";
 import { useToast } from "@/components/ui/toast";
 import { PushButton } from "@/components/PushButton";
 import { TelegramConnect } from "@/components/TelegramConnect";
@@ -28,6 +34,9 @@ export default function Profile() {
   const logout = useAppStore((s) => s.logout);
   const { data: heroes } = useHeroes();
   const { data: llm } = useLlmSettings(user?.id);
+  const { data: quickChips } = useQuickChipsPref(user?.id);
+  const setQuickChips = useSetQuickChipsPref(user?.id);
+  const quickChipsOn = quickChips?.quick_chips !== false;
 
   const name = user?.displayName || user?.username || "Gracz";
   const email = user?.email || "—";
@@ -99,6 +108,24 @@ export default function Profile() {
         </section>
 
         <section className="lg:col-span-2">
+          <SectionHead>Rozgrywka</SectionHead>
+          <ToggleRow
+            icon={Lightning}
+            title="Szybkie akcje"
+            sub="Podpowiedzi akcji pod polem tekstowym (od narratora)"
+            checked={quickChipsOn}
+            disabled={setQuickChips.isPending || !user?.id}
+            onChange={(v) =>
+              setQuickChips.mutate(v, {
+                onSuccess: () =>
+                  toast(v ? "Szybkie akcje włączone." : "Szybkie akcje wyłączone.", "success"),
+                onError: () => toast("Nie udało się zapisać ustawienia.", "danger"),
+              })
+            }
+          />
+        </section>
+
+        <section className="lg:col-span-2">
           <SectionHead>Powiadomienia</SectionHead>
           <div className="grid gap-2 lg:grid-cols-2">
             <TelegramConnect />
@@ -142,6 +169,52 @@ function SectionHead({ children }: { children: React.ReactNode }) {
     <div className="mb-2.5 mt-4 flex items-center gap-2.5 font-ui text-[10.5px] font-bold uppercase tracking-[0.2em] text-ember">
       {children}
       <span className="h-px flex-1 bg-line-soft" />
+    </div>
+  );
+}
+
+// #1215 — wiersz z przełącznikiem (per-user toggle chipów LLM).
+function ToggleRow({
+  icon: I,
+  title,
+  sub,
+  checked,
+  disabled,
+  onChange,
+}: {
+  icon: Icon;
+  title: string;
+  sub: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3.5 rounded-md border border-line-soft bg-surface px-3.5 py-3">
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-line bg-bg text-text-2">
+        <I size={18} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-ui text-body font-semibold text-text">{title}</span>
+        <span className="block truncate font-ui text-micro text-text-3">{sub}</span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={title}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative h-6 w-11 shrink-0 rounded-pill border transition-colors disabled:opacity-50 ${
+          checked ? "border-line-ember bg-ember/60" : "border-line bg-bg"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-pill bg-text transition-all ${
+            checked ? "left-[22px]" : "left-0.5"
+          }`}
+        />
+      </button>
     </div>
   );
 }

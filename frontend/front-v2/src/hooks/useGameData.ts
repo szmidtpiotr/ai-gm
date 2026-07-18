@@ -469,6 +469,29 @@ export function useLlmSettings(userId: number | undefined) {
   });
 }
 
+// #1215 — per-user toggle chipów szybkich akcji GENEROWANYCH przez LLM.
+// Wpływa TYLKO na chipy source==="llm"; regułowe (podróż/odpoczynek) zostają.
+export function useQuickChipsPref(userId: number | undefined) {
+  return useQuery({
+    queryKey: ["quick-chips-pref", userId],
+    enabled: !!userId,
+    queryFn: () =>
+      apiFetch<{ quick_chips: boolean }>(`/users/${userId}/preferences`),
+  });
+}
+
+export function useSetQuickChipsPref(userId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiFetch<{ ok: boolean; quick_chips: boolean }>(
+        `/users/${userId}/preferences/quick-chips`,
+        { method: "PUT", body: { enabled } },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-chips-pref", userId] }),
+  });
+}
+
 export function useChronicle(userId: number | undefined) {
   return useQuery({
     queryKey: ["chronicle", userId],
