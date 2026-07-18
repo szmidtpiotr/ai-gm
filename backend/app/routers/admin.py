@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -2017,6 +2017,88 @@ def admin_delete_enemy(key: str, req: EnemyDeleteReq, _: None = Depends(require_
         raise HTTPException(status_code=404, detail="Enemy not found") from None
     except PermissionError:
         raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+
+
+# ── #1192 FAZA TW — towarzysze podróży + wierzchowce (admin CRUD) ────────────
+def _companions_conn() -> sqlite3.Connection:
+    import sqlite3 as _sq
+    from app.services.companion_service import DB_PATH as _CDB
+    c = _sq.connect(_CDB)
+    c.row_factory = _sq.Row
+    return c
+
+
+def _map_companion_err(e: ValueError) -> HTTPException:
+    m = str(e)
+    codes = {
+        "companion_exists": (409, "Companion key already exists"),
+        "companion_not_found": (404, "Companion not found"),
+        "invalid_key": (422, "key must be lowercase_snake_case, 1-40 chars"),
+        "invalid_type": (422, "type must be mount, hireling or animal"),
+        "invalid_hp_base": (422, "hp_base must be >= 1"),
+        "invalid_attack_json": (422, "attack_json must be valid JSON"),
+        "invalid_passive_json": (422, "passive_json must be valid JSON"),
+    }
+    code, msg = codes.get(m, (422, "Invalid companion payload"))
+    return HTTPException(status_code=code, detail=msg)
+
+
+@router.get("/admin/companions")
+def admin_companions(_: None = Depends(require_admin_token)):
+    from app.services import companion_service as _cmp
+    conn = _companions_conn()
+    try:
+        return {"items": _cmp.admin_list(conn)}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/companions")
+async def admin_create_companion(request: Request, _: None = Depends(require_admin_token)):
+    from app.services import companion_service as _cmp
+    payload = await request.json()
+    conn = _companions_conn()
+    try:
+        return {"item": _cmp.admin_create(conn, payload)}
+    except ValueError as e:
+        raise _map_companion_err(e) from None
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/companions/{key}")
+async def admin_patch_companion(key: str, request: Request, _: None = Depends(require_admin_token)):
+    from app.services import companion_service as _cmp
+    payload = await request.json()
+    conn = _companions_conn()
+    try:
+        return {"item": _cmp.admin_update(conn, key, payload)}
+    except ValueError as e:
+        raise _map_companion_err(e) from None
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/companions/{key}")
+def admin_delete_companion(key: str, _: None = Depends(require_admin_token)):
+    from app.services import companion_service as _cmp
+    conn = _companions_conn()
+    try:
+        return {"ok": True, **_cmp.admin_delete(conn, key)}
+    except ValueError as e:
+        raise _map_companion_err(e) from None
+    finally:
+        conn.close()
+
+
+@router.get("/admin/campaigns/{campaign_id}/companions")
+def admin_campaign_companions(campaign_id: int, _: None = Depends(require_admin_token)):
+    from app.services import companion_service as _cmp
+    conn = _companions_conn()
+    try:
+        return {"items": _cmp.campaign_companions(conn, campaign_id)}
+    finally:
+        conn.close()
 
 
 @router.get("/admin/npcs")

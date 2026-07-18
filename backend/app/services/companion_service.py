@@ -493,6 +493,112 @@ def resolve_mount_escape(
     return result
 
 
+# ── admin CRUD (TW10) ───────────────────────────────────────────────────────
+
+_COMPANION_TYPES = ("mount", "hireling", "animal")
+_COMPANION_COLS = (
+    "key", "label", "type", "hp_base", "attack_json", "daily_cost", "buy_cost",
+    "upkeep_cost", "passive_json", "region_tags", "description", "note", "is_active",
+)
+
+
+def admin_list(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM game_config_companions ORDER BY type, COALESCE(buy_cost, 9999), key"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _validate_admin_payload(p: dict, *, require_key: bool = True) -> None:
+    import re as _re
+    if require_key:
+        key = str(p.get("key") or "").strip()
+        if not _re.match(r"^[a-z0-9_]{1,40}$", key):
+            raise ValueError("invalid_key")
+    if "type" in p and p["type"] is not None and str(p["type"]) not in _COMPANION_TYPES:
+        raise ValueError("invalid_type")
+    if p.get("hp_base") is not None and int(p["hp_base"]) < 1:
+        raise ValueError("invalid_hp_base")
+    for jf in ("attack_json", "passive_json"):
+        v = p.get(jf)
+        if v:
+            try:
+                json.loads(v)
+            except (ValueError, TypeError):
+                raise ValueError(f"invalid_{jf}")
+
+
+def admin_create(conn: sqlite3.Connection, payload: dict) -> dict:
+    _validate_admin_payload(payload, require_key=True)
+    key = str(payload["key"]).strip()
+    exists = conn.execute(
+        "SELECT 1 FROM game_config_companions WHERE key = ?", (key,)
+    ).fetchone()
+    if exists:
+        raise ValueError("companion_exists")
+    vals = {c: payload.get(c) for c in _COMPANION_COLS}
+    vals["key"] = key
+    vals["type"] = vals.get("type") or "hireling"
+    vals["hp_base"] = int(vals.get("hp_base") or 10)
+    # NOT NULL DEFAULT 0 columns — never pass NULL.
+    vals["daily_cost"] = int(vals.get("daily_cost") or 0)
+    vals["upkeep_cost"] = int(vals.get("upkeep_cost") or 0)
+    vals["is_active"] = 1 if vals.get("is_active", 1) in (1, True, "1", None) else 0
+    cols = list(_COMPANION_COLS)
+    conn.execute(
+        f"INSERT INTO game_config_companions ({','.join(cols)}, created_by) "
+        f"VALUES ({','.join('?' for _ in cols)}, 'admin')",
+        [vals[c] for c in cols],
+    )
+    conn.commit()
+    return _catalog(conn, key) or vals
+
+
+def admin_update(conn: sqlite3.Connection, key: str, payload: dict) -> dict:
+    row = conn.execute(
+        "SELECT 1 FROM game_config_companions WHERE key = ?", (key,)
+    ).fetchone()
+    if not row:
+        raise ValueError("companion_not_found")
+    _validate_admin_payload(payload, require_key=False)
+    fields = [c for c in _COMPANION_COLS if c != "key" and c in payload]
+    if not fields:
+        return _catalog(conn, key) or {}
+    conn.execute(
+        f"UPDATE game_config_companions SET {', '.join(f'{c}=?' for c in fields)}, "
+        f"updated_at=datetime('now') WHERE key = ?",
+        [payload[c] for c in fields] + [key],
+    )
+    conn.commit()
+    return dict(conn.execute(
+        "SELECT * FROM game_config_companions WHERE key = ?", (key,)
+    ).fetchone())
+
+
+def admin_delete(conn: sqlite3.Connection, key: str) -> dict:
+    row = conn.execute(
+        "SELECT 1 FROM game_config_companions WHERE key = ?", (key,)
+    ).fetchone()
+    if not row:
+        raise ValueError("companion_not_found")
+    conn.execute("DELETE FROM game_config_companions WHERE key = ?", (key,))
+    conn.commit()
+    return {"deleted": key}
+
+
+def campaign_companions(conn: sqlite3.Connection, campaign_id: int) -> list[dict]:
+    """TW10 monitor: aktywni towarzysze wszystkich postaci w kampanii."""
+    rows = conn.execute(
+        "SELECT id FROM characters WHERE campaign_id = ?", (campaign_id,)
+    ).fetchall()
+    out: list[dict] = []
+    for r in rows:
+        for c in get_active_companions(conn, int(r["id"])):
+            c["character_id"] = int(r["id"])
+            out.append(c)
+    return out
+
+
 _ENEMY_TIER_INT = {"weak": 1, "standard": 2, "elite": 3, "boss": 4}
 
 
