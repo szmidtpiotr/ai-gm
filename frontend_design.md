@@ -1,7 +1,8 @@
 # frontend_design.md — System projektowania nowego frontendu gracza (AI-GM)
 
 > **Status:** żywy dokument. Powstał 2026-06-17.
-> **Zakres:** TYLKO frontend gracza (`frontend/front/`). Admin panel = osobna sprawa, NIE dotyczy tego pliku.
+> **Zakres:** TYLKO frontend gracza — dziś **ŻAR** (`frontend/front-v2/`). Admin panel = osobna sprawa, NIE dotyczy tego pliku.
+> **Uwaga 2026-07-18:** legacy `frontend/front/` został USUNIĘTY z repo (archiwum: tag `archive/frontend-front-legacy-20260718` + tar na `.61`). Wzmianki o `frontend/front/` w treści poniżej są historyczne — opisują stan sprzed migracji na ŻAR.
 > **Cel:** przygotować kompletny, dwufazowy prompt dla **Claude Design** tak, aby zbudować nowy UI w React, który odwzorowuje **1:1** każdą funkcjonalność obecnego frontendu — i żeby migracja gotowego projektu z chmury była przyjemna i prosta.
 
 ---
@@ -335,7 +336,7 @@ Zasady:
 
 ## 9. Konwencja aktualizacji (reguła living-doc)
 
-**Reguła:** każda zmiana w `frontend/front/` (nowy ekran / modal / komponent / system) → dopisz lub zaktualizuj wpis w **Feature Ledger** (sekcja 7).
+**Reguła:** każda zmiana w `frontend/front-v2/` (nowy ekran / modal / komponent / system) → dopisz lub zaktualizuj wpis w **Feature Ledger** (sekcja 7).
 
 **Format wpisu:**
 

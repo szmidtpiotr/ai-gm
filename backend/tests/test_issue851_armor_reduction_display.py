@@ -1,65 +1,20 @@
 """TDD: Issue #851 — wyświetlanie redukcji pancerza na karcie obrażeń.
 
-Dwa poziomy testów:
-1. Inspekcja kodu JS (RED→GREEN przy fixie): buildDamageStage musi zwracać armorReduction
-   i showDmg musi go wyświetlać jako "− N Pancerz" w formule karty obrażeń.
-2. Backend kontrakt (GREEN od razu): apply_defense_model zwraca armor_reduction gdy ac_base > 10,
-   a równanie rozliczenia zachodzi dla prostego ataku (dokumentuje niezmiennik API).
+Backend kontrakt: apply_defense_model zwraca armor_reduction gdy ac_base > 10,
+a równanie rozliczenia zachodzi dla prostego ataku (dokumentuje niezmiennik API).
+
+(Testy inspekcji JS starego UI usunięte — legacy frontend/front/ skasowany
+2026-07-18; ŻAR (front-v2) jest jedynym UI gracza.)
 """
 import sys
-import re
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.services.combat_service import (  # noqa: E402
-    ARMOR_REDUCTION_OFFSET,
     apply_defense_model,
     _armor_value,
 )
-
-# Ścieżka do app.js — testy inspekcji kodu JS.
-# W kontenerze: docker cp frontend/front/js/app.js ai-gm-dev-backend-1:/app/tests/app.js
-_APP_JS = Path(__file__).resolve().parent / "app.js"
-
-
-# ─── FAZA RED: inspekcja kodu JS ────────────────────────────────────────────
-
-def test_buildDamageStage_returns_armorReduction():
-    """buildDamageStage() musi zwracać armorReduction z data.armor_reduction.
-
-    Bez tego pola frontend nigdy nie dotrze do informacji o pancerzu wroga
-    i nie może wyświetlić '− N Pancerz' na karcie obrażeń (#851).
-    """
-    content = _APP_JS.read_text(encoding="utf-8")
-    match = re.search(
-        r'function buildDamageStage\(data\)(.*?)(?=^function |\Z)',
-        content, re.DOTALL | re.MULTILINE
-    )
-    assert match, "buildDamageStage nie znaleziona w app.js"
-    func_body = match.group(1)
-    assert "armorReduction" in func_body, (
-        "buildDamageStage nie zawiera 'armorReduction' — fix #851 wymaga dodania "
-        "armorReduction: Number(data.armor_reduction ?? 0) do obiektu zwrotnego"
-    )
-
-
-def test_showDmg_displays_pancerz_label():
-    """runDamageStage showDmg musi wyświetlać '− N Pancerz' gdy armorReduction > 0.
-
-    Gracz musi widzieć pełne równanie: 🎲 1 + 3 − 1 Pancerz = 3
-    zamiast skróconego: 🎲 1 + 3 = 3 (brakuje wyjaśnienia dlaczego suma się nie zgadza).
-    """
-    content = _APP_JS.read_text(encoding="utf-8")
-    # showDmg jest wewnątrz runDamageStage, szukamy 'Pancerz' w tej okolicy (linia z armorReduction)
-    assert "armorReduction" in content and (
-        "Pancerz" in content.split("runDamageStage")[1].split("runAttackStage")[0]
-        if "runDamageStage" in content and "runAttackStage" in content
-        else "Pancerz" in content
-    ), (
-        "app.js nie wyświetla 'Pancerz' w formule obrażeń — "
-        "fix #851 wymaga: if (ds.armorReduction) line += ` − ${ds.armorReduction} Pancerz`"
-    )
 
 
 # ─── Backend kontrakt (dokumentacja niezmiennika API) ──────────────────────

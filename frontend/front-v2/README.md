@@ -2,7 +2,8 @@
 
 Kierunek wizualny **ŻAR** (frontend_design.md §5–6). Stack: React 18 + Vite + TS +
 Tailwind + shadcn/ui (Radix) + TanStack Query + Zustand + React Router.
-Stary `frontend/front/` zostaje jako referencja 1:1 — **nie ruszać**.
+Stary `frontend/front/` został usunięty 2026-07-18 (archiwum: tag
+`archive/frontend-front-legacy-20260718` + tar w `/home/piotrszmidt/ai-gm-archive/` na `.61`).
 
 ## Serwowanie
 

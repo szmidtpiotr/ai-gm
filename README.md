@@ -64,7 +64,7 @@ A browser-based single-player RPG where a Large Language Model acts as the Game 
 
 ```
 Player Browser
-  └─ /front/         Player UI (login → hero → campaigns/dungeons → gameplay)
+  └─ /graj/          Player UI ŻAR (front-v2: login → hero → campaigns/dungeons → gameplay)
   └─ /admin2/        Admin Panel v2 (modular JS sections)
 
 Backend (FastAPI)

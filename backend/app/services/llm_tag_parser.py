@@ -149,7 +149,7 @@ def strip_all_mechanic_tags(text: Optional[str]) -> str:
     """Remove every [ALLCAPS_TAG: ...] from text.
 
     Covers all known (and future) mechanic tags emitted by the LLM.
-    Mirrors the JS stripMechanicTags() in frontend/front/js/app.js.
+    Mirrors the JS-side mechanic-tag stripping in the ŻAR frontend (front-v2).
     """
     if not text:
         return ''

@@ -90,7 +90,7 @@ Global provider/credentials edited from `Admin Panel → Accounts`. Player UI "C
 
 ### Frontend — Two UIs
 
-**Player UI** (`frontend/front/index.html` + `frontend/front/js/`): Login gate → gameplay. Standard RPG turn flow.
+**Player UI = ŻAR** (`frontend/front-v2/`, React + Vite + Tailwind, served at `/graj/`): the ONLY player frontend. Build on `.61` (`sudo npm run build`), `dist/` is gitignored and bind-mounted. The legacy player UI (`frontend/front/`) was **deleted 2026-07-18** (archived: git tag `archive/frontend-front-legacy-20260718` + tar on `.61` at `/home/piotrszmidt/ai-gm-archive/`). The Rules Book survived the deletion and now lives at `frontend/rules/` (served at `/rules/`).
 
 **Modular Admin Shell** (`frontend/admin/`) — active admin interface at `/admin/`:
 - Entry: `index.html` — loads sidebar nav, mounts section ES modules dynamically
@@ -253,8 +253,8 @@ Per `docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4`. Each combatant has `zone: 
 - DB change: write migration in `migrations_admin.py` → test on DB copy → update models if needed.
 - Frontend change: edit under `frontend/` → verify in browser at `https://aigm-dev.studio-colorbox.com/` → check console.
 - JS version strings in imports (`?v=N`) must be bumped when a shared module changes to bust browser cache.
-- **Player-UI ledger:** any change under `frontend/front/` (new/changed screen, modal, gameplay component, or system) → add or update the matching `F-NN` entry in `frontend_design.md` (Section 7, Feature Ledger), per the convention in Section 9. Keeps the redesign target 1:1 with the live player UI.
-- **Księga Zasad ledger (living document):** any change that alters **player-facing rules/mechanics** (new/changed skill, spell, condition, combat rule, stat/DC change) → update the living Rules Book `frontend/front/rules/index.html` (served at `/rules/`) in the **same PR**. Checklist: chapter prose + example · test/entry card · gloss tooltip on new terms + "Pełny opis →" link · TOC entry + anchor `id` · illustration via Juggernaut-XL on `.170` if a scene/skill/spell. The Księga **describes, never defines** — source of truth stays `backend/prompts/system_prompt.txt`, `game_mechanics.md`, engine code, `game_config_*`. Skip when the change does not touch player rules. Per issue #868.
+- **Player-UI ledger:** any change under `frontend/front-v2/` (new/changed screen, modal, gameplay component, or system) → add or update the matching `F-NN` entry in `frontend_design.md` (Section 7, Feature Ledger), per the convention in Section 9. Keeps the ledger 1:1 with the live player UI.
+- **Księga Zasad ledger (living document):** any change that alters **player-facing rules/mechanics** (new/changed skill, spell, condition, combat rule, stat/DC change) → update the living Rules Book `frontend/rules/index.html` (served at `/rules/`) in the **same PR**. Checklist: chapter prose + example · test/entry card · gloss tooltip on new terms + "Pełny opis →" link · TOC entry + anchor `id` · illustration via Juggernaut-XL on `.170` if a scene/skill/spell. The Księga **describes, never defines** — source of truth stays `backend/prompts/system_prompt.txt`, `game_mechanics.md`, engine code, `game_config_*`. Skip when the change does not touch player rules. Per issue #868.
 
 ### Implementation record issues (mandatory)
 
@@ -295,7 +295,7 @@ This applies to every implementation, no matter how small.
 - Campaign monitor: `frontend/admin/sections/campaigns.js`
 - Forge (asset builder): `frontend/admin/sections/forge.js`
 - All admin styles: `frontend/admin/layout.css`
-- Player UI: `frontend/front/index.html`, `frontend/front/js/app.js`, `frontend/front/css/styles.css`
+- Player UI (ŻAR): `frontend/front-v2/src/` (React), entry `frontend/front-v2/index.html`; Rules Book: `frontend/rules/index.html`
 - Compose: `docker-compose.yml` (PROD), `docker-compose.dev.yml` (DEV)
 - Planned work: `to_do_ideas.md`
 - Game mechanics reference (stats, combat, skills, DC, archetypes): `game_mechanics.md`

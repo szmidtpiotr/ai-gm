@@ -33,13 +33,7 @@ def test_wizard_race_default_human():
 
 
 def test_wizard_steps_now_five():
-    """WIZARD_STEPS has 5 entries after adding Krok 0 (race)."""
-    import subprocess
-    result = subprocess.run(
-        ["grep", "-c", "Krok.*z 5", "/app/../../frontend/front/js/app.js"],
-        capture_output=True, text=True
-    )
-    # If file not accessible via container path, just check CharacterCreateRequest supports race
+    """Backend contract for wizard race step (legacy app.js grep removed — old UI deleted 2026-07-18)."""
     from app.api.characters import CharacterCreateRequest
     req = CharacterCreateRequest(
         user_id=1, name="X", system_id="fantasy",

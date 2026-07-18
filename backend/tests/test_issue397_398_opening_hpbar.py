@@ -1,24 +1,17 @@
-"""TDD: Issue #397 (opening scene zawsze w lochu) + #398 (header HP bar 50% mimo full).
+"""TDD: Issue #397 (opening scene zawsze w lochu).
 
 #397 — backend/prompts/system_prompt.txt OTWARCIE SESJI:
   - NIE może już zabraniać tawern/miast (stara reguła "NIE otwieraj w tawernie")
   - MUSI zawierać jawny zakaz domyślnego tropu "budzisz się w zimnym miejscu"
   - MUSI dopuszczać miasta/tawerny/lokacje wśród ludzi
 
-#398 — frontend/front/js/app.js:
-  - enterGame() MUSI wołać updateHeaderStats() (ustawia tekst + pasek razem)
-  - martwy lokalny `sheet` usunięty (nie ustawiamy samego textContent bez paska)
+(#398 dotyczył app.js starego UI — testy usunięte razem z legacy frontend/front/,
+skasowanym 2026-07-18; ŻAR (front-v2) jest jedynym UI gracza.)
 """
 import os
-import re
 
-REPO = "/app"  # baked image root; prompts + frontend copied in
+REPO = "/app"  # baked image root; prompts copied in
 SYS_PROMPT = os.path.join(REPO, "prompts", "system_prompt.txt")
-# frontend is NOT in the backend image — resolve via repo path passed by mount or skip
-APP_JS_CANDIDATES = [
-    "/app/frontend/front/js/app.js",
-    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "front", "js", "app.js"),
-]
 
 
 def _read(path):
@@ -80,40 +73,4 @@ def test_opening_prioritizes_campaign_plan():
     )
 
 
-# ─── #398: enterGame calls updateHeaderStats ─────────────────────────────────
-
-def _app_js():
-    for p in APP_JS_CANDIDATES:
-        if os.path.isfile(p):
-            return _read(p)
-    return None
-
-
-def test_enter_game_updates_header_bar():
-    """enterGame() must call updateHeaderStats() so the HP bar width matches the value."""
-    js = _app_js()
-    if js is None:
-        import pytest
-        pytest.skip("app.js not mounted in backend image — verified via frontend bind mount")
-    # isolate enterGame function body
-    idx = js.find("async function enterGame(")
-    assert idx != -1, "enterGame() nie znaleziona w app.js"
-    body = js[idx: idx + 1200]
-    assert "updateHeaderStats()" in body, (
-        "enterGame() musi wołać updateHeaderStats() — inaczej pasek HP w nagłówku "
-        "zostaje ze starą szerokością (bug #398)."
-    )
-
-
-def test_enter_game_no_lone_textcontent_without_bar():
-    """enterGame() must not set characterStatsDisplay.textContent inline without the bar update."""
-    js = _app_js()
-    if js is None:
-        import pytest
-        pytest.skip("app.js not mounted in backend image")
-    idx = js.find("async function enterGame(")
-    body = js[idx: idx + 1200]
-    # the old buggy line set textContent directly; now it goes through updateHeaderStats
-    assert "characterStatsDisplay.textContent = `${hp}/${maxHp} HP`" not in body, (
-        "enterGame() nadal ustawia sam tekst HP bez aktualizacji paska — regresja #398."
-    )
+# Testy #398 (app.js starego UI) usunięte — legacy frontend/front/ skasowany 2026-07-18.

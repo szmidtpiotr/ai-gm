@@ -80,36 +80,5 @@ def test_wound_penalty_still_works_after_constants_extracted():
     assert wound_penalty(20, 100) == -4  # ≤25% → -4
 
 
-# ─── Frontend: app.js używa fetch zamiast hardkodów ──────────────────────────
-
-def _appjs_content() -> str | None:
-    """Read app.js content; return None if not accessible (e.g., inside container)."""
-    for candidate in [
-        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "front", "js", "app.js"),
-        "/home/piotrszmidt/ai-gm/frontend/front/js/app.js",
-    ]:
-        if os.path.exists(candidate):
-            with open(candidate) as f:
-                return f.read()
-    return None
-
-
-def test_frontend_appjs_fetches_wound_thresholds():
-    """app.js musi zawierać wywołanie fetch('/api/config/wound-thresholds')."""
-    content = _appjs_content()
-    if content is None:
-        pytest.skip("app.js niedostępny w tym środowisku")
-    assert "/api/config/wound-thresholds" in content, (
-        "Frontend app.js nie zawiera wywołania /api/config/wound-thresholds — "
-        "progi są nadal hardkodowane"
-    )
-
-
-def test_frontend_appjs_no_hardcoded_40pct_threshold():
-    """app.js nie powinien zawierać hardkodowanego progu 'pct <= 40' dla HP baru."""
-    content = _appjs_content()
-    if content is None:
-        pytest.skip("app.js niedostępny w tym środowisku")
-    assert "pct <= 40 && pct > 20" not in content, (
-        "Frontend nadal używa hardkodowanego progu pct<=40 w HP barze — nie zsynchronizowany z backendem"
-    )
+# Frontendowe testy statyczne (app.js starego UI) usunięte —
+# legacy frontend/front/ skasowany 2026-07-18, ŻAR (front-v2) jest jedynym UI gracza.

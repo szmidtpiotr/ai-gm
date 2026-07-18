@@ -76,49 +76,8 @@ def test_create_lobby_includes_model_id():
         pytest.skip(f"Nie można sprawdzić źródła: {e}")
 
 
-# ─── Blokery GF7 — frontend source ───────────────────────────────────────────
-
-def test_openMultiplayerLobby_uses_correct_screen_key():
-    """#935 bloker: openMultiplayerLobby() musi używać klucza 'create-lobby' (nie 'create-lobby-screen')."""
-    src_path = os.path.join(
-        os.path.dirname(__file__),
-        '../../frontend/front/js/multiplayer_ui.js'
-    )
-    if not os.path.exists(src_path):
-        pytest.skip("multiplayer_ui.js nie znaleziony")
-    with open(src_path) as f:
-        src = f.read()
-    assert "showScreen('create-lobby')" in src or 'showScreen("create-lobby")' in src, \
-        "openMultiplayerLobby() nie wywołuje showScreen('create-lobby') — fix #935 nie zaaplikowany"
-    assert "showScreen('create-lobby-screen')" not in src, \
-        "openMultiplayerLobby() nadal używa starego klucza 'create-lobby-screen' — regresja #935"
-
-
-def test_party_chat_panel_exists_in_html():
-    """#939 bloker: #party-chat-panel musi istnieć w index.html (czat party renderuje się)."""
-    html_path = os.path.join(
-        os.path.dirname(__file__),
-        '../../frontend/front/index.html'
-    )
-    if not os.path.exists(html_path):
-        pytest.skip("frontend/front/index.html nie znaleziony")
-    with open(html_path) as f:
-        html = f.read()
-    assert 'id="party-chat-panel"' in html, \
-        "#party-chat-panel nie istnieje w index.html — fix #939 nie zaaplikowany"
-
-
-def test_mp_btn_exists_in_html():
-    """#934 bloker: #mp-btn musi istnieć w index.html (kafelek Multiplayer w hubie)."""
-    html_path = os.path.join(
-        os.path.dirname(__file__),
-        '../../frontend/front/index.html'
-    )
-    if not os.path.exists(html_path):
-        pytest.skip("frontend/front/index.html nie znaleziony")
-    with open(html_path) as f:
-        html = f.read()
-    assert 'id="mp-btn"' in html, "#mp-btn nie istnieje w index.html — fix #934 nie zaaplikowany"
+# Testy źródeł frontendu (multiplayer_ui.js/index.html starego UI) usunięte —
+# legacy frontend/front/ skasowany 2026-07-18, MP żyje w ŻAR (front-v2).
 
 
 # ─── Backward compat: nie zepsuliśmy istniejących trybów ─────────────────────

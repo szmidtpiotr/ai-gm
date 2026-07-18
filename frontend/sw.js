@@ -11,8 +11,8 @@ self.addEventListener('push', function(event) {
     }
     const options = {
         body: data.body || '',
-        icon: data.icon || '/front/icon-192.png',
-        badge: data.badge || '/front/icon-72.png',
+        icon: data.icon || '/graj/icon-192.png',
+        badge: data.badge || '/graj/icon-192.png',
         data: { url: data.url || '/' },
         requireInteraction: false,
     };

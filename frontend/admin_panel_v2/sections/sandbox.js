@@ -1040,7 +1040,7 @@ function renderSheet(panel) {
   }
 
   // Track which slots are already occupied so weapons fall through to off_hand.
-  // Same algorithm as the player UI's _invPickEquipSlot (frontend/front/js/app.js).
+  // Same slot-picking algorithm as the player UI (ŻAR, front-v2).
   const occupied = { main_hand: false, off_hand: false, armor: false };
   for (const r of invList) {
     if (r.equipped && r.slot && occupied.hasOwnProperty(r.slot)) occupied[r.slot] = true;

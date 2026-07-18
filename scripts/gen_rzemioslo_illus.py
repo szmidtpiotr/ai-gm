@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """One-shot: generate the Rzemiosło chapter illustration via Juggernaut-XL v9 on .170.
-Saves to frontend/front/rules/img/ch-rzemioslo.png (1024x600, matches other chapter art)."""
+Saves to frontend/rules/img/ch-rzemioslo.png (1024x600, matches other chapter art)."""
 import base64
 import json
 import urllib.request
@@ -8,7 +8,7 @@ from pathlib import Path
 
 GEN_URL = "http://192.168.1.170:8765/generate"
 MODEL = "SDXL/Juggernaut-XL_v9.safetensors"
-OUT = Path(__file__).resolve().parent.parent / "frontend" / "front" / "rules" / "img" / "ch-rzemioslo.png"
+OUT = Path(__file__).resolve().parent.parent / "frontend" / "rules" / "img" / "ch-rzemioslo.png"
 
 STYLE = (
     "dark fantasy illustration, grimoire aesthetic, painterly oil-on-parchment, deep "

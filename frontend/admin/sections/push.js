@@ -167,7 +167,7 @@ export async function init(panel) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <div style="flex:2;min-width:180px">
             <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Ikona URL <span style="opacity:0.5">(opcjonalnie, zastąpi domyślną)</span></div>
-            <input id="push-test-icon" class="input" style="width:100%" placeholder="/front/icon-192.png" />
+            <input id="push-test-icon" class="input" style="width:100%" placeholder="/graj/icon-192.png" />
           </div>
           <div style="flex:2;min-width:180px">
             <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Obraz (baner) URL <span style="opacity:0.5">(Chrome Android)</span></div>
