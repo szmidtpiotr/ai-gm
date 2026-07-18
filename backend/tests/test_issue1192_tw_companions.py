@@ -42,9 +42,66 @@ def conn():
             safe_for_rest INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, region TEXT
         )"""
     )
+    c.execute(
+        """CREATE TABLE game_sessions (
+            id INTEGER PRIMARY KEY, campaign_id INTEGER, session_flags TEXT DEFAULT '{}'
+        )"""
+    )
+    c.execute(
+        """CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, tier TEXT)"""
+    )
     _ensure_companions_schema(c)
     _mk_char(c)
     return c
+
+
+def _seed_encounter(conn, campaign_id=7, enemy_key="wolf", tier="elite"):
+    conn.execute("UPDATE characters SET campaign_id = ? WHERE id = 1", (campaign_id,))
+    conn.execute("INSERT OR IGNORE INTO game_config_enemies (key, tier) VALUES (?, ?)",
+                 (enemy_key, tier))
+    sf = {"travel_plan": {"interrupt_reason": "encounter", "combat_seen": False,
+                          "enemy_key": enemy_key}}
+    conn.execute("INSERT INTO game_sessions (id, campaign_id, session_flags) VALUES (1, ?, ?)",
+                 (campaign_id, json.dumps(sf)))
+    conn.commit()
+
+
+def test_tw7_escape_no_encounter(conn):
+    conn.execute("INSERT INTO game_sessions (id, campaign_id, session_flags) VALUES (1, 7, '{}')")
+    cs.buy(conn, 1, "horse")
+    conn.execute("UPDATE characters SET campaign_id = 7 WHERE id = 1")
+    with pytest.raises(ValueError, match="no_encounter"):
+        cs.resolve_travel_escape(conn, 7, 1)
+
+
+def test_tw7_escape_no_mount(conn):
+    _seed_encounter(conn)
+    with pytest.raises(ValueError, match="no_mount"):
+        cs.resolve_travel_escape(conn, 7, 1)
+
+
+def test_tw7_escape_success_skips_combat(conn, monkeypatch):
+    _seed_encounter(conn, tier="weak")  # DC 12, easy
+    cs.buy(conn, 1, "horse")
+    conn.execute("UPDATE characters SET campaign_id = 7 WHERE id = 1")
+    # force a guaranteed success
+    monkeypatch.setattr(cs, "roll_d20", lambda *a, **k: 20)
+    res = cs.resolve_travel_escape(conn, 7, 1)
+    assert res["escaped"] is True
+    assert res["enemy_tier"] == 1  # weak
+    sf = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=1").fetchone()[0])
+    assert sf["travel_plan"]["combat_seen"] is True  # combat will be skipped
+
+
+def test_tw7_escape_fail_keeps_combat(conn, monkeypatch):
+    _seed_encounter(conn, tier="boss")  # DC 18
+    cs.buy(conn, 1, "horse")
+    conn.execute("UPDATE characters SET campaign_id = 7 WHERE id = 1")
+    monkeypatch.setattr(cs, "roll_d20", lambda *a, **k: 2)  # low → fail
+    res = cs.resolve_travel_escape(conn, 7, 1)
+    assert res["escaped"] is False
+    sf = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=1").fetchone()[0])
+    assert sf["travel_plan"]["combat_seen"] is False  # combat still happens
 
 
 # ── TW1 schema + seeds ──────────────────────────────────────────────────────

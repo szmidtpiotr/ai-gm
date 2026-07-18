@@ -330,6 +330,7 @@ AVAILABLE_CMDS = [
     "combat end",
     "quest add",
     "quest complete",
+    "grant companion",
     "show state",
 ]
 
@@ -785,6 +786,18 @@ def admin_cheat(
                 "quests_completed": sheet.get("quests_completed") or [],
                 "inventory": inventory,
             }
+
+        elif cmd == "grant companion":
+            # #1192 FAZA TW: przyznaj towarzysza/wierzchowca bez kosztu (własny).
+            from app.services import companion_service as _cmp
+            comp_key = str(req.key or req.value or "").strip()
+            if not comp_key:
+                raise HTTPException(status_code=422, detail={"error": "missing_companion_key"})
+            try:
+                granted = _cmp.grant_companion(conn, character_id, comp_key, source="admin")
+                result = {"granted": granted}
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail={"error": str(e)}) from e
 
         else:
             raise HTTPException(

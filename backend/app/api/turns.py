@@ -9698,6 +9698,19 @@ def _travel_notice_for(
         enemy_notice = _encounter_enemy_notice(conn, campaign_id, tp.get("enemy_key"))
         if enemy_notice:
             notice.update(enemy_notice)
+        # #1192 TW7: pokaż przycisk „Uciekaj konno" tylko gdy gracz ma najedzonego
+        # wierzchowca z możliwością ucieczki.
+        notice["can_escape_mounted"] = False
+        if conn is not None and campaign_id is not None:
+            try:
+                from app.services import companion_service as _cmp
+                _ch = conn.execute(
+                    "SELECT id FROM characters WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+                ).fetchone()
+                if _ch:
+                    notice["can_escape_mounted"] = _cmp.can_escape_mounted(conn, int(_ch["id"]))
+            except Exception:
+                pass
     return notice
 
 

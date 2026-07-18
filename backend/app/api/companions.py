@@ -110,3 +110,22 @@ def dismiss_companion(character_id: int, body: DismissRequest):
         raise _map_error(e) from e
     finally:
         conn.close()
+
+
+class MountEscapeRequest(BaseModel):
+    character_id: int
+
+
+@router.post("/campaigns/{campaign_id}/travel/escape-mounted")
+def escape_mounted(campaign_id: int, body: MountEscapeRequest):
+    """TW7: próba ucieczki konno z aktywnego spotkania w podróży (test Jeździectwa).
+    Sukces = walki nie ma; porażka = walka ruszy przy TRAVEL_RESUME."""
+    conn = _get_conn()
+    try:
+        data = companion_service.resolve_travel_escape(conn, campaign_id, body.character_id)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        code = {"no_encounter": 409, "no_mount": 400}.get(str(e), 400)
+        raise HTTPException(status_code=code, detail=str(e)) from e
+    finally:
+        conn.close()

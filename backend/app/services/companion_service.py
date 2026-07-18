@@ -493,6 +493,56 @@ def resolve_mount_escape(
     return result
 
 
+_ENEMY_TIER_INT = {"weak": 1, "standard": 2, "elite": 3, "boss": 4}
+
+
+def resolve_travel_escape(
+    conn: sqlite3.Connection, campaign_id: int, character_id: int
+) -> dict:
+    """TW7: rozlicz próbę ucieczki konno z aktywnego spotkania w podróży.
+
+    Czyta `session_flags.travel_plan` (pending encounter), mapuje tier wroga
+    TEXT→int, sprawdza `can_escape_mounted`, rozlicza `resolve_mount_escape`.
+    Sukces → stempluje `travel_plan.combat_seen=True` (następny TRAVEL_RESUME
+    NIE wstrzyknie [COMBAT_START] — walki nie ma). Porażka → nie rusza planu
+    (walka ruszy normalnie). Raises ValueError: no_encounter | no_mount."""
+    row = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    sf = json.loads((row["session_flags"] if row else None) or "{}")
+    tp = sf.get("travel_plan") or {}
+    enemy_key = tp.get("enemy_key")
+    if not (tp.get("interrupt_reason") == "encounter" and not tp.get("combat_seen") and enemy_key):
+        raise ValueError("no_encounter")
+
+    if not can_escape_mounted(conn, character_id):
+        raise ValueError("no_mount")
+
+    tier_txt = "standard"
+    er = conn.execute(
+        "SELECT tier FROM game_config_enemies WHERE key = ? LIMIT 1", (enemy_key,)
+    ).fetchone()
+    if er and er["tier"]:
+        tier_txt = str(er["tier"]).strip().lower()
+    tier = _ENEMY_TIER_INT.get(tier_txt, 2)
+
+    res = resolve_mount_escape(conn, character_id, tier)
+    res["enemy_key"] = enemy_key
+    res["enemy_tier"] = tier
+
+    if res["escaped"]:
+        tp["combat_seen"] = True
+        sf["travel_plan"] = tp
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(sf, ensure_ascii=False), row["id"]),
+        )
+        conn.commit()
+        _emit("Spinasz wierzchowca i wyrywasz się przed walką.")
+    return res
+
+
 def _roll_simple(dice: str) -> int:
     """Minimal NdM roller for self-damage (e.g. '1d4'). No modifiers."""
     import random as _r
