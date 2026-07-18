@@ -5098,6 +5098,20 @@ def initiate_combat(
             combatants.append(enemy_c)
             turn_slots.append((slug, init_e, idx))
 
+        # #1192 FAZA TW: aktywny towarzysz bojowy (najemnik/pies) dołącza po stronie
+        # gracza jako osobny kombatant (type='companion'). Jego tura jest ROZWIĄZYWANA
+        # SERWEROWO w _advance_turn_impl (auto-atak), więc current_turn nigdy nie zatrzyma
+        # się na nim — front (który każdą nie-gracza turę kieruje do /enemy-turn) się nie zawiesi.
+        try:
+            from app.services import companion_service as _cmp
+            _comp = _cmp.build_companion_combatant(conn, int(character_id))
+            if _comp:
+                _comp["initiative_roll"] = roll_d20() + 1
+                combatants.append(_comp)
+                turn_slots.append((_comp["id"], _comp["initiative_roll"], idx + 1))
+        except Exception as _comp_err:
+            logger.warning("companion_combat_inject_failed", error=str(_comp_err))
+
         # Sort: highest initiative first; ties: player wins (lower tie-break value sorts first after negating init)
         turn_slots.sort(key=lambda t: (-t[1], 0 if t[0] == "player" else 1))
         # LB2: first combat of the dungeon run — hero always acts first (soft-init)
@@ -5106,7 +5120,15 @@ def initiate_combat(
             if player_idx > 0:
                 turn_slots.insert(0, turn_slots.pop(player_idx))
         turn_order = [t[0] for t in turn_slots]
-        current = turn_order[0] if turn_order else "player"
+        # #1192 FAZA TW: current_turn na starcie NIE może być towarzyszem (front
+        # kierowałby jego turę do /enemy-turn → 400 → zawieszenie). Towarzysz i tak
+        # zadziała, gdy advance_turn wróci do jego slotu (rozwiązanie serwerowe).
+        _first_comb = {str(c.get("id")): c for c in combatants}
+        current = next(
+            (tid for tid in turn_order
+             if _first_comb.get(tid, {}).get("type") != "companion"),
+            turn_order[0] if turn_order else "player",
+        )
 
         # #1210: Strach/Groza przy wejściu do walki — wróg z fear_aura wymusza rzut
         # (czysty d20, „los") vs fear_dc; porażka nakłada frightened na gracza PRZED zapisem.
@@ -5440,6 +5462,47 @@ def _resolve_summon_spell_in_combat(
     )
     out["combat_state"] = load_combat_snapshot(campaign_id)
     return out
+
+
+def _resolve_companion_attack_inline(
+    conn, row, campaign_id: int, combatants: list[dict], comp: dict
+) -> None:
+    """#1192 FAZA TW: auto-atak towarzysza bojowego (najemnik/pies) w jego turze.
+
+    Rozwiązywany serwerowo podczas advance_turn (patrz _advance_turn_impl), więc
+    NIE commit'uje ani nie persystuje sam — caller robi to razem z pointerem tury.
+    Wzorzec ataku skopiowany z resolve_summon_turn: najbliższy żywy wróg (preferuj
+    strefę), d20 + attack_bonus vs defense, kość obrażeń. Bez lifetime (trwały)."""
+    _ensure_zones(combatants)
+    target = _b15_pick_summon_target(combatants, comp)
+    if target is None:
+        return
+    raw = roll_d20()
+    atk = int(comp.get("attack_bonus") or 0)
+    total = raw + atk
+    tgt_ac = int(target.get("defense", 10) or 10)
+    hit = raw == 20 or (raw != 1 and total >= tgt_ac)
+    dmg = 0
+    if hit:
+        dmg = roll_damage_dice((comp.get("damage_dice") or "1d4").strip().lower(), 0)
+        target["hp_current"] = max(0, int(target.get("hp_current", 0) or 0) - dmg)
+    try:
+        cid = int(row["id"])
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor=str(comp.get("id")), event_type="companion_attack",
+            roll_value=int(total), damage=int(dmg),
+            hp_after=int(target.get("hp_current", 0) or 0),
+            target_id=str(target.get("id")), target_name=str(target.get("name") or target.get("id")),
+            hit=bool(hit),
+            narrative=json.dumps(
+                {"companion_id": str(comp.get("id")), "companion_name": str(comp.get("name") or "Towarzysz"),
+                 "attack_roll": int(total), "raw_d20": int(raw), "damage": int(dmg), "hit": bool(hit)},
+                ensure_ascii=False),
+        )
+    except Exception as _log_err:
+        logger.warning("companion_attack_log_failed", error=str(_log_err))
 
 
 def resolve_summon_turn(campaign_id: int) -> dict[str, Any]:
@@ -9229,6 +9292,27 @@ def _persist_combatants_and_maybe_end(
         )
     if str(status) == "ended":
         _log_combat_end_event(conn, row, str(ended_reason or "ended"))
+        _sync_companions_to_db(conn, row, combatants)
+
+
+def _sync_companions_to_db(conn: sqlite3.Connection, row: sqlite3.Row, combatants: list[dict]) -> None:
+    """#1192 FAZA TW: przy końcu walki zapisz HP towarzyszy z combatants →
+    character_companions (hp<=0 = trwała śmierć). REUSE otwartego conn — otwieranie
+    drugiego połączenia w trakcie niezcommitowanej transakcji = 'database is locked'
+    (combat DB == companion DB, ten sam plik /data/ai_gm.db; gotcha #1390)."""
+    comps = [c for c in combatants if str(c.get("type")) == "companion"]
+    if not comps:
+        return
+    try:
+        from app.services import companion_service as _cmp
+        ch_id = int(row["character_id"])
+        for c in comps:
+            rid = c.get("companion_row_id")
+            if rid is None:
+                continue
+            _cmp.sync_companion_hp(conn, ch_id, int(rid), int(c.get("hp_current", 0) or 0))
+    except Exception as e:
+        logger.warning("companion_hp_sync_failed", error=str(e))
 
 
 def get_current_actor(conn: sqlite3.Connection | None, campaign_id: int) -> str | None:
@@ -9492,17 +9576,47 @@ def _advance_turn_impl(campaign_id: int) -> str:
 
         cur = row["current_turn"]
         rnd = int(row["round"] or 1)
-        cur_s = str(cur)
-        if cur_s in living:
-            i = living.index(cur_s)
-        else:
-            i = -1
-        next_i = (i + 1) % len(living)
-        new_turn = living[next_i]
         first_in_order = order[0] if order else living[0]
-        if str(cur) != str(first_in_order) and str(new_turn) == str(first_in_order):
-            rnd += 1
 
+        def _advance_one(cur_id: str, rnd_in: int) -> tuple[str, int]:
+            cs = str(cur_id)
+            ii = living.index(cs) if cs in living else -1
+            nxt = living[(ii + 1) % len(living)]
+            r2 = rnd_in + 1 if (str(cur_id) != str(first_in_order)
+                                and str(nxt) == str(first_in_order)) else rnd_in
+            return str(nxt), r2
+
+        new_turn, rnd = _advance_one(cur, rnd)
+
+        # #1192 FAZA TW: rozwiąż tury towarzyszy SERWEROWO — auto-atak, po czym przejdź
+        # dalej. current_turn nie może zatrzymać się na 'companion_*' (front kieruje każdą
+        # nie-gracza turę do /enemy-turn, który 400-uje na nie-wrogu → zawieszenie kolejki).
+        _guard = 0
+        while _guard < len(living) + 2:
+            _c = _find_combatant(combatants, new_turn)
+            if not _c or _c.get("type") != "companion":
+                break
+            _guard += 1
+            _resolve_companion_attack_inline(conn, row, campaign_id, combatants, _c)
+            if _all_enemies_dead(combatants):
+                _persist_combatants_and_maybe_end(
+                    conn, row, combatants, status="ended", ended_reason="victory")
+                conn.commit()
+                try:
+                    set_world_state_flags(campaign_id, scene_enemies=[])
+                except Exception:
+                    pass
+                try:
+                    from app.services.dungeon_tile_service import mark_node_cleared
+                    mark_node_cleared(campaign_id, int(row["character_id"]))
+                except Exception:
+                    pass
+                return "ended"
+            # companion still alive combatant; recompute living (it may have died? no self-dmg)
+            new_turn, rnd = _advance_one(new_turn, rnd)
+
+        # Persist the companion's attack results together with the turn pointer.
+        _persist_combatants(conn, row, combatants)
         conn.execute(
             """
             UPDATE active_combat
@@ -9601,6 +9715,10 @@ def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None)
         if row:
             _log_combat_end_event(conn, row, reason)
             char_id = int(row["character_id"])
+            try:
+                _sync_companions_to_db(conn, row, json.loads(row["combatants"] or "[]"))
+            except Exception:
+                pass
         conn.execute(
             """
             UPDATE active_combat

@@ -243,3 +243,12 @@ def test_tw8_hp_sync_survive(conn):
     comb = cs.build_companion_combatant(conn, 1)
     cs.sync_companion_hp(conn, 1, comb["companion_row_id"], 7)
     assert cs.get_active_combat_companion(conn, 1)["current_hp"] == 7
+
+
+def test_tw8_combatant_id_matches_row(conn):
+    r = cs.hire(conn, 1, "dog_tracker")
+    comb = cs.build_companion_combatant(conn, 1)
+    # id must encode the row id so combat can sync HP back on end.
+    assert comb["companion_row_id"] == r["id"]
+    assert comb["id"] == f"companion_{r['id']}"
+    assert comb["hp_max"] == 8 and comb["damage_dice"] == "1d4"

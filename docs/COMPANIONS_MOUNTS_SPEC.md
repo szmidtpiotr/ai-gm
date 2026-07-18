@@ -211,7 +211,7 @@ Ledger: wpis F-NN w `frontend_design.md` §7.
 | TW5 podróż konna | ✅ WDROŻONE | mult+cap wpięte w `hex_travel_service` |
 | TW6 pies encounter | ✅ WDROŻONE | `_companion_enc_mult` w `_step_mult` |
 | TW7 ucieczka | 🟡 PRYMITYW | `resolve_mount_escape`/`can_escape_mounted` gotowe+testowane; brak wpięcia w flow encountera (turns.py) + przycisk ŻAR |
-| TW8 walka | 🟡 PRYMITYW | `build_companion_combatant`/`sync_companion_hp` gotowe+testowane; brak wstrzyknięcia w start walki + routing tury w kolejce (backend+front) — ryzyko zawieszenia kolejki tur, wymaga combat smoke |
+| TW8 walka | ✅ WDROŻONE | towarzysz wstrzykiwany na starcie walki; tura rozwiązywana SERWEROWO w `_advance_turn_impl` (auto-atak, current_turn nigdy nie zatrzyma się na `companion_*` → front się nie zawiesi); HP sync + śmierć permanentna na końcu walki; 3 testy flow + regresja summonów/advance zielona. Enemy-targets-companion (koń może zginąć od AoE) = follow-up |
 | TW9 frontend ŻAR | ⬜ TODO | build+visual verify |
 | TW10 admin | 🟡 CZĘŚĆ | Smart Entry schema ✅ (`smart_entry.py`); brak zakładki Świat→Towarzysze + monitor + cheat |
 | TW11 Księga | ⬜ TODO | rozdział wg checklisty #868 |
