@@ -4602,8 +4602,25 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
         if forced_behavior is not None and forced_behavior.get("behavior") == "random_table_k4":
             runtime_changed = True  # k4 zapisane w runtime → wymuś persist
 
+        # #1452 (AUDIT): jeśli DoT/kondycja dobiła WROGA w jego turze → przyznaj nagrody
+        # (XP+złoto+łup+bestiariusz), dokładnie jak dobicie ręką gracza. Śmierć gracza z DoT
+        # obsługuje osobna ścieżka (end_combat), więc tylko type=='enemy'.
+        _loot_pool_death: list[dict[str, Any]] | None = None
+        if (actor_type == "enemy" and int(actor.get("hp_current", 0) or 0) <= 0
+                and not actor.get("dead")):
+            _loot_pool_death = _read_loot_pool_from_row(row)
+            try:
+                _process_enemy_death(
+                    conn, row, campaign_id, int(row["character_id"]),
+                    actor, combatants, _loot_pool_death, target_id=actor_id,
+                )
+                conditions_changed = True  # wymuś persist (dead + loot_pool)
+            except Exception as _death_err:  # pragma: no cover - defensive
+                logger.warning("dot_enemy_death_reward_failed",
+                               campaign_id=campaign_id, error_message=str(_death_err))
+
         if conditions_changed or runtime_changed:
-            _persist_combatants(conn, row, combatants)
+            _persist_combatants(conn, row, combatants, loot_pool=_loot_pool_death)
 
         if conditions_changed and actor_type == "player" and isinstance(sheet, dict):
             stripped_conditions: list[dict[str, Any]] = []
@@ -4914,7 +4931,13 @@ def initiate_combat(
     _dungeon_enemy_overrides: "dict[str, dict] | None" = None,
     _dungeon_first_combat: bool = False,
     _rank_by_key: "dict[str, str] | None" = None,
+    allow_pending: bool = False,
 ) -> dict[str, Any]:
+    # #1449 (AUDIT): pending_review templates for UNKNOWN enemy keys są dozwolone TYLKO
+    # gdy caller to zaufana ścieżka narracji/tagów LLM (turn-pipeline, lochy, skarby,
+    # scenariusze, sandbox) → allow_pending=True. Bezpośrednia ścieżka klienta
+    # (POST /combat/start) startuje z allow_pending=False, więc nieznany klucz jest
+    # odrzucany (ValueError→400) zamiast puchnąć game_config_enemies + tabele łupów.
     if not enemy_keys:
         raise ValueError("enemy_keys required")
 
@@ -5009,6 +5032,9 @@ def initiate_combat(
         for ek in enemy_keys:
             er = _fetch_enemy_row(conn, ek)
             if not er:
+                # #1449 (AUDIT): nieznany klucz z niezaufanej ścieżki (klient) → odrzuć.
+                if not allow_pending:
+                    raise ValueError(f"unknown enemy key: {ek}")
                 # D2 (#377) — unknown enemy key → create a pending_review template so
                 # the fight proceeds and the enemy lands in the admin review queue,
                 # instead of silently dropping it (mirrors D1 item pending flow).
@@ -5614,6 +5640,21 @@ def _resolve_companion_attack_inline(
         )
     except Exception as _log_err:
         logger.warning("companion_attack_log_failed", error=str(_log_err))
+    # #1452 (AUDIT): dobicie przez towarzysza (#1192) daje nagrody — XP+złoto+łup do
+    # loot_pool walki + bestiariusz + wpis „death". Wcześniej HP wroga spadało do 0 bez
+    # enemy["dead"] i bez żadnej nagrody (regres w mechanice towarzyszy).
+    if (hit and int(target.get("hp_current", 0) or 0) <= 0
+            and target.get("type") == "enemy" and not target.get("dead")):
+        _lp_comp = _read_loot_pool_from_row(row)
+        try:
+            _process_enemy_death(
+                conn, row, campaign_id, int(row["character_id"]),
+                target, combatants, _lp_comp, target_id=str(target.get("id")),
+            )
+            _persist_combatants(conn, row, combatants, loot_pool=_lp_comp)
+        except Exception as _rew_err:  # pragma: no cover - defensive
+            logger.warning("companion_kill_reward_failed",
+                           campaign_id=campaign_id, error_message=str(_rew_err))
 
 
 def resolve_summon_turn(campaign_id: int) -> dict[str, Any]:
@@ -5709,7 +5750,21 @@ def resolve_summon_turn(campaign_id: int) -> dict[str, Any]:
                  "damage": int(dmg_b), "hit": bool(hit_b)}, ensure_ascii=False,
             ),
         )
-        _persist_combatants(conn, row, combatants)
+        # #1452 (AUDIT): dobicie przez summona (B15) daje nagrody — XP+złoto+łup+bestiariusz.
+        _lp_summon: list[dict[str, Any]] | None = None
+        if (hit_b and int(target.get("hp_current", 0) or 0) <= 0
+                and target.get("type") == "enemy" and not target.get("dead")):
+            _lp_summon = _read_loot_pool_from_row(row)
+            try:
+                _process_enemy_death(
+                    conn, row, campaign_id, int(row["character_id"]),
+                    target, combatants, _lp_summon, target_id=str(target.get("id")),
+                )
+            except Exception as _rew_err:  # pragma: no cover - defensive
+                logger.warning("summon_kill_reward_failed",
+                               campaign_id=campaign_id, error_message=str(_rew_err))
+                _lp_summon = None
+        _persist_combatants(conn, row, combatants, loot_pool=_lp_summon)
         conn.commit()
         out["combat_state"] = load_combat_snapshot(campaign_id)
         return out
@@ -6378,9 +6433,18 @@ def resolve_player_flee(campaign_id: int) -> dict[str, Any]:
     if not snap:
         return {"ok": False, "reason": "no_active_combat"}
     combatants = snap.get("combatants") or []
+    # #1450 (AUDIT): ucieczka to akcja gracza — dozwolona TYLKO w jego turze. Bez tego
+    # dało się ją spamować w turze wroga (porażka wołała advance_turn, ale dmg z otwartego
+    # pending_reaction NIGDY nie aplikowany → darmowe anulowanie każdego groźnego ciosu).
+    if str(snap.get("current_turn") or "") != "player":
+        return {"ok": False, "reason": "not_player_turn"}
     player = _find_active_player_combatant(combatants) or _find_combatant(combatants, "player")
     if not player:
         return {"ok": False, "reason": "player_not_found"}
+    # #1450: otwarte okno reakcji (naliczony dmg czeka na resolve_reaction) blokuje flee —
+    # inaczej osierocone pending_reaction blokuje przyszłe okna reakcji i gubi obrażenia.
+    if player.get("pending_reaction"):
+        return {"ok": False, "reason": "pending_reaction_open"}
 
     penalty, blocked = flee_penalty_from_conditions(player.get("conditions") or [])
     if blocked:
@@ -7209,6 +7273,225 @@ def _attack_spell_secondary(
         _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
 
+def _process_enemy_death(
+    conn,
+    row,
+    campaign_id: int,
+    ch_id: int,
+    enemy: dict,
+    combatants: list,
+    loot_pool: list,
+    *,
+    out: dict | None = None,
+    target_id: str | None = None,
+) -> dict:
+    """#1452 (AUDIT) — jednolita ścieżka nagród za śmierć wroga.
+
+    Wydzielone verbatim z ``_resolve_player_attack_turn`` (blok ``if dead:``), aby
+    dobicia NIE wykonane ręką gracza — DoT (podpalenie), towarzysz (#1192), summon
+    (B15) — przyznawały TE SAME nagrody: XP + złoto + łup do ``loot_pool`` walki +
+    kredyt bestiariusza + wpis „death" w logu walki. Oznacza wroga jako martwego.
+    NIE wykrywa zwycięstwa / nie kończy walki — każdy caller robi to sam przez
+    ``_persist_combatants*``.
+
+    ``out`` zbiera pola odpowiedzi (xp_granted/gold_drop/loot); dla dobić nie-gracza
+    podaj słownik jednorazowy. ``target_id`` to id combatanta-wroga do logu śmierci
+    (domyślnie własne id wroga)."""
+    if out is None:
+        out = {}
+    if target_id is None:
+        target_id = str(enemy.get("id") or "")
+    enemy["dead"] = True
+    ek = str(enemy.get("enemy_key") or "")
+    # #1191 — Bestiariusz: credit kill (solo=killer, MP=all participants).
+    _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
+    # U25 (#575): flag boss kills so post-combat loot claim can drive
+    # the affix pity timer (guaranteed affix after a dry streak).
+    if str(enemy.get("tier") or "").strip().lower() == "boss":
+        try:
+            conn.execute(
+                "UPDATE active_combat SET boss_defeated = 1 WHERE campaign_id = ?",
+                (campaign_id,),
+            )
+        except sqlite3.OperationalError:
+            pass
+    if ek and ch_id:
+        # #1390 — łup/złoto liczą się przez WŁASNE połączenia SQLite
+        # (loot_service._conn()). WAL = jeden pisarz: dopóki TA transakcja
+        # trzyma lock (niezacommitowane zapisy obrażeń/efektów/kill), zagnieżdżony
+        # zapis łupu nie dostaje locka → po busy_timeout leci „database is locked",
+        # a szeroki except niżej zjada wyjątek → PUSTY loot_pool + 0 złota
+        # (modal „Nie miał nic przy sobie."). Commit zwalnia lock PRZED grantem.
+        try:
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            from app.services.loot_service import (
+                apply_character_gold_delta,
+                distribute_mp_loot,
+                grant_loot_to_character,
+                roll_gold_drop,
+                roll_loot_with_consolation,
+            )
+            _enemy_loot_tier = str(enemy.get("loot_tier") or "") or None
+
+            # G10 (#795): MP path — each player gets own class-filtered roll;
+            # gold split equally. Solo path unchanged.
+            if _is_mp_combat(combatants):
+                mp_result = distribute_mp_loot(campaign_id, ek)
+                loot = []
+                gold_drop = mp_result.get("total_gold", 0)
+                out["gold_drop"] = max(0, gold_drop)
+                out["mp_loot"] = {}
+                for _cid, _pdata in mp_result.get("per_player", {}).items():
+                    _cid_int = int(_cid)
+                    _ploot = _pdata.get("loot") or []
+                    _pgold = int(_pdata.get("gold") or 0)
+                    if _pgold > 0:
+                        apply_character_gold_delta(_cid_int, _pgold, reason="combat_loot_mp")
+                    if _ploot:
+                        try:
+                            grant_loot_to_character(
+                                _cid_int, _ploot,
+                                source="loot",
+                                loot_tier=_enemy_loot_tier,
+                            )
+                        except Exception:
+                            pass
+                    out["mp_loot"][_cid_int] = {"gold": _pgold, "items": _ploot}
+                    loot.extend(_ploot)
+            else:
+                # Solo path — T6 (#1352): consolation zapewnia niepusty loot_pool
+                # (rolled) albo jeden narracyjny drobiazg (consolation).
+                # #1375: ch_id → ×2 boost nieodkrytych receptur.
+                loot_items = roll_loot_with_consolation(ek, character_id=ch_id)
+                loot = (
+                    _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
+                    if loot_items else []
+                )
+                gold_drop = int(roll_gold_drop(ek) or 0)
+                if gold_drop > 0:
+                    apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
+                out["gold_drop"] = max(0, gold_drop)
+            # #754: strukturalny rejestr — loot + złoto (ścieżka pojedynczego ubicia)
+            try:
+                from app.services.dice_log_service import record_dice_roll as _rec_roll
+                _rec_roll(
+                    campaign_id=campaign_id, roll_type="gold",
+                    character_id=ch_id, combat_id=int(row["id"]),
+                    actor=ek, total=max(0, gold_drop), outcome="drop",
+                    meta={"enemy_key": ek, "loot_tier": _enemy_loot_tier,
+                          "round": int(row["round"] or 1)},
+                )
+                if loot:
+                    _rec_roll(
+                        campaign_id=campaign_id, roll_type="loot",
+                        character_id=ch_id, combat_id=int(row["id"]),
+                        actor=ek, total=len(loot), outcome="drop",
+                        meta={"enemy_key": ek, "items": loot,
+                              "round": int(row["round"] or 1)},
+                    )
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning(
+                "combat_loot_grant_failed",
+                campaign_id=campaign_id,
+                character_id=ch_id,
+                enemy_key=ek,
+                error_message=str(e),
+            )
+            loot = []
+            out["gold_drop"] = 0
+    else:
+        loot = []
+        out["gold_drop"] = 0
+    xpa = 0
+    xp_src = "none"
+    try:
+        raw_award = int(enemy.get("xp_award") or 0)
+    except (TypeError, ValueError):
+        raw_award = 0
+    from app.services import xp_service
+
+    try:
+        xpa, xp_src = xp_service.resolve_enemy_defeat_xp_amount(
+            conn,
+            catalog_xp_award=raw_award,
+            tier=str(enemy.get("tier") or "") or None,
+        )
+    except Exception:
+        xpa = 0
+        xp_src = "none"
+    if xpa > 0 and ch_id:
+        try:
+            grant = xp_service.grant_character_xp(
+                conn,
+                ch_id,
+                xpa,
+                reason="enemy_defeat",
+                meta={
+                    "enemy_key": ek,
+                    "xp_source": xp_src,
+                    "enemy_template_xp_award": raw_award,
+                    "enemy_tier": str(enemy.get("tier") or ""),
+                },
+            )
+            out["xp_granted"] = xpa
+            out["xp_source"] = xp_src
+            out["xp_available"] = grant.get("xp_available")
+        except Exception as e:
+            logger.warning(
+                "combat_xp_grant_failed",
+                campaign_id=campaign_id,
+                character_id=ch_id,
+                enemy_key=ek,
+                error_message=str(e),
+            )
+    out["loot"] = loot
+    loot_pool.extend(loot)
+    # #550: Auto-complete kill_enemy beats — resolve_attack bypasses turn_pipeline
+    try:
+        from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+        _enemy_label = str(enemy.get("name") or enemy.get("enemy_key") or ek or "")
+        if _enemy_label:
+            _tn_beat = conn.execute(
+                "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns"
+                " WHERE campaign_id = ?",
+                (campaign_id,),
+            ).fetchone()[0]
+            auto_complete_beats_by_event(
+                campaign_id, "kill_enemy", _enemy_label, _tn_beat, conn
+            )
+            # #1011: auto-close kill quests on the same event
+            from app.services.quest_persist_service import auto_complete_quests_by_event
+            auto_complete_quests_by_event(
+                conn, campaign_id, "kill_enemy", _enemy_label, _tn_beat
+            )
+    except Exception:
+        pass
+    cid_death = int(row["id"])
+    death_tn = _next_combat_log_sequence(conn, cid_death)
+    ename = str(enemy.get("name") or "Wróg")
+    log_combat_turn(
+        conn,
+        combat_id=cid_death,
+        campaign_id=campaign_id,
+        turn_number=death_tn,
+        actor=str(target_id),
+        event_type="death",
+        roll_value=None,
+        damage=int(out.get("damage") or 0),
+        hp_after=int(enemy.get("hp_current", 0) or 0),
+        target_id=target_id,
+        target_name=str(enemy.get("name") or "") or None,
+        hit=None,
+        narrative=f"{ename} pada — wróg nie żyje.",
+    )
+    return out
+
+
 def _resolve_player_attack_turn(
     conn,
     row,
@@ -7236,6 +7519,15 @@ def _resolve_player_attack_turn(
     # A tampered request body can no longer dictate the die face or the attack total —
     # covers solo + MP (shared entry) + every spell handler downstream. Internal callers
     # that already roll server-side (off-hand #598) pass authoritative=False and keep theirs.
+    #
+    # #1429 (AUDIT — bramka tury): każda inna akcja gracza sprawdza czyja tura, tylko
+    # ścieżka ataku nie miała guardu → klient mógł spamować /resolve-attack bez /enemy-turn
+    # i wybić całe starcie poza kolejnością (wrogowie nigdy nie działali). Lustro ścieżki
+    # wroga (`_resolve_enemy_attack_turn`: cur=="player" → blok). Obsługa MP-idów player:N
+    # przez `_player_comb_id`; dopuszczamy też goły "player" (solo).
+    _ct_now = str(row["current_turn"] or "").strip()
+    if _ct_now not in (str(_player_comb_id), "player"):
+        raise ValueError("not_player_turn")
     if authoritative:
         raw_d20 = roll_d20()
         roll_result = None
@@ -7664,193 +7956,11 @@ def _resolve_player_attack_turn(
         # ─────────────────────────────────────────────────────────────
 
         if dead:
-            enemy["dead"] = True
-            ek = str(enemy.get("enemy_key") or "")
-            # #1191 — Bestiariusz: credit kill (solo=killer, MP=all participants).
-            _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
-            # U25 (#575): flag boss kills so post-combat loot claim can drive
-            # the affix pity timer (guaranteed affix after a dry streak).
-            if str(enemy.get("tier") or "").strip().lower() == "boss":
-                try:
-                    conn.execute(
-                        "UPDATE active_combat SET boss_defeated = 1 WHERE campaign_id = ?",
-                        (campaign_id,),
-                    )
-                except sqlite3.OperationalError:
-                    pass
-            if ek and ch_id:
-                # #1390 — łup/złoto liczą się przez WŁASNE połączenia SQLite
-                # (loot_service._conn()). WAL = jeden pisarz: dopóki TA transakcja
-                # trzyma lock (niezacommitowane zapisy obrażeń/efektów/kill), zagnieżdżony
-                # zapis łupu nie dostaje locka → po busy_timeout leci „database is locked",
-                # a szeroki except niżej zjada wyjątek → PUSTY loot_pool + 0 złota
-                # (modal „Nie miał nic przy sobie."). Commit zwalnia lock PRZED grantem.
-                try:
-                    conn.commit()
-                except sqlite3.OperationalError:
-                    pass
-                try:
-                    from app.services.loot_service import (
-                        apply_character_gold_delta,
-                        distribute_mp_loot,
-                        grant_loot_to_character,
-                        roll_gold_drop,
-                        roll_loot_with_consolation,
-                    )
-                    _enemy_loot_tier = str(enemy.get("loot_tier") or "") or None
-
-                    # G10 (#795): MP path — each player gets own class-filtered roll;
-                    # gold split equally. Solo path unchanged.
-                    if _is_mp_combat(combatants):
-                        mp_result = distribute_mp_loot(campaign_id, ek)
-                        loot = []
-                        gold_drop = mp_result.get("total_gold", 0)
-                        out["gold_drop"] = max(0, gold_drop)
-                        out["mp_loot"] = {}
-                        for _cid, _pdata in mp_result.get("per_player", {}).items():
-                            _cid_int = int(_cid)
-                            _ploot = _pdata.get("loot") or []
-                            _pgold = int(_pdata.get("gold") or 0)
-                            if _pgold > 0:
-                                apply_character_gold_delta(_cid_int, _pgold, reason="combat_loot_mp")
-                            if _ploot:
-                                try:
-                                    grant_loot_to_character(
-                                        _cid_int, _ploot,
-                                        source="loot",
-                                        loot_tier=_enemy_loot_tier,
-                                    )
-                                except Exception:
-                                    pass
-                            out["mp_loot"][_cid_int] = {"gold": _pgold, "items": _ploot}
-                            loot.extend(_ploot)
-                    else:
-                        # Solo path — T6 (#1352): consolation zapewnia niepusty loot_pool
-                        # (rolled) albo jeden narracyjny drobiazg (consolation).
-                        # #1375: ch_id → ×2 boost nieodkrytych receptur.
-                        loot_items = roll_loot_with_consolation(ek, character_id=ch_id)
-                        loot = (
-                            _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
-                            if loot_items else []
-                        )
-                        gold_drop = int(roll_gold_drop(ek) or 0)
-                        if gold_drop > 0:
-                            apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
-                        out["gold_drop"] = max(0, gold_drop)
-                    # #754: strukturalny rejestr — loot + złoto (ścieżka pojedynczego ubicia)
-                    try:
-                        from app.services.dice_log_service import record_dice_roll as _rec_roll
-                        _rec_roll(
-                            campaign_id=campaign_id, roll_type="gold",
-                            character_id=ch_id, combat_id=int(row["id"]),
-                            actor=ek, total=max(0, gold_drop), outcome="drop",
-                            meta={"enemy_key": ek, "loot_tier": _enemy_loot_tier,
-                                  "round": int(row["round"] or 1)},
-                        )
-                        if loot:
-                            _rec_roll(
-                                campaign_id=campaign_id, roll_type="loot",
-                                character_id=ch_id, combat_id=int(row["id"]),
-                                actor=ek, total=len(loot), outcome="drop",
-                                meta={"enemy_key": ek, "items": loot,
-                                      "round": int(row["round"] or 1)},
-                            )
-                    except Exception:
-                        pass
-                except Exception as e:
-                    logger.warning(
-                        "combat_loot_grant_failed",
-                        campaign_id=campaign_id,
-                        character_id=ch_id,
-                        enemy_key=ek,
-                        error_message=str(e),
-                    )
-                    loot = []
-                    out["gold_drop"] = 0
-            else:
-                loot = []
-                out["gold_drop"] = 0
-            xpa = 0
-            xp_src = "none"
-            try:
-                raw_award = int(enemy.get("xp_award") or 0)
-            except (TypeError, ValueError):
-                raw_award = 0
-            from app.services import xp_service
-
-            try:
-                xpa, xp_src = xp_service.resolve_enemy_defeat_xp_amount(
-                    conn,
-                    catalog_xp_award=raw_award,
-                    tier=str(enemy.get("tier") or "") or None,
-                )
-            except Exception:
-                xpa = 0
-                xp_src = "none"
-            if xpa > 0 and ch_id:
-                try:
-                    grant = xp_service.grant_character_xp(
-                        conn,
-                        ch_id,
-                        xpa,
-                        reason="enemy_defeat",
-                        meta={
-                            "enemy_key": ek,
-                            "xp_source": xp_src,
-                            "enemy_template_xp_award": raw_award,
-                            "enemy_tier": str(enemy.get("tier") or ""),
-                        },
-                    )
-                    out["xp_granted"] = xpa
-                    out["xp_source"] = xp_src
-                    out["xp_available"] = grant.get("xp_available")
-                except Exception as e:
-                    logger.warning(
-                        "combat_xp_grant_failed",
-                        campaign_id=campaign_id,
-                        character_id=ch_id,
-                        enemy_key=ek,
-                        error_message=str(e),
-                    )
-            out["loot"] = loot
-            loot_pool_accum.extend(loot)
-            # #550: Auto-complete kill_enemy beats — resolve_attack bypasses turn_pipeline
-            try:
-                from app.services.campaign_plan_runtime import auto_complete_beats_by_event
-                _enemy_label = str(enemy.get("name") or enemy.get("enemy_key") or ek or "")
-                if _enemy_label:
-                    _tn_beat = conn.execute(
-                        "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns"
-                        " WHERE campaign_id = ?",
-                        (campaign_id,),
-                    ).fetchone()[0]
-                    auto_complete_beats_by_event(
-                        campaign_id, "kill_enemy", _enemy_label, _tn_beat, conn
-                    )
-                    # #1011: auto-close kill quests on the same event
-                    from app.services.quest_persist_service import auto_complete_quests_by_event
-                    auto_complete_quests_by_event(
-                        conn, campaign_id, "kill_enemy", _enemy_label, _tn_beat
-                    )
-            except Exception:
-                pass
-            cid_death = int(row["id"])
-            death_tn = _next_combat_log_sequence(conn, cid_death)
-            ename = str(enemy.get("name") or card_name or "Wróg")
-            log_combat_turn(
-                conn,
-                combat_id=cid_death,
-                campaign_id=campaign_id,
-                turn_number=death_tn,
-                actor=str(target_id),
-                event_type="death",
-                roll_value=None,
-                damage=int(out.get("damage") or 0),
-                hp_after=int(enemy.get("hp_current", 0) or 0),
-                target_id=target_id,
-                target_name=str(enemy.get("name") or "") or None,
-                hit=None,
-                narrative=f"{ename} pada — wróg nie żyje.",
+            # #1452 (AUDIT): reward path wydzielony do _process_enemy_death — te same
+            # granty (XP+złoto+łup+bestiariusz+log) obsługują dobicia DoT/towarzysza/summona.
+            _process_enemy_death(
+                conn, row, campaign_id, ch_id, enemy, combatants,
+                loot_pool_accum, out=out, target_id=target_id,
             )
             if _all_enemies_dead(combatants):
                 cid = int(row["id"])
@@ -8528,6 +8638,13 @@ def resolve_attack(
         # G7 (#791): MP player — attacker="player:N" → use that character's sheet
         _mp_ch_id = _mp_player_char_id(str(attacker))
         if _mp_ch_id is not None:
+            # #1449 (AUDIT — anti-spoof): "player:N" wolno zaatakować TYLKO jeśli player:N
+            # jest realnym combatantem TEJ walki. Bez tego solo-walkę można było odpalić
+            # z attacker="player:<cudze_id>" → silnik ładował cudzy arkusz, a po zabójstwie
+            # sypał XP/złoto na dowolną (także cudzą aktywną) postać. Legit MP wchodzi
+            # własnym endpointem (submit_mp_combat_action), gdzie player:N JEST combatantem.
+            if _find_combatant(combatants, str(attacker)) is None:
+                raise ValueError("attacker_not_in_combat")
             ch_id = _mp_ch_id
 
         character = conn.execute(
@@ -9720,7 +9837,12 @@ def _advance_turn_impl(campaign_id: int) -> str:
 
         cur = row["current_turn"]
         rnd = int(row["round"] or 1)
-        first_in_order = order[0] if order else living[0]
+        # #1451 (AUDIT): wrap rundy licz względem PIERWSZEGO ŻYWEGO wg turn_order, nie order[0].
+        # Martwy wróg nie jest usuwany z turn_order — gdy order[0] (np. wróg wygrał inicjatywę)
+        # ginie, `nxt` (zawsze z living) nigdy nie zrówna się z order[0] → round zamarza do
+        # końca walki. Skutki: DoT tyka raz i nigdy więcej, kondycje nie schodzą, cap „1
+        # reakcja/rundę" staje się „1/walkę". living[0] = pierwszy żywy w kolejności inicjatywy.
+        first_in_order = living[0] if living else (order[0] if order else None)
 
         def _advance_one(cur_id: str, rnd_in: int) -> tuple[str, int]:
             cs = str(cur_id)
@@ -9948,6 +10070,15 @@ def claim_post_combat_loot(
     selected_indexes: list[int],
 ) -> dict[str, Any]:
     with _conn() as conn:
+        # #1430 (AUDIT): BEGIN IMMEDIATE bierze write-lock PRZED read-modify-write, więc
+        # dwa równoległe claimy nie przeczytają tego samego pre-stanu (poza in-process
+        # turn_lock, jako druga warstwa na wypadek wielu workerów). Autocommit=None, by
+        # jawny BEGIN nie kolidował z auto-BEGIN Pythona; finalny commit niżej domyka txn.
+        conn.isolation_level = None
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError:
+            pass
         row = conn.execute(
             "SELECT * FROM active_combat WHERE campaign_id = ?",
             (campaign_id,),
@@ -9958,6 +10089,17 @@ def claim_post_combat_loot(
             raise ValueError("character mismatch")
         if str(row["status"] or "") != "ended" or str(row["ended_reason"] or "") != "victory":
             raise ValueError("combat not in victory state")
+
+        # #1430 (AUDIT): idempotencja — łup już rozliczony (loot_persisted=1) → NIE przyznawaj
+        # ponownie (druga próba claim = duplikacja itemów/złota). Zwróć poprzednio przyznane.
+        if "loot_persisted" in row.keys() and int(row["loot_persisted"] or 0) == 1:
+            _already: list[Any] = []
+            if "post_combat_loot_json" in row.keys():
+                try:
+                    _already = json.loads(row["post_combat_loot_json"] or "[]")
+                except Exception:
+                    _already = []
+            return {"claimed": [], "already_claimed": _already, "available": [], "selected_indexes": []}
 
         pool = _read_loot_pool_from_row(row)
         if not pool:

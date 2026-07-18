@@ -757,7 +757,7 @@ def resolve_dig_success(conn: sqlite3.Connection, campaign_id: int,
     if guardian:
         try:
             from app.services import combat_service
-            combat_service.initiate_combat(campaign_id, character_id, [str(guardian)])
+            combat_service.initiate_combat(campaign_id, character_id, [str(guardian)], allow_pending=True)  # #1449: authored guardian key
             # mark payout pending on victory
             _set_pending_treasure_loot(conn, campaign_id, treasure_id)
             conn.commit()

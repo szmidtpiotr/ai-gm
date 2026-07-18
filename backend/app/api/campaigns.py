@@ -1430,7 +1430,7 @@ def travel_resume(campaign_id: int):
                 conn.commit()
                 from app.services.combat_service import initiate_combat
                 try:
-                    initiate_combat(campaign_id, int(char["id"]), [str(_enemy_key)])
+                    initiate_combat(campaign_id, int(char["id"]), [str(_enemy_key)], allow_pending=True)  # #1449: LLM-driven auto-combat
                 except ValueError as _ce:
                     raise HTTPException(status_code=400, detail=str(_ce)) from None
                 return {

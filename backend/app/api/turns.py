@@ -1742,6 +1742,7 @@ def _maybe_start_combat_from_gm_tag(
         combat_state = cs.initiate_combat(
             campaign_id, character_id, enemy_keys,
             _rank_by_key=_rank_by_key or None,
+            allow_pending=True,  # #1449: turn-pipeline (tag LLM [COMBAT_START]) → pending OK
         )
         logger.info(
             "combat_gm_tag_started",

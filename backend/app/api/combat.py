@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.core.jwt_auth import assert_campaign_owner
 from app.services import combat_service as combat
+from app.services import turn_lock
 from app.services.client_ui_config import is_slash_command_enabled
 
 router = APIRouter(tags=["combat"])
@@ -126,56 +127,70 @@ def get_combat_turns_history(campaign_id: int, limit: int = Query(500, ge=1, le=
 @router.post("/campaigns/{campaign_id}/combat/resolve-attack")
 def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest, authorization: str | None = Header(None)):
     assert_campaign_owner(campaign_id, authorization)
+    # #1449 (AUDIT): solo endpoint akceptuje TYLKO attacker ∈ {"player","enemy"}. Spoof
+    # "player:N" (farm XP na cudzą postać) był wolnym stringiem z body — MP idzie własnym
+    # endpointem (submit_mp_combat_action), który zna character_id z sesji.
+    if body.attacker not in ("player", "enemy"):
+        raise HTTPException(status_code=400, detail="invalid attacker")
+    # #1430 (AUDIT): serializuj mutujące endpointy walki — dwa równoległe /resolve-attack
+    # czytały ten sam pre-stan → podwójny atak w jednej turze. Lock per kampania.
+    lock = turn_lock.acquire_or_409(campaign_id)
     try:
-        res = combat.resolve_attack(
-            campaign_id,
-            body.roll_result,
-            attacker=body.attacker,
-            raw_d20=body.raw_d20,
-            spell_key=body.spell_key,
-            target_id=body.target_id,
-            authoritative=True,  # #1427: server rolls the player d20; body values display-only
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    # #598: dual-wield — drugi atak off-hand (ta sama tura) gdy para broni = 'dual_attack'.
-    # PRZED advance_turn, by oba ataki rozliczyły się w jednej turze gracza. Tylko melee
-    # (nie spell), tura nie zablokowana, walka wciąż aktywna (resolve_offhand_followup waliduje).
-    if body.attacker == "player" and not res.get("blocked") and not body.spell_key:
         try:
-            off = combat.resolve_offhand_followup(campaign_id)
-        except ValueError:
-            off = None
-        if off is not None:
-            res["offhand"] = off
-            res["combat_state"] = off.get("combat_state", res.get("combat_state"))
+            res = combat.resolve_attack(
+                campaign_id,
+                body.roll_result,
+                attacker=body.attacker,
+                raw_d20=body.raw_d20,
+                spell_key=body.spell_key,
+                target_id=body.target_id,
+                authoritative=True,  # #1427: server rolls the player d20; body values display-only
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # #848: advance turn server-side after player attack so enemy turn is never lost on F5/reload.
-    # Skip if blocked (turn not consumed: out_of_range, mana_insufficient, unsupported_effect).
-    # Mirrors post_enemy_turn — advance only when combat still active.
-    if body.attacker == "player" and not res.get("blocked"):
-        snap = combat.load_combat_snapshot(campaign_id)
-        if snap and snap.get("status") == "active":
+        # #598: dual-wield — drugi atak off-hand (ta sama tura) gdy para broni = 'dual_attack'.
+        # PRZED advance_turn, by oba ataki rozliczyły się w jednej turze gracza. Tylko melee
+        # (nie spell), tura nie zablokowana, walka wciąż aktywna (resolve_offhand_followup waliduje).
+        if body.attacker == "player" and not res.get("blocked") and not body.spell_key:
             try:
-                res["advance_turn"] = combat.advance_turn(campaign_id)
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
-        else:
-            res["advance_turn"] = "ended"
-        res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+                off = combat.resolve_offhand_followup(campaign_id)
+            except ValueError:
+                off = None
+            if off is not None:
+                res["offhand"] = off
+                res["combat_state"] = off.get("combat_state", res.get("combat_state"))
 
-    return res
+        # #848: advance turn server-side after player attack so enemy turn is never lost on F5/reload.
+        # Skip if blocked (turn not consumed: out_of_range, mana_insufficient, unsupported_effect).
+        # Mirrors post_enemy_turn — advance only when combat still active.
+        if body.attacker == "player" and not res.get("blocked"):
+            snap = combat.load_combat_snapshot(campaign_id)
+            if snap and snap.get("status") == "active":
+                try:
+                    res["advance_turn"] = combat.advance_turn(campaign_id)
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e)) from e
+            else:
+                res["advance_turn"] = "ended"
+            res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+
+        return res
+    finally:
+        turn_lock.release(lock)
 
 
 @router.post("/campaigns/{campaign_id}/combat/zone-change")
 def post_zone_change(campaign_id: int, authorization: str | None = Header(None)):
     """T34 — Player toggles their combat zone (engaged ↔ ranged). Consumes the turn."""
     assert_campaign_owner(campaign_id, authorization)
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
     try:
         return combat.change_player_zone(campaign_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        turn_lock.release(lock)
 
 
 @router.post("/campaigns/{campaign_id}/combat/flee")
@@ -183,8 +198,21 @@ def post_flee(campaign_id: int, authorization: str | None = Header(None)):
     """#1210 — Player attempts to flee combat (opposed DEX vs best enemy).
     leg_wound → -2, hobbled → blocked. Success ends combat (fled); failure consumes the turn."""
     assert_campaign_owner(campaign_id, authorization)
-    res = combat.resolve_player_flee(campaign_id)
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
+    try:
+        res = combat.resolve_player_flee(campaign_id)
+    finally:
+        turn_lock.release(lock)
     if not res.get("ok"):
+        # #1450: idempotencja — brak aktywnej walki, ale ostatnia zakończona ucieczką → 200.
+        if res.get("reason") == "no_active_combat":
+            snap = combat.load_combat_snapshot(campaign_id)
+            if (
+                snap
+                and str(snap.get("status") or "") == "ended"
+                and str(snap.get("ended_reason") or "") == "fled"
+            ):
+                return {"ok": True, "fled": True, "already_ended": True, "combat_state": snap}
         raise HTTPException(status_code=400, detail=res.get("reason") or "flee_failed")
     return res
 
@@ -198,6 +226,7 @@ def post_use_consumable(campaign_id: int, body: UseConsumableRequest, authorizat
     """#734 — Player drinks a healing consumable from the backpack as a combat action.
     Heals (PŻ rośnie) + consumes the turn. Domyka pętlę sustain #732."""
     assert_campaign_owner(campaign_id, authorization)
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430: blokuj podwójne leczenie z jednej mikstury
     try:
         return combat.use_consumable_in_combat(campaign_id, body.inventory_id)
     except ValueError as e:
@@ -205,6 +234,8 @@ def post_use_consumable(campaign_id: int, body: UseConsumableRequest, authorizat
         if "inventory entry not found" in msg or "character not found" in msg:
             raise HTTPException(status_code=404, detail=str(e)) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        turn_lock.release(lock)
 
 
 @router.post("/campaigns/{campaign_id}/combat/wrestling")
@@ -214,10 +245,13 @@ def post_wrestling(campaign_id: int, body: dict | None = None, authorization: st
     (engaged) — cel poza zwarciem zwraca blocked bez konsumpcji tury. Konsumuje turę."""
     assert_campaign_owner(campaign_id, authorization)
     target_ref = str((body or {}).get("target_ref") or "").strip() or None
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
     try:
         return combat.resolve_wrestling(campaign_id, target_ref=target_ref)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        turn_lock.release(lock)
 
 
 @router.post("/campaigns/{campaign_id}/combat/declare-reaction")
@@ -241,50 +275,15 @@ def post_resolve_reaction(campaign_id: int, body: dict | None = None, authorizat
     Po rozliczeniu ZAAWANSOWUJE turę (advance_turn) — turę wstrzymano przy oknie."""
     assert_campaign_owner(campaign_id, authorization)
     choice = str((body or {}).get("choice") or "take").strip().lower()
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
     try:
-        res = combat.resolve_reaction(campaign_id, choice)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    # #864: po rozliczeniu okna reakcji wróg z attacks_per_turn>1 dokańcza pozostałe ciosy
-    # tej samej tury PRZED advance_turn. Jeśli kolejny cios znów otworzy okno → pauza ponownie.
-    extras = combat.resolve_enemy_followup_attacks(campaign_id)
-    if extras:
-        res["multiattack"] = extras
-        last = extras[-1]
-        for _k in ("combat_state", "player_hp_remaining", "player_incapacitated",
-                   "reaction_window", "reaction_options", "enemy_name"):
-            if _k in last:
-                res[_k] = last[_k]
-        if last.get("reaction_window"):
-            res["advance_turn"] = "awaiting_reaction"
-            res["combat_state"] = combat.load_combat_snapshot(campaign_id)
-            return res
-
-    snap = combat.load_combat_snapshot(campaign_id)
-    if snap and snap.get("status") == "active":
         try:
-            res["advance_turn"] = combat.advance_turn(campaign_id)
+            res = combat.resolve_reaction(campaign_id, choice)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-    else:
-        res["advance_turn"] = "ended"
-    res["combat_state"] = combat.load_combat_snapshot(campaign_id)
-    return res
 
-
-@router.post("/campaigns/{campaign_id}/combat/enemy-turn")
-def post_enemy_turn(campaign_id: int, authorization: str | None = Header(None)):
-    assert_campaign_owner(campaign_id, authorization)
-    try:
-        res = combat.resolve_attack(campaign_id, 0, attacker="enemy")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    # #864: multi-attack — wróg z attacks_per_turn>1 wykonuje resztę ciosów w tej samej
-    # turze, PRZED advance_turn (analogicznie do off-hand gracza w #598). Pomijamy, gdy
-    # pierwszy cios otworzył okno reakcji (pauza — resztę dokończy resolve-reaction).
-    if not res.get("reaction_window"):
+        # #864: po rozliczeniu okna reakcji wróg z attacks_per_turn>1 dokańcza pozostałe ciosy
+        # tej samej tury PRZED advance_turn. Jeśli kolejny cios znów otworzy okno → pauza ponownie.
         extras = combat.resolve_enemy_followup_attacks(campaign_id)
         if extras:
             res["multiattack"] = extras
@@ -293,25 +292,68 @@ def post_enemy_turn(campaign_id: int, authorization: str | None = Header(None)):
                        "reaction_window", "reaction_options", "enemy_name"):
                 if _k in last:
                     res[_k] = last[_k]
+            if last.get("reaction_window"):
+                res["advance_turn"] = "awaiting_reaction"
+                res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+                return res
 
-    # SF10 (#633): okno reakcji wstrzymuje turę — NIE zaawansowuj, dopóki gracz nie
-    # rozliczy reakcji (resolve-reaction zrobi advance_turn). Zwróć stan z otwartym oknem.
-    if res.get("reaction_window"):
-        res["advance_turn"] = "awaiting_reaction"
+        snap = combat.load_combat_snapshot(campaign_id)
+        if snap and snap.get("status") == "active":
+            try:
+                res["advance_turn"] = combat.advance_turn(campaign_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        else:
+            res["advance_turn"] = "ended"
         res["combat_state"] = combat.load_combat_snapshot(campaign_id)
         return res
+    finally:
+        turn_lock.release(lock)
 
-    snap = combat.load_combat_snapshot(campaign_id)
-    if snap and snap.get("status") == "active":
+
+@router.post("/campaigns/{campaign_id}/combat/enemy-turn")
+def post_enemy_turn(campaign_id: int, authorization: str | None = Header(None)):
+    assert_campaign_owner(campaign_id, authorization)
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
+    try:
         try:
-            new_turn = combat.advance_turn(campaign_id)
+            res = combat.resolve_attack(campaign_id, 0, attacker="enemy")
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        res["advance_turn"] = new_turn
-    else:
-        res["advance_turn"] = "ended"
-    res["combat_state"] = combat.load_combat_snapshot(campaign_id)
-    return res
+
+        # #864: multi-attack — wróg z attacks_per_turn>1 wykonuje resztę ciosów w tej samej
+        # turze, PRZED advance_turn (analogicznie do off-hand gracza w #598). Pomijamy, gdy
+        # pierwszy cios otworzył okno reakcji (pauza — resztę dokończy resolve-reaction).
+        if not res.get("reaction_window"):
+            extras = combat.resolve_enemy_followup_attacks(campaign_id)
+            if extras:
+                res["multiattack"] = extras
+                last = extras[-1]
+                for _k in ("combat_state", "player_hp_remaining", "player_incapacitated",
+                           "reaction_window", "reaction_options", "enemy_name"):
+                    if _k in last:
+                        res[_k] = last[_k]
+
+        # SF10 (#633): okno reakcji wstrzymuje turę — NIE zaawansowuj, dopóki gracz nie
+        # rozliczy reakcji (resolve-reaction zrobi advance_turn). Zwróć stan z otwartym oknem.
+        if res.get("reaction_window"):
+            res["advance_turn"] = "awaiting_reaction"
+            res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+            return res
+
+        snap = combat.load_combat_snapshot(campaign_id)
+        if snap and snap.get("status") == "active":
+            try:
+                new_turn = combat.advance_turn(campaign_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            res["advance_turn"] = new_turn
+        else:
+            res["advance_turn"] = "ended"
+        res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+        return res
+    finally:
+        turn_lock.release(lock)
 
 
 @router.post("/campaigns/{campaign_id}/combat/summon-turn")
@@ -320,52 +362,31 @@ def post_summon_turn(campaign_id: int, authorization: str | None = Header(None))
     zaawansuj kolejkę. Frontend woła ten endpoint, gdy current_turn zaczyna się od
     'summon:' (analogicznie do /enemy-turn dla wrogów)."""
     assert_campaign_owner(campaign_id, authorization)
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
     try:
-        res = combat.resolve_summon_turn(campaign_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    snap = combat.load_combat_snapshot(campaign_id)
-    if snap and snap.get("status") == "active":
         try:
-            res["advance_turn"] = combat.advance_turn(campaign_id)
+            res = combat.resolve_summon_turn(campaign_id)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-    else:
-        res["advance_turn"] = "ended"
-    res["combat_state"] = combat.load_combat_snapshot(campaign_id)
-    return res
+
+        snap = combat.load_combat_snapshot(campaign_id)
+        if snap and snap.get("status") == "active":
+            try:
+                res["advance_turn"] = combat.advance_turn(campaign_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        else:
+            res["advance_turn"] = "ended"
+        res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+        return res
+    finally:
+        turn_lock.release(lock)
 
 
-@router.post("/campaigns/{campaign_id}/combat/flee")
-def post_flee(campaign_id: int, authorization: str | None = Header(None)):
-    """
-    End active combat as fled. Returns 409 if there is no active combat row
-    (distinct from a missing HTTP route — avoids confusion with literal 404).
-    Idempotent: if combat already ended with reason fled, returns 200 with already_ended.
-    """
-    assert_campaign_owner(campaign_id, authorization)
-    if combat.get_active_combat(campaign_id):
-        combat.end_combat(campaign_id, "fled")
-        return {
-            "fled": True,
-            "already_ended": False,
-            "combat_state": combat.load_combat_snapshot(campaign_id),
-        }
-    snap = combat.load_combat_snapshot(campaign_id)
-    if (
-        snap
-        and str(snap.get("status") or "") == "ended"
-        and str(snap.get("ended_reason") or "") == "fled"
-    ):
-        return {"fled": True, "already_ended": True, "combat_state": snap}
-    raise HTTPException(
-        status_code=409,
-        detail=(
-            "Brak aktywnej walki — ucieczka z silnika jest możliwa tylko gdy trwa walka "
-            "(status active). Jeśli panel jest nieaktualny, odśwież stronę."
-        ),
-    )
+# #1450 (AUDIT): druga (martwa) definicja post_flee na tej samej ścieżce — bezwarunkowe
+# end_combat("fled") BEZ rzutu — usunięta. FastAPI używała pierwszej (rzut #1210), ale
+# druga była tykającą bombą (refaktor kolejności = darmowa 100% ucieczka). Idempotencja
+# `already_ended` przeniesiona do pierwszej definicji post_flee wyżej.
 
 
 class CastSpellRequest(BaseModel):
@@ -402,6 +423,10 @@ def post_recover_ammo(campaign_id: int, authorization: str | None = Header(None)
 @router.post("/campaigns/{campaign_id}/combat/loot/claim")
 def post_claim_loot(campaign_id: int, body: ClaimLootRequest, authorization: str | None = Header(None)):
     assert_campaign_owner(campaign_id, authorization)
+    # #1430: serializuj claim — dwa równoległe /loot/claim mogły oba przejść `if not pool`
+    # zanim którykolwiek wyczyścił loot_pool → podwojony grant. Lock + idempotencja
+    # (loot_persisted) w claim_post_combat_loot razem gwarantują pojedynczy grant.
+    lock = turn_lock.acquire_or_409(campaign_id)
     try:
         out = combat.claim_post_combat_loot(
             campaign_id,
@@ -410,4 +435,6 @@ def post_claim_loot(campaign_id: int, body: ClaimLootRequest, authorization: str
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        turn_lock.release(lock)
     return {"ok": True, "data": out}

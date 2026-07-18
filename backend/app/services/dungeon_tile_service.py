@@ -1011,6 +1011,7 @@ def move_through_door(campaign_id: int, character_id: int, direction: str) -> di
                         campaign_id, character_id, enemy_keys,
                         _dungeon_enemy_overrides=_enemy_overrides if _enemy_overrides else None,
                         _dungeon_first_combat=_is_first_combat,
+                        allow_pending=True,  # #1449: authored dungeon seed keys
                     )
                     run["combats_started"] = run.get("combats_started", 0) + 1
                     flags["dungeon_run"] = run

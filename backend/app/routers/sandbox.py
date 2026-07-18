@@ -334,7 +334,7 @@ def start_combat(payload: dict = Body(...)) -> dict[str, Any]:
         if str(v).strip().lower() in ("weteran", "elitarny")
     } if isinstance(_ranks_raw, dict) else {}
     try:
-        res = combat.initiate_combat(cid, char_id, enemies, _rank_by_key=ranks or None)
+        res = combat.initiate_combat(cid, char_id, enemies, _rank_by_key=ranks or None, allow_pending=True)  # #1449: admin sandbox harness
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "combat_state": combat.load_combat_snapshot(cid), "initiate": res}

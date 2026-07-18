@@ -175,7 +175,7 @@ def _clone_hero(
 def _default_combat_starter(campaign_id: int, character_id: int, enemy_keys: list) -> dict:
     from app.services import combat_service
 
-    return combat_service.initiate_combat(campaign_id, character_id, list(enemy_keys))
+    return combat_service.initiate_combat(campaign_id, character_id, list(enemy_keys), allow_pending=True)  # #1449: authored scenario keys
 
 
 def prepare_scenario(
