@@ -502,6 +502,17 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r14-gildia">Gildia Kupiecka</a></li>
         </ul>
       </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">XV</span><span class="ttl">Towarzysze i wierzchowce</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r15">Wprowadzenie</a></li>
+          <li><a href="#r15-rodzaje">Rodzaje towarzyszy</a></li>
+          <li><a href="#r15-najem">Najem, kupno i utrzymanie</a></li>
+          <li><a href="#r15-kon">Koń w podróży</a></li>
+          <li><a href="#r15-ucieczka">Ucieczka konno</a></li>
+          <li><a href="#r15-walka">Towarzysz w walce</a></li>
+        </ul>
+      </li>
     </ul>
     <div class="toc-empty">Brak wyników.</div>
   </nav>
@@ -2749,8 +2760,83 @@ document.addEventListener('DOMContentLoaded',function(){
       <p class="aside">Liczby (150% / 40%, wielkość asortymentu, rotacja) to wartości startowe — strojone
       w testach ekonomii, by handel uzupełniał pętlę farmienia, a nigdy jej nie kasował.</p>
 
+    </section>
+
+    <!-- ════════════════ XV · TOWARZYSZE I WIERZCHOWCE ════════════════ -->
+    <section id="r15">
+      <p class="eyebrow">Rozdział XV</p>
+      <h1><span class="num">XV</span>Towarzysze i wierzchowce</h1>
+      <p>Samotna wędrówka przez Kresy bywa krótka. W osadach można <b>najać towarzysza</b> —
+      najemnika z mieczem, tropiciela znającego bory, albo psa, który zwietrzy zasadzkę zanim
+      ta zwietrzy ciebie. W stajni kupisz też <b>wierzchowca</b>: koń skraca marsz i pozwala
+      wyrwać się przed walką, muł dźwiga więcej. Naraz prowadzisz najwyżej <b>jednego towarzysza
+      bojowego</b> i <b>jednego wierzchowca</b>.</p>
+
+      <h2 id="r15-rodzaje">Rodzaje towarzyszy</h2>
+      <p>Każdy typ służy do czego innego. Bojowi walczą u twego boku; wierzchowce nie biją się
+      nigdy, za to zmieniają twoją podróż.</p>
+      <div class="card">
+        <p class="card-h">Kogo można prowadzić</p>
+        <table class="test-card">
+          <tbody>
+            <tr><td>🗡 Najemnik</td><td class="dc">walczy w zwarciu, żołd za każdy dzień</td></tr>
+            <tr><td>🏹 Tropiciel</td><td class="dc">walczy z dystansu, skraca marsz przez las</td></tr>
+            <tr><td>🐕 Pies gończy</td><td class="dc">gryzie w walce i <b>ostrzega przed zasadzką</b></td></tr>
+            <tr><td>🐴 Koń</td><td class="dc">nie walczy — przyspiesza podróż i daje ucieczkę</td></tr>
+            <tr><td>🐴 Muł</td><td class="dc">nie walczy — wolniejszy, dźwiga więcej</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="r15-najem">Najem, kupno i utrzymanie</h2>
+      <p>Najemnika i tropiciela <b>najmujesz na dni</b> — płacisz żołd z góry, a potem co dzień.
+      Zabraknie złota na zapłatę przez dwa dni z rzędu, a towarzysz <b>odejdzie</b>. Konia i muła
+      możesz <b>kupić na własność</b> w stajni; wtedy zamiast żołdu płacisz tylko za <b>paszę</b>.
+      Nocleg w stajni pokrywa paszę tej nocy. Głodny koń <b>chudnie</b> i traci siły — dopóki go
+      nie nakarmisz, nie daje żadnych korzyści w podróży.</p>
+      <p class="aside">Koszty (żołd, cena kupna, pasza) to wartości startowe — strojone w testach
+      ekonomii, by towarzysz był realnym wydatkiem, a nie darmowym dodatkiem.</p>
+
+      <h2 id="r15-kon">Koń w podróży</h2>
+      <p>Konno pokonasz szlak <b>szybciej</b>, a im wyższą masz <b>Jeździectwo</b>, tym pewniej
+      trzymasz się w siodle i tym ostrzej gna wierzchowiec. Bez wyszkolenia koń idzie stępa —
+      pomaga, ale niewiele. Koń niesie też jeźdźca dłużej: <b>dzienny budżet marszu</b> rośnie,
+      więc zajedziesz dalej, zanim zapadnie zmierzch.</p>
+      <div class="card">
+        <p class="card-h">Tempo konnej jazdy wg Jeździectwa</p>
+        <table class="test-card">
+          <tbody>
+            <tr><td>Ranga 0 (stępa)</td><td class="dc">marsz krótszy o ~15%</td></tr>
+            <tr><td>Ranga 1</td><td class="dc">krótszy o ~25%</td></tr>
+            <tr><td>Ranga 2</td><td class="dc">krótszy o ~30%</td></tr>
+            <tr><td>Ranga 3 (cwał)</td><td class="dc" style="color:#9bb56a">krótszy o ~35%</td></tr>
+          </tbody>
+        </table>
+        <p class="ex">Muł jest wolniejszy od konia, a bonus z Jeździectwa działa na niego słabiej —
+        za to uniesie więcej niż koń.</p>
+      </div>
+
+      <h2 id="r15-ucieczka">Ucieczka konno</h2>
+      <p>Gdy w podróży wpadniesz na wroga, na koniu masz wybór, którego piechur nie ma:
+      <b>spiąć wierzchowca i uciec</b> zamiast dobywać broni. To <b>test Jeździectwa</b> — im
+      groźniejszy przeciwnik, tym trudniej mu umknąć. Udany rzut kończy spotkanie bez walki.
+      Porażka oznacza, że wróg cię dopadł — zaczyna się walka. <b>Krytyczna porażka</b> (naturalna
+      1) to <b>wypadnięcie z siodła</b>: potłuczenie i walka mimo wszystko.</p>
+      <p class="aside">Uciec można tylko na <b>najedzonym</b> koniu. Wykorzystana próba liczy się do
+      dziennego limitu spotkań — nie da się w kółko uciekać i przerzucać, aż w końcu się uda.</p>
+
+      <h2 id="r15-walka">Towarzysz w walce</h2>
+      <p>Najemnik, tropiciel i pies stają do walki jako <b>osobni uczestnicy po twojej stronie</b>.
+      W swojej turze <b>sami</b> atakują najbliższego wroga — nie musisz nimi kierować. Pies i
+      najemnik biją w zwarciu, tropiciel razi z dystansu.</p>
+      <p>Towarzysz <b>może zginąć</b> — i to na dobre. Nie ma dla niego wskrzeszenia ani rzutów na
+      śmierć; poległy towarzysz zostaje na polu, a ty ruszasz dalej sam albo najmujesz nowego.
+      Dlatego wierny pies u boku to nie tylko dodatkowe kły, lecz i cena, którą można zapłacić.</p>
+      <p class="aside">Wierzchowce nigdy nie wchodzą do walki — koń czeka z boku. Wartości (obrażenia,
+      wytrzymałość towarzyszy) są startowe i strojone w testach.</p>
+
       <footer>
-        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIV</span><br>
+        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XV</span><br>
         Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
       </footer>
     </section>
