@@ -299,9 +299,12 @@ def _build_narrative_actions(
                 label="Rzemiosło", action=f"OPEN_CRAFTING:{current_loc_key}", enabled=True, icon="🔨",
             ))
 
-    # 1) NPCs present at current location
+    # 1) NPCs present at current location — #1215: tylko ci realnie wprowadzeni do
+    # sceny w ostatniej narracji (mieszkaniec lokacji ≠ obecny tu i teraz; bez tego
+    # na turze przybycia chip proponował dialog z NPC, którego narrator nie pokazał).
     if current_loc_key and len(actions) < MAX_ACTIONS:
-        npc_actions = _get_npc_actions(conn, current_loc_key)
+        scene_folded = _last_scene_text(conn, campaign_id)
+        npc_actions = _get_npc_actions(conn, current_loc_key, scene_folded)
         remaining = MAX_ACTIONS - len(actions)
         actions.extend(npc_actions[:min(2, remaining)])
 
@@ -497,30 +500,81 @@ _HEX_TYPE_POLISH: dict[str, str] = {
 }
 
 
-def _get_npc_actions(conn: sqlite3.Connection, location_key: str) -> list[SuggestedAction]:
+# #1215 — słowa-tytuły/przydomki, które SAME nie identyfikują NPC (żeby „starszy"
+# nie łapał się na „starszy mężczyzna" w opisie). Dopasowanie preferuje imię własne.
+_NPC_TITLE_WORDS = {
+    "starszy", "starsza", "stary", "stara", "mistrz", "mistrzyni", "pan", "pani",
+    "kowal", "karczmarz", "karczmarka", "zielarz", "zielarka", "grubas", "gruby",
+    "chudy", "wielki", "mlody", "kapitan", "straznik", "straznicy", "handlarz",
+    "kupiec", "wojt", "soltys", "braciszek", "siostra", "ojciec", "matka",
+}
+
+
+def _last_scene_text(conn: sqlite3.Connection, campaign_id: int) -> str:
+    """#1215 — zwięzła, znormalizowana treść OSTATNIEJ narracji (do bramki obecności
+    NPC w scenie). Pusty string, gdy brak tur / błąd."""
+    try:
+        row = conn.execute(
+            "SELECT assistant_text FROM campaign_turns "
+            "WHERE campaign_id = ? ORDER BY turn_number DESC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+    except Exception:
+        return ""
+    if not row:
+        return ""
+    raw = (row[0] if not hasattr(row, "keys") else row["assistant_text"]) or ""
+    txt = raw
+    try:
+        j = json.loads(raw)
+        if isinstance(j, dict) and j.get("narrative"):
+            txt = str(j["narrative"])
+    except Exception:
+        pass
+    return fold(txt)
+
+
+def _npc_in_scene(label: str, key: str, scene_folded: str) -> bool:
+    """#1215 — czy narrator faktycznie wprowadził tego NPC do bieżącej sceny.
+    „Mieszkaniec lokacji" ≠ „obecny tu i teraz" — chip dialogu ma się pojawić dopiero,
+    gdy postać padnie w ostatniej narracji (po imieniu własnym, nie po samym tytule)."""
+    if not scene_folded:
+        return False
+    words = [w for w in fold(label).split() if len(w) >= 4]
+    names = [w for w in words if w not in _NPC_TITLE_WORDS]
+    candidates = names or words  # gdy sam tytuł — dopuść dopasowanie po tytule
+    return any(w in scene_folded for w in candidates)
+
+
+def _get_npc_actions(
+    conn: sqlite3.Connection, location_key: str, scene_folded: str = "",
+) -> list[SuggestedAction]:
     actions: list[SuggestedAction] = []
     try:
-        # Try location_npc_assignments join table first
+        # Try location_npc_assignments join table first. Zaciągamy szerzej niż 2, bo
+        # bramka obecności w scenie odsieje część — cap nakładamy po filtrze.
         rows = conn.execute(
             """
             SELECT n.key, n.label
             FROM location_npc_assignments lna
             JOIN npcs n ON n.key = lna.npc_key
             WHERE lna.location_key = ? AND lna.is_active = 1
-            LIMIT 2
+            LIMIT 8
             """,
             (location_key,),
         ).fetchall()
         for row in rows:
             npc_key = str(row["key"] or "")
             npc_name = str(row["label"] or npc_key)
+            if not _npc_in_scene(npc_name, npc_key, scene_folded):
+                continue
             actions.append(SuggestedAction(
                 label=f"Porozmawiaj z {npc_name}",
                 action=f"DIALOGUE:{npc_key}",
                 enabled=True,
             ))
         if actions:
-            return actions
+            return actions[:2]
 
         # Fallback: parse npc_keys JSON from game_locations
         loc_row = conn.execute(
@@ -532,7 +586,7 @@ def _get_npc_actions(conn: sqlite3.Connection, location_key: str) -> list[Sugges
             if npc_keys_raw:
                 npc_keys = json.loads(npc_keys_raw) if isinstance(npc_keys_raw, str) else npc_keys_raw
                 if isinstance(npc_keys, list):
-                    for npc_key in npc_keys[:2]:
+                    for npc_key in npc_keys:
                         npc_key = str(npc_key).strip()
                         if not npc_key:
                             continue
@@ -542,11 +596,15 @@ def _get_npc_actions(conn: sqlite3.Connection, location_key: str) -> list[Sugges
                             (npc_key,),
                         ).fetchone()
                         npc_name = str(nr["label"]) if nr else npc_key
+                        if not _npc_in_scene(npc_name, npc_key, scene_folded):
+                            continue
                         actions.append(SuggestedAction(
                             label=f"Porozmawiaj z {npc_name}",
                             action=f"DIALOGUE:{npc_key}",
                             enabled=True,
                         ))
+                        if len(actions) >= 2:
+                            break
     except Exception as exc:
         logger.warning("npc_actions_error", error=str(exc))
     return actions
