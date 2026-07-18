@@ -473,6 +473,11 @@ export interface CombatActionResult {
   attack_roll?: number;
   target_ac?: number;
   enemy_name?: string;
+  // #1192 follow-up: wróg zaatakował TOWARZYSZA gracza (nie gracza). HP gracza bez
+  // zmian; karta nazywa cel. `companion_down` = towarzysz padł (trwale).
+  target_kind?: "player" | "companion" | string;
+  companion_hp_remaining?: number;
+  companion_down?: boolean;
   // obrażenia / efekt
   damage?: number;
   damage_die?: string;

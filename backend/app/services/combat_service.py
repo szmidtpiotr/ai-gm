@@ -5464,6 +5464,117 @@ def _resolve_summon_spell_in_combat(
     return out
 
 
+# #1192 follow-up — szansa, że wróg w swojej turze uderza w TOWARZYSZA gracza
+# zamiast w gracza. Numbers Policy — wartość STARTOWA, Sandbox-tunable. Bez tego
+# towarzysz jest nieśmiertelny w walce (podważa „może zginąć — i to boli").
+COMPANION_AGGRO_CHANCE = 0.35
+
+
+def _enemy_companion_target(combatants: list[dict], enemy: dict) -> dict | None:
+    """Zwróć żywego towarzysza (type=='companion'), którego wróg może zaatakować
+    w tej turze, albo None. Bramka zasięgu jak dla melee: wróg trafia towarzysza
+    w tej samej strefie; wróg dystansowy trafia w każdej. Losowo (COMPANION_AGGRO_CHANCE)
+    — reszta tur leci normalnie na gracza."""
+    comps = [
+        c for c in combatants
+        if str(c.get("type")) == "companion" and int(c.get("hp_current", 0) or 0) > 0
+    ]
+    if not comps:
+        return None
+    e_zone = str(enemy.get("zone") or ZONE_ENGAGED)
+    _prefers_ranged = _default_zone_for_enemy(
+        str(enemy.get("enemy_key") or ""), str(enemy.get("name") or "")
+    ) == ZONE_RANGED
+    in_range = [
+        c for c in comps
+        if _prefers_ranged or str(c.get("zone") or ZONE_ENGAGED) == e_zone
+    ]
+    if not in_range:
+        return None
+    if random.random() >= COMPANION_AGGRO_CHANCE:
+        return None
+    return in_range[0]
+
+
+def _resolve_enemy_vs_companion(
+    conn, row, campaign_id: int, combatants: list, loot_pool_accum: list,
+    enemy: dict, comp: dict, out: dict,
+) -> dict:
+    """#1192 follow-up: wróg atakuje towarzysza gracza. Samodzielna ścieżka —
+    ŻADNYCH okien reakcji / rzutów na śmierć gracza (to tylko dla gracza). Rzut
+    ataku wg #826 (margines→dmg, pancerz=redukcja). Śmierć towarzysza = trwała:
+    sync HP→character_companions (state='dead'), usuń z turn_order. Kontrakt #232:
+    NIE advance'uje wewnętrznie — caller (post_enemy_turn) robi jeden advance."""
+    out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
+    out["target_kind"] = "companion"
+    out["target_id"] = str(comp.get("id"))
+    out["target_name"] = str(comp.get("name") or "Towarzysz")
+
+    raw = roll_d20()
+    atk_b = int(enemy.get("attack_bonus") or 0) + _combatant_stat_modifier(enemy, sheet=None, stat="attack_bonus")
+    wp = wound_penalty(int(enemy.get("hp_current", 0) or 0), int(enemy.get("hp_max", 0) or 0))
+    attack_roll = raw + atk_b + wp
+    c_def = int(comp.get("defense", 11) or 11)
+    hit = raw == 20 or (raw != 1 and attack_roll >= c_def)
+
+    out["raw_d20"] = int(raw)
+    out["attack_roll"] = int(attack_roll)
+    out["target_ac"] = int(c_def)
+    out["wound_penalty"] = int(wp)
+    out["hit"] = bool(hit)
+    dmg = 0
+    if hit:
+        _dd = roll_dice_detailed((enemy.get("damage_dice") or "1d6").strip().lower())
+        base = max(0, sum(_dd["rolls"])) if _dd["rolls"] else 0
+        out["damage_die"] = _dd["die"]
+        out["damage_rolls"] = _dd["rolls"]
+        if base > 0:
+            _dm = apply_defense_model(base, int(attack_roll), int(c_def), ignore_armor=bool(raw == 20))
+            if _dm["margin_bonus"]:
+                out["margin_damage_bonus"] = _dm["margin_bonus"]
+            if _dm["armor_reduction"]:
+                out["armor_reduction"] = _dm["armor_reduction"]
+            dmg = _dm["final"]
+        prev = int(comp.get("hp_current", 0) or 0)
+        comp["hp_current"] = max(0, prev - dmg)
+    out["damage"] = int(dmg)
+    out["companion_hp_remaining"] = int(comp.get("hp_current", 0) or 0)
+
+    _dead = int(comp.get("hp_current", 0) or 0) <= 0 and hit
+    out["companion_down"] = bool(_dead)
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn, combat_id=cid, campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid), actor="enemy",
+        event_type="enemy_vs_companion", roll_value=int(attack_roll), damage=int(dmg),
+        hp_after=int(comp.get("hp_current", 0) or 0),
+        target_id=str(comp.get("id")), target_name=out["target_name"], hit=bool(hit),
+        narrative=json.dumps({"enemy_name": out["enemy_name"], "companion": out["target_name"],
+                              "attack_roll": int(attack_roll), "raw_d20": int(raw),
+                              "damage": int(dmg), "hit": bool(hit), "down": bool(_dead)},
+                             ensure_ascii=False),
+    )
+
+    if _dead:
+        # Trwała śmierć: usuń z turn_order (advance i tak pomija hp<=0) + sync DB.
+        order = json.loads(row["turn_order"] or "[]")
+        new_order = [t for t in order if str(t) != str(comp.get("id"))]
+        _b15_persist_with_turn_order(conn, row, combatants, new_order)
+        try:
+            rid = comp.get("companion_row_id")
+            if rid is not None:
+                from app.services import companion_service as _cmp
+                _cmp.sync_companion_hp(conn, int(row["character_id"]), int(rid), 0)
+        except Exception as _sync_err:
+            logger.warning("companion_death_sync_failed", error=str(_sync_err))
+    else:
+        _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+    conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
 def _resolve_companion_attack_inline(
     conn, row, campaign_id: int, combatants: list[dict], comp: dict
 ) -> None:
@@ -8022,6 +8133,14 @@ def _resolve_enemy_attack_turn(
         # podwójny advance przeskakiwał turę gracza (walka wisiała na turze wroga).
         out["combat_state"] = load_combat_snapshot(campaign_id)
         return out
+
+    # #1192 follow-up: wróg może zamiast gracza uderzyć w TOWARZYSZA (jeśli żywy i
+    # w zasięgu). Samodzielna ścieżka — bez okien reakcji / rzutów śmierci gracza.
+    _comp_target = _enemy_companion_target(combatants, enemy)
+    if _comp_target is not None:
+        return _resolve_enemy_vs_companion(
+            conn, row, campaign_id, combatants, loot_pool_accum, enemy, _comp_target, out,
+        )
 
     p_zone_e = str(player_c.get("zone") or ZONE_ENGAGED)
     e_zone = str(enemy.get("zone") or ZONE_ENGAGED)

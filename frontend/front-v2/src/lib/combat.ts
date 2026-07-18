@@ -235,6 +235,12 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
     tone: windowPending ? "warn" : hit ? "bad" : "ok",
   });
   const name = String(r.enemy_name || "Wróg").toUpperCase();
+  // #1192: wróg uderzył w towarzysza — nazwij cel, by karta nie sugerowała gracza.
+  if (r.target_kind === "companion") {
+    const tgt = String(r.target_name || "towarzysza").toUpperCase();
+    const title = r.companion_down ? `${name} → ${tgt} · PADŁ` : `${name} → ${tgt}`;
+    return { actor: "enemy", title, cells, crit, fumble };
+  }
   return { actor: "enemy", title: `${name} — ATAK`, cells, crit, fumble };
 }
 

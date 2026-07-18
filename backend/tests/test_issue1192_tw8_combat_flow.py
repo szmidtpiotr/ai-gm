@@ -134,3 +134,66 @@ def test_companion_kill_triggers_victory(combat_db):
     comp = combat_db.execute(
         "SELECT state, current_hp FROM character_companions WHERE id=1").fetchone()
     assert comp["state"] == "active"
+
+
+# ── #1192 follow-up: wróg atakuje towarzysza ────────────────────────────────
+
+def _active_row(combat_db, combatants, turn_order):
+    combat_db.execute(
+        "INSERT INTO active_combat (campaign_id, character_id, round, turn_order, current_turn, combatants, status) "
+        "VALUES (1,1,1,?,?,?, 'active')",
+        (json.dumps(turn_order), turn_order[0], json.dumps(combatants)),
+    )
+    combat_db.commit()
+    return combat_db.execute("SELECT * FROM active_combat WHERE campaign_id=1").fetchone()
+
+
+def test_enemy_companion_target_zone_gate(combat_db, monkeypatch):
+    import app.services.combat_service as c
+    monkeypatch.setattr(c.random, "random", lambda: 0.0)  # within aggro chance
+    enemy = _enemy()  # melee, engaged
+    ranged_comp = {**_companion(), "zone": "ranged"}
+    assert c._enemy_companion_target([_player(), ranged_comp, enemy], enemy) is None
+    engaged_comp = {**_companion(), "zone": "engaged"}
+    assert c._enemy_companion_target([_player(), engaged_comp, enemy], enemy) is not None
+
+
+def test_enemy_companion_target_probability(combat_db, monkeypatch):
+    import app.services.combat_service as c
+    monkeypatch.setattr(c.random, "random", lambda: 0.99)  # above aggro chance
+    assert c._enemy_companion_target([_player(), _companion(), _enemy()], _enemy()) is None
+
+
+def test_enemy_hits_companion_not_player(combat_db, monkeypatch):
+    import app.services.combat_service as c
+    comp = _companion(hp=10)
+    enemy = _enemy()
+    combatants = [_player(), comp, enemy]
+    row = _active_row(combat_db, combatants, ["player", "companion_1", "goblin_01"])
+    monkeypatch.setattr(c, "roll_d20", lambda *a, **k: 18)
+    monkeypatch.setattr(c, "roll_dice_detailed", lambda expr: {"die": "1d4", "rolls": [4]})
+    out = c._resolve_enemy_vs_companion(combat_db, row, 1, combatants, [], enemy, comp, {})
+    assert out["target_kind"] == "companion" and out["hit"] is True and out["damage"] >= 1
+    assert comp["hp_current"] < 10
+    saved = json.loads(combat_db.execute(
+        "SELECT combatants FROM active_combat WHERE campaign_id=1").fetchone()["combatants"])
+    player = next(x for x in saved if x["id"] == "player")
+    assert player["hp_current"] == 20  # player untouched
+
+
+def test_enemy_kills_companion_permanent(combat_db, monkeypatch):
+    import app.services.combat_service as c
+    cs.hire(combat_db, 1, "mercenary")  # character_companions row id 1
+    comp = {**_companion(hp=2), "companion_row_id": 1}
+    enemy = _enemy()
+    combatants = [_player(), comp, enemy]
+    row = _active_row(combat_db, combatants, ["player", "companion_1", "goblin_01"])
+    monkeypatch.setattr(c, "roll_d20", lambda *a, **k: 18)
+    monkeypatch.setattr(c, "roll_dice_detailed", lambda expr: {"die": "1d4", "rolls": [4]})
+    out = c._resolve_enemy_vs_companion(combat_db, row, 1, combatants, [], enemy, comp, {})
+    assert out["companion_down"] is True
+    order = json.loads(combat_db.execute(
+        "SELECT turn_order FROM active_combat WHERE campaign_id=1").fetchone()["turn_order"])
+    assert "companion_1" not in order
+    st = combat_db.execute("SELECT state FROM character_companions WHERE id=1").fetchone()["state"]
+    assert st == "dead"
