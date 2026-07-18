@@ -57,6 +57,31 @@ wybierasz już na miejscu.</p>`,
     chapters: [
       { id: 'swiat', title: 'NPC, wrogowie i zasady świata', body: STUB },
       {
+        id: 'towarzysze',
+        title: 'Zakładka Towarzysze (najemnicy i wierzchowce)',
+        body: `
+<p>W sekcji <b>Świat</b> zakładka <b>Towarzysze</b> to katalog towarzyszy podróży i wierzchowców,
+których gracz może najmować i kupować w osadach — tak jak katalog wrogów, tylko po przyjaznej stronie.</p>
+<h4>Trzy typy</h4>
+<ul>
+  <li><b>🗡 Najemnik</b> i <b>🐕 Zwierzę (pies)</b> — <b>walczą</b> u boku bohatera (podaj <b>Atak (JSON)</b>,
+      np. <code>{"attack_bonus":3,"damage_dice":"1d6","zone":"engaged"}</code>).</li>
+  <li><b>🐴 Wierzchowiec</b> (koń, muł) — <b>nie walczy</b>; zostaw pole Atak puste. Skraca podróż i daje
+      ucieczkę przed walką. Efekty ustawiasz w polu <b>Pasywy (JSON)</b>:
+      <code>travel_speed_mult</code>, <code>daily_cap_bonus_h</code>, <code>escape_enabled</code>,
+      <code>encounter_chance_mult</code> (pies), <code>terrain_speed_mult</code> (tropiciel).</li>
+</ul>
+<h4>Koszty</h4>
+<p><b>Najem/dzień</b> = żołd potrącany co dzień gry (0 = nie do najęcia). <b>Kupno</b> = cena na własność
+(puste = nie do kupienia). <b>Utrzymanie/dz</b> = pasza dla kupionego wierzchowca. Głodny koń traci bonusy;
+niezapłacony najemnik po dwóch dniach odchodzi.</p>
+<h4>Kreator AI</h4>
+<p>Przycisk <b>+ Dodaj towarzysza</b> otwiera formularz. Możesz też użyć <b>Kreatora AI</b> (Smart Entry) —
+opisz towarzysza, a LLM wypełni pola. Aby przyznać towarzysza konkretnemu bohaterowi od ręki, użyj cheatu
+<code>grant companion</code> w Inspektorze bohatera (sekcja Gracze).</p>
+<p class="muted">Wszystkie liczby (HP, koszty, mnożniki) to wartości startowe — strojone po obserwacji rozgrywki.</p>`,
+      },
+      {
         id: 'wydarzenia',
         title: 'Zakładka Wydarzenia (żywy świat)',
         body: `
