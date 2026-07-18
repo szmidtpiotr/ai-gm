@@ -827,6 +827,14 @@ def resolve_chain_travel(
                 (json.dumps(_sf_budget, ensure_ascii=False), _gs_budget["id"]),
             )
             conn.commit()
+            # #1192 FAZA TW: nowy dzień gry = rozliczenie utrzymania towarzyszy
+            # (żołd najemnika / pasza konia). Idempotentne per dzień.
+            try:
+                from app.services import companion_service as _cmp
+                _cmp.run_daily_upkeep(conn, int(character_id), int(_cur_day),
+                                      campaign_id=campaign_id)
+            except Exception as _up_err:
+                logger.warning("companion_upkeep_failed", error=str(_up_err))
     except Exception as _budget_day_err:
         logger.warning("march_budget_day_reset_failed", error=str(_budget_day_err))
 
@@ -848,6 +856,19 @@ def resolve_chain_travel(
         _ev_region = _resolve_region_ev(conn, campaign_id)
         _weather_mult = _weather_mult * _wes.travel_hours_multiplier(conn, _ev_region)
         _event_enc_mult = _wes.encounter_chance_multiplier(conn, _ev_region)
+    except Exception:
+        pass
+
+    # #1192 FAZA TW: aktywny wierzchowiec przyspiesza marsz (mnożnik wg rangi
+    # Jeździectwa, głodny koń bez bonusu) i podnosi dzienny budżet; pies obniża
+    # szansę zasadzki. Składane z pogodą/eventami — mnożymy, nie nadpisujemy.
+    _companion_cap_bonus = 0.0
+    _companion_enc_mult = 1.0
+    try:
+        from app.services import companion_service as _cmp
+        _weather_mult = _weather_mult * _cmp.get_travel_multiplier(conn, character_id)
+        _companion_cap_bonus = _cmp.get_daily_cap_bonus(conn, character_id)
+        _companion_enc_mult = _cmp.get_encounter_chance_mult(conn, character_id)
     except Exception:
         pass
 
@@ -997,9 +1018,9 @@ def resolve_chain_travel(
 
     def _world_budget_interrupt(acc: float, step: MovementStep) -> str | None:
         # PT7: hard cap forced_camp (any time), soft cap dusk (unless already night_march)
-        if acc >= DAILY_HARD_CAP:
+        if acc >= DAILY_HARD_CAP + _companion_cap_bonus:  # #1192: koń niesie dłużej
             return "forced_camp"
-        if acc >= DAILY_SOFT_CAP and not night_march:
+        if acc >= DAILY_SOFT_CAP + _companion_cap_bonus and not night_march:
             return "dusk"
         return None
 
@@ -1021,6 +1042,7 @@ def resolve_chain_travel(
         if route_mode == "road" and hex_data.get("hex_type") == "road":
             m *= ROAD_ENCOUNTER_MULT
         m *= _event_enc_mult  # #1193: rajdy bandytów zagęszczają spotkania w regionie
+        m *= _companion_enc_mult  # #1192: pies gończy ostrzega przed zasadzką
         return m
 
     # #1390 Fix 3 — cap na CAŁĄ podróż. Rzut leci per hex (stop na 1. trafieniu),

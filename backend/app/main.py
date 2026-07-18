@@ -38,6 +38,7 @@ from app.api import (
     npcs,
     shop,
     services_shop,
+    companions,
 )
 from app.api.crafting import router as crafting_router
 from app.api.dungeons import router as dungeons_router
@@ -864,6 +865,7 @@ app.include_router(inventory.router, prefix="/api")
 app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")
 app.include_router(services_shop.router, prefix="/api")
+app.include_router(companions.router, prefix="/api")  # #1192 FAZA TW
 app.include_router(auth.router, prefix="/api")
 app.include_router(friends.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")

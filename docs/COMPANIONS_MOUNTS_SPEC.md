@@ -2,7 +2,7 @@
 
 **Issue bazowe:** #1192 (Towarzysz podróży — hireling / zwierzę)
 **Rozszerzenie:** koń/wierzchowiec spięty ze skillem `riding` (Jeździectwo, DEX, DC 12)
-**Status:** spec zatwierdzony przez Piotra 2026-07-18, gotowy do wdrożenia agentem
+**Status:** spec zatwierdzony 2026-07-18. Backend TW1–TW6 WDROŻONE+zweryfikowane; TW7/TW8 prymitywy gotowe (wiring pending); TW9/TW10-UI/TW11 do zrobienia. Statusy per zadanie w §6.
 **Zakres:** PEŁNY system od razu — najemnik, tropiciel, pies (kombatanci) + koń/muł (wierzchowce, poza walką)
 
 ---
@@ -200,6 +200,22 @@ Ledger: wpis F-NN w `frontend_design.md` §7.
 ---
 
 ## 6. Zadania wdrożeniowe TW1–TW11
+
+**Statusy (2026-07-18):**
+| Zadanie | Status | Uwagi |
+|---|---|---|
+| TW1 DB+seedy | ✅ WDROŻONE | `_ensure_companions_schema`, 5 seedów, migracja w live DB |
+| TW2 serwis | ✅ WDROŻONE | `companion_service.py`, 26 pytest zielonych |
+| TW3 upkeep | ✅ WDROŻONE | wpięte w day-tick `hex_travel_service` |
+| TW4 endpointy | ✅ WDROŻONE | `api/companions.py`, live smoke buy/list/dismiss OK |
+| TW5 podróż konna | ✅ WDROŻONE | mult+cap wpięte w `hex_travel_service` |
+| TW6 pies encounter | ✅ WDROŻONE | `_companion_enc_mult` w `_step_mult` |
+| TW7 ucieczka | 🟡 PRYMITYW | `resolve_mount_escape`/`can_escape_mounted` gotowe+testowane; brak wpięcia w flow encountera (turns.py) + przycisk ŻAR |
+| TW8 walka | 🟡 PRYMITYW | `build_companion_combatant`/`sync_companion_hp` gotowe+testowane; brak wstrzyknięcia w start walki + routing tury w kolejce (backend+front) — ryzyko zawieszenia kolejki tur, wymaga combat smoke |
+| TW9 frontend ŻAR | ⬜ TODO | build+visual verify |
+| TW10 admin | 🟡 CZĘŚĆ | Smart Entry schema ✅ (`smart_entry.py`); brak zakładki Świat→Towarzysze + monitor + cheat |
+| TW11 Księga | ⬜ TODO | rozdział wg checklisty #868 |
+
 
 Kolejność = zależności. Jedno zadanie = jedna sesja agenta (konwencja FAZA-U). Testy: TYLKO pliki zadania (nigdy pełna suita). TDD: docker cp → pytest w kontenerze (`ai-gm-dev-backend-1`, testy w `/app/tests/`).
 

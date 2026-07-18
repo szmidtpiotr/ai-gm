@@ -73,6 +73,7 @@ WRITABLE_TABLES = {
     "game_config_spells",
     "game_locations",
     "game_config_recipes",
+    "game_config_companions",
 }
 
 READ_ONLY_TABLES = {
@@ -605,6 +606,71 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             "is_active": {
                 "type": "boolean",
                 "question": "Przepis aktywny (dostępny w grze)?",
+            },
+        },
+    },
+    "game_config_companions": {
+        # #1192 FAZA TW — towarzysze podróży + wierzchowce (Kreator AI jak wrogowie).
+        "required": ["key", "label", "type", "hp_base"],
+        "optional": ["attack_json", "daily_cost", "buy_cost", "upkeep_cost",
+                     "passive_json", "region_tags", "description", "note"],
+        "fields": {
+            "key": {
+                "type": "text",
+                "question": "Unikalny klucz (slug), np. 'war_horse' albo 'hunting_dog'.",
+            },
+            "label": {
+                "type": "text",
+                "question": "Wyświetlana nazwa towarzysza, np. 'Koń bojowy'.",
+            },
+            "type": {
+                "type": "single_choice",
+                "question": "Jaki to typ towarzysza?",
+                "options": [
+                    {"label": "mount", "description": "Wierzchowiec — przyspiesza podróż, NIE walczy"},
+                    {"label": "hireling", "description": "Najemnik/tropiciel — walczy u boku bohatera"},
+                    {"label": "animal", "description": "Zwierzę (pies) — walczy, może dawać pasyw"},
+                ],
+            },
+            "hp_base": {
+                "type": "number",
+                "question": "Ile punktów życia ma towarzysz?",
+                "min": 1,
+            },
+            "attack_json": {
+                "type": "text",
+                "question": "Profil ataku JSON dla walczących, np. '{\"attack_bonus\":3,\"damage_dice\":\"1d6\",\"zone\":\"engaged\"}'. Wierzchowce zostaw puste.",
+            },
+            "daily_cost": {
+                "type": "number",
+                "question": "Koszt najmu za dzień (w złocie). 0 = nie do najęcia.",
+                "min": 0,
+            },
+            "buy_cost": {
+                "type": "number",
+                "question": "Koszt kupna na własność (w złocie, opcjonalnie).",
+                "min": 0,
+            },
+            "upkeep_cost": {
+                "type": "number",
+                "question": "Dzienne utrzymanie/pasza dla kupionego (w złocie). 0 dla większości zwierząt.",
+                "min": 0,
+            },
+            "passive_json": {
+                "type": "text",
+                "question": "Pasywy JSON, np. '{\"travel_speed_mult\":0.75,\"daily_cap_bonus_h\":2,\"escape_enabled\":true}' albo '{\"encounter_chance_mult\":0.8}'.",
+            },
+            "region_tags": {
+                "type": "text",
+                "question": "Znaczniki regionów gdzie dostępny (CSV, opcjonalnie). Puste = wszędzie.",
+            },
+            "description": {
+                "type": "text",
+                "question": "Krótki opis towarzysza (dla gracza).",
+            },
+            "note": {
+                "type": "text",
+                "question": "Notatka dla MG (zdolności specjalne, informacyjnie).",
             },
         },
     },

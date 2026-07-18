@@ -7463,6 +7463,107 @@ def _ensure_guild_merchant_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_companions_schema(conn: sqlite3.Connection) -> None:
+    """#1192 FAZA TW — Towarzysze podróży i wierzchowce.
+
+    `game_config_companions` = catalog (content-as-code, created_by='seed'),
+    mirrors game_config_enemies but friendly. type ∈ mount/hireling/animal.
+    Mounts (type='mount') never enter combat — attack_json is NULL.
+    `character_companions` = per-character live state. Slots enforced in the
+    service layer (1 combat companion + 1 mount), not SQL. Idempotent.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS game_config_companions (
+                key          TEXT PRIMARY KEY,
+                label        TEXT NOT NULL,
+                type         TEXT NOT NULL DEFAULT 'hireling'
+                                 CHECK(type IN ('mount','hireling','animal')),
+                hp_base      INTEGER NOT NULL DEFAULT 10,
+                attack_json  TEXT,
+                daily_cost   INTEGER NOT NULL DEFAULT 0,
+                buy_cost     INTEGER,
+                upkeep_cost  INTEGER NOT NULL DEFAULT 0,
+                passive_json TEXT,
+                region_tags  TEXT,
+                description  TEXT,
+                note         TEXT,
+                is_active    INTEGER NOT NULL DEFAULT 1,
+                created_by   TEXT NOT NULL DEFAULT 'seed',
+                created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_companions (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id   INTEGER NOT NULL,
+                companion_key  TEXT NOT NULL,
+                custom_name    TEXT,
+                current_hp     INTEGER NOT NULL,
+                state          TEXT NOT NULL DEFAULT 'active'
+                                   CHECK(state IN ('active','dead','dismissed')),
+                ownership      TEXT NOT NULL DEFAULT 'hired'
+                                   CHECK(ownership IN ('hired','owned')),
+                acquired_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                last_upkeep_day INTEGER,
+                unpaid_days    INTEGER NOT NULL DEFAULT 0,
+                underfed       INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_char_companions_char "
+            "ON character_companions(character_id, state)"
+        )
+        conn.commit()
+
+        # ── Seeds (content-as-code #1202, created_by='seed'; INSERT OR IGNORE
+        #    so runtime/admin edits are never clobbered on boot — #1377). ──
+        # (key, label, type, hp, attack_json, daily, buy, upkeep, passive_json, region_tags, description, note)
+        seeds = [
+            ("horse", "Koń wierzchowy", "mount", 20, None, 4, 60, 1,
+             '{"travel_speed_mult":0.75,"daily_cap_bonus_h":2,"escape_enabled":true}',
+             None,
+             "Wierny koń wierzchowy. Przyspiesza podróż i pozwala uciec przed zasadzką.",
+             "Nie walczy. Wymaga paszy (utrzymanie) — głodny koń traci prędkość."),
+            ("mule", "Muł juczny", "mount", 16, None, 2, 30, 1,
+             '{"travel_speed_mult":0.9,"daily_cap_bonus_h":2,"carry_bonus_kg":60}',
+             None,
+             "Wytrzymały muł juczny. Wolniejszy niż koń, ale niesie więcej.",
+             "Nie walczy. Nosi dodatkowy ekwipunek (informacyjnie)."),
+            ("dog_tracker", "Pies gończy", "animal", 8, '{"attack_bonus":2,"damage_dice":"1d4","zone":"engaged"}', 1, 15, 0,
+             '{"encounter_chance_mult":0.8}',
+             None,
+             "Czujny pies gończy. Ostrzega przed zasadzką i gryzie w walce.",
+             "Walczy u boku bohatera. Może zginąć — brak wskrzeszania."),
+            ("mercenary", "Najemnik", "hireling", 14, '{"attack_bonus":3,"damage_dice":"1d6","zone":"engaged"}', 5, None, 0,
+             '{"carry_bonus_kg":20}',
+             None,
+             "Zaprawiony w bojach najemnik. Drugi miecz u boku bohatera.",
+             "Walczy w zwarciu. Koszt dzienny. Może zginąć."),
+            ("tracker", "Tropiciel", "hireling", 10, '{"attack_bonus":2,"damage_dice":"1d4","zone":"ranged"}', 4, None, 0,
+             '{"terrain_speed_mult":{"las":0.8}}',
+             None,
+             "Doświadczony tropiciel. Skraca marsz przez las i strzela z dystansu.",
+             "Walczy z dystansu. Obniża koszt podróży przez las."),
+        ]
+        for s in seeds:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_companions
+                   (key,label,type,hp_base,attack_json,daily_cost,buy_cost,upkeep_cost,
+                    passive_json,region_tags,description,note,created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'seed')""",
+                s,
+            )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.info("companions_schema_deferred", reason=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -7635,6 +7736,7 @@ def run_admin_migrations() -> None:
         _ensure_experiment_schema(conn)  # #1341 BL-D2 — eksperymenty: ukryte receptury + odkrycia
         _ensure_guild_merchant_schema(conn)  # #1342 BL-D3 — gildia kupiecka + no_trade
         _ensure_recipe_loot_schema(conn)  # #1375 BL-E1 — receptury jako drop lootu + pule availability
+        _ensure_companions_schema(conn)  # #1192 FAZA TW — towarzysze podróży + wierzchowce
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
