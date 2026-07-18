@@ -11,6 +11,7 @@ Playwright spec issue_564_u16_cost_preview.spec.js na żywej bazie DEV.
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import sqlite3
 import pytest
@@ -68,10 +69,7 @@ def db():
             weapon_key TEXT, item_key TEXT, consumable_key TEXT,
             affixes_json TEXT
         );
-        CREATE TABLE game_config_affixes (
-            key TEXT PRIMARY KEY, name TEXT, tier INTEGER,
-            is_active INTEGER DEFAULT 1, allowed_item_types TEXT, effect_json TEXT
-        );
+        """ + table_sql("game_config_affixes") + """
         """
     )
     conn.execute("INSERT INTO characters (id, gold_gp) VALUES (1, 800)")

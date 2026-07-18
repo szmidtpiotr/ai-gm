@@ -5,6 +5,7 @@ import os
 import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 import pytest
 from app.services.shop_service import _catalog_item
@@ -39,67 +40,10 @@ def _make_db() -> sqlite3.Connection:
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL DEFAULT '',
-            damage_die TEXT NOT NULL DEFAULT 'd6',
-            weapon_type TEXT NOT NULL DEFAULT 'melee',
-            linked_stat TEXT NOT NULL DEFAULT 'STR',
-            allowed_classes TEXT NOT NULL DEFAULT '[]',
-            two_handed INTEGER NOT NULL DEFAULT 0,
-            finesse INTEGER NOT NULL DEFAULT 0,
-            weight_kg REAL NOT NULL DEFAULT 0.0,
-            description TEXT NOT NULL DEFAULT '',
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            price_gp INTEGER DEFAULT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL DEFAULT '',
-            item_type TEXT NOT NULL DEFAULT 'misc',
-            description TEXT NOT NULL DEFAULT '',
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            price_gp INTEGER DEFAULT NULL,
-            effect_json TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            note TEXT,
-            weight_kg REAL NOT NULL DEFAULT 0.0,
-            ac_bonus INTEGER NOT NULL DEFAULT 0,
-            charges INTEGER NOT NULL DEFAULT 1,
-            allowed_classes TEXT NOT NULL DEFAULT '[]',
-            min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL DEFAULT '',
-            description TEXT NOT NULL DEFAULT '',
-            effect_type TEXT NOT NULL DEFAULT 'misc',
-            effect_dice TEXT,
-            effect_bonus INTEGER NOT NULL DEFAULT 0,
-            effect_target TEXT NOT NULL DEFAULT 'self',
-            weight_kg REAL NOT NULL DEFAULT 0.0,
-            charges INTEGER NOT NULL DEFAULT 1,
-            base_price INTEGER NOT NULL DEFAULT 0,
-            price_gp INTEGER DEFAULT NULL,
-            note TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_affixes (
-            key TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            tier INTEGER NOT NULL DEFAULT 1,
-            allowed_item_types TEXT NOT NULL DEFAULT 'weapon',
-            effect_json TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_consumables") + """
+        """ + table_sql("game_config_affixes") + """
     """)
     # Weapons: one with price_gp set, one with only value_gp (migration compat)
     conn.execute("""INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes, value_gp, price_gp)

@@ -8,6 +8,7 @@ Test sprawdza dane seeda (migracja) + parser SPEND_GOLD na świeżej bazie.
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import sqlite3
 import pytest
@@ -20,13 +21,7 @@ def _fresh_services_db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_services (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            cost_gp INTEGER NOT NULL DEFAULT 0,
-            description TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1
-        )
+        """ + table_sql("game_config_services") + """
     """)
     # Znajdź seed zawierający tavern_meal i zaaplikuj go (RED: nie istnieje dopóki fix nie wejdzie).
     seed = next(

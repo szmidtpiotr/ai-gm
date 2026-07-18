@@ -28,6 +28,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service
 
@@ -72,8 +73,7 @@ def _combat_db(tmp_path, *, player_str=14, enemy_str=10, wrestling_rank=1,
           turn_number REAL, actor TEXT, event_type TEXT, roll_value INTEGER, damage INTEGER, hp_after INTEGER,
           target_id TEXT, target_name TEXT, hit INTEGER, narrative TEXT,
           created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
-        CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, label TEXT, effect_json TEXT,
-          is_active INTEGER DEFAULT 1, stackable INTEGER DEFAULT 0);
+        """ + table_sql("game_config_conditions") + """
         INSERT INTO game_config_conditions (key,label,effect_json,is_active,stackable) VALUES
           ('slowed','Spowolniony','{{"effects":[{{"type":"static_stat_modifier","stat":"DEX","value":-2}}]}}',1,0),
           ('stunned','Ogłuszony','{{"effects":[{{"type":"skip_turn"}}]}}',1,0);

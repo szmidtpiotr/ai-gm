@@ -5,5 +5,8 @@
   "alwaysUpdateLinks": true,
   "showLineNumber": false,
   "spellcheck": true,
-  "spellcheckLanguages": ["pl", "en-US"]
+  "spellcheckLanguages": [
+    "pl",
+    "en-US"
+  ]
 }

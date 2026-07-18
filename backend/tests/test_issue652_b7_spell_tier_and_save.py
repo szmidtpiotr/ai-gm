@@ -12,6 +12,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 from app.services import spell_service
 
@@ -92,7 +93,7 @@ def temp_db(tmp_path, monkeypatch):
     conn = sqlite3.connect(db_file)
     conn.executescript(
         """
-        CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, label TEXT, tier INTEGER);
+        """ + table_sql("game_config_spells") + """
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER,
             use_count INTEGER DEFAULT 0, learned_at_level INTEGER DEFAULT 1);
         CREATE TABLE characters (id INTEGER PRIMARY KEY, sheet_json TEXT);

@@ -11,6 +11,7 @@ Acceptance:
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -44,11 +45,7 @@ def db():
             game_clock_day INTEGER DEFAULT 1,
             reverted_at TEXT
         );
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            updated_at TEXT
-        );
+        """ + table_sql("game_config_meta") + """
 
         -- Character with 200 gold
         INSERT INTO characters VALUES (1, 200);

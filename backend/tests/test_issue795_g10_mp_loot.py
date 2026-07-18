@@ -6,6 +6,7 @@ import sys
 import os
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 os.environ.setdefault("AIGM_E2E_LITE", "1")
 
 import pytest
@@ -19,50 +20,12 @@ def _make_loot_db(tmp_path):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE game_config_enemies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
-            name TEXT NOT NULL DEFAULT '',
-            loot_table_key TEXT,
-            drop_chance REAL NOT NULL DEFAULT 1.0,
-            xp_award INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE game_config_loot_tables (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
-            label TEXT NOT NULL DEFAULT '',
-            gold_min INTEGER NOT NULL DEFAULT 0,
-            gold_max INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_loot_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            loot_table_key TEXT NOT NULL,
-            item_key TEXT,
-            weapon_key TEXT,
-            consumable_key TEXT,
-            weight INTEGER NOT NULL DEFAULT 100,
-            qty_min INTEGER NOT NULL DEFAULT 1,
-            qty_max INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_weapons (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
-            label TEXT NOT NULL DEFAULT '',
-            allowed_classes TEXT NOT NULL DEFAULT '[]',
-            linked_stat TEXT DEFAULT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
-            label TEXT NOT NULL DEFAULT ''
-        );
-        CREATE TABLE game_config_consumables (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
-            label TEXT NOT NULL DEFAULT ''
-        );
+        """ + table_sql("game_config_enemies") + """
+        """ + table_sql("game_config_loot_tables") + """
+        """ + table_sql("game_config_loot_entries") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_consumables") + """
         CREATE TABLE characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             campaign_id INTEGER,

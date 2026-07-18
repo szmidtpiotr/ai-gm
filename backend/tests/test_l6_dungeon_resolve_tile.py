@@ -9,6 +9,7 @@ Issue #675. Verifies:
 - Soft-lock impossible: riddle_solved exit_condition does not block boss path
 """
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -57,14 +58,7 @@ CREATE TABLE dungeon_tiles (
     is_boss_tile INTEGER DEFAULT 0,
     is_active INTEGER DEFAULT 1
 );
-CREATE TABLE game_config_riddles (
-    key TEXT PRIMARY KEY,
-    text TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    answer_alts TEXT DEFAULT '[]',
-    hints TEXT DEFAULT '[]',
-    is_active INTEGER DEFAULT 1
-);
+""" + table_sql("game_config_riddles") + """
 CREATE TABLE game_dungeons (
     key TEXT PRIMARY KEY,
     label TEXT NOT NULL DEFAULT 'Test Dungeon',
@@ -83,38 +77,12 @@ CREATE TABLE game_dungeons (
     boss_tile_id INTEGER,
     endless_growth_n INTEGER DEFAULT 0
 );
-CREATE TABLE game_config_loot_tables (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL DEFAULT 'Table',
-    gold_min INTEGER DEFAULT 0,
-    gold_max INTEGER DEFAULT 0,
-    is_active INTEGER DEFAULT 1
-);
-CREATE TABLE game_config_loot_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    loot_table_key TEXT NOT NULL,
-    item_key TEXT,
-    consumable_key TEXT,
-    weapon_key TEXT,
-    weight INTEGER DEFAULT 100,
-    qty_min INTEGER DEFAULT 1,
-    qty_max INTEGER DEFAULT 1
-);
-CREATE TABLE game_config_enemies (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL DEFAULT 'Enemy',
-    hp_base INTEGER DEFAULT 5,
-    ac_base INTEGER DEFAULT 8,
-    attack_bonus INTEGER DEFAULT 0,
-    damage_die TEXT DEFAULT '1d6',
-    damage_bonus INTEGER DEFAULT 0,
-    dex_modifier INTEGER DEFAULT 0,
-    tier TEXT DEFAULT 'common',
-    stats_json TEXT DEFAULT NULL
-);
-CREATE TABLE game_config_items (key TEXT PRIMARY KEY, label TEXT NOT NULL DEFAULT 'Item');
-CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT NOT NULL DEFAULT 'Weapon');
-CREATE TABLE game_config_consumables (key TEXT PRIMARY KEY, label TEXT NOT NULL DEFAULT 'Potion');
+""" + table_sql("game_config_loot_tables") + """
+""" + table_sql("game_config_loot_entries") + """
+""" + table_sql("game_config_enemies") + """
+""" + table_sql("game_config_items") + """
+""" + table_sql("game_config_weapons") + """
+""" + table_sql("game_config_consumables") + """
 """
 
 

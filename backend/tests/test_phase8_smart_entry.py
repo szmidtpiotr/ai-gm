@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 import app.routers.smart_entry as smart_entry_module
 from app.routers.smart_entry import (
@@ -31,52 +32,19 @@ from app.routers.smart_entry import (
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 WEAPONS_DDL = """
-CREATE TABLE IF NOT EXISTS game_config_weapons (
-    key          TEXT PRIMARY KEY,
-    label        TEXT NOT NULL DEFAULT '',
-    damage_die   TEXT NOT NULL DEFAULT 'd6',
-    weapon_type  TEXT NOT NULL DEFAULT 'melee',
-    linked_stat  TEXT NOT NULL DEFAULT 'STR',
-    two_handed   INTEGER NOT NULL DEFAULT 0,
-    value_gp     INTEGER NOT NULL DEFAULT 0,
-    allowed_classes TEXT NOT NULL DEFAULT '[]'
-);
+""" + table_sql("game_config_weapons") + """
 """
 
 ITEMS_DDL = """
-CREATE TABLE IF NOT EXISTS game_config_items (
-    key       TEXT PRIMARY KEY,
-    label     TEXT NOT NULL DEFAULT '',
-    item_type TEXT NOT NULL DEFAULT 'misc',
-    value_gp  INTEGER NOT NULL DEFAULT 0,
-    ac_bonus  INTEGER NOT NULL DEFAULT 0,
-    effect_json TEXT
-);
+""" + table_sql("game_config_items") + """
 """
 
 CONSUMABLES_DDL = """
-CREATE TABLE IF NOT EXISTS game_config_consumables (
-    key         TEXT PRIMARY KEY,
-    label       TEXT NOT NULL DEFAULT '',
-    effect_type TEXT NOT NULL DEFAULT 'heal_hp',
-    base_price  INTEGER NOT NULL DEFAULT 1,
-    effect_dice TEXT,
-    effect_bonus INTEGER NOT NULL DEFAULT 0
-);
+""" + table_sql("game_config_consumables") + """
 """
 
 ENEMIES_DDL = """
-CREATE TABLE IF NOT EXISTS game_config_enemies (
-    key          TEXT PRIMARY KEY,
-    label        TEXT NOT NULL DEFAULT '',
-    tier         TEXT NOT NULL DEFAULT 'standard',
-    hp_base      INTEGER NOT NULL DEFAULT 10,
-    ac_base      INTEGER NOT NULL DEFAULT 10,
-    attack_bonus INTEGER NOT NULL DEFAULT 0,
-    damage_dice  TEXT NOT NULL DEFAULT '1d6',
-    drop_chance  REAL,
-    loot_table_key TEXT
-);
+""" + table_sql("game_config_enemies") + """
 """
 
 

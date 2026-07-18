@@ -4,6 +4,7 @@ import sqlite3
 import pytest
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 from app.services.skill_service import intercept_skill_test_tag
 
@@ -13,12 +14,7 @@ def mem_conn():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS game_config_skills (
-            key TEXT PRIMARY KEY,
-            label TEXT,
-            base_stat TEXT,
-            counter INTEGER DEFAULT 0
-        );
+        """ + table_sql("game_config_skills") + """
         INSERT OR IGNORE INTO game_config_skills VALUES ('stealth','Skradanie','DEX',0);
         INSERT OR IGNORE INTO game_config_skills VALUES ('perception','Spostrzegawczość','WIS',0);
         CREATE TABLE IF NOT EXISTS game_sessions (

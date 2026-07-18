@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 import app.routers.settings as settings_router_module
 from app.routers.settings import router as settings_router
@@ -19,11 +20,7 @@ def _init_db(path: Path) -> None:
     try:
         conn.executescript(
             """
-            CREATE TABLE game_config_meta (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
+            """ + table_sql("game_config_meta") + """
             CREATE TABLE user_llm_settings (
                 user_id INTEGER PRIMARY KEY,
                 mode TEXT NOT NULL DEFAULT 'custom',

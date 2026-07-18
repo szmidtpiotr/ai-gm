@@ -1,5 +1,6 @@
 """LOC-3: Backend guard dla location_intent (graf sesji vs target_key, fallback parent przy create)."""
 
+from _fixtures_schema import table_sql
 import sqlite3
 from pathlib import Path
 
@@ -63,11 +64,7 @@ def _schema(conn: sqlite3.Connection) -> None:
           reason_blocked TEXT,
           created_at TEXT DEFAULT 'now'
         );
-        CREATE TABLE game_config_meta (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'
-        );
+        """ + table_sql("game_config_meta") + """
         """
     )
 

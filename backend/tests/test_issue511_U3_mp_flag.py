@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import os
 sys.path.insert(0, '/app')
+from _fixtures_schema import table_sql
 
 import pytest
 from app.services.campaign_modes_service import get_available_modes
@@ -19,10 +20,7 @@ def _conn_with_flags(flags: dict) -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
+        """ + table_sql("game_config_meta") + """
     """)
     # Tabele potrzebne do count-ów
     conn.execute("CREATE TABLE campaign_templates (status TEXT, player_visible INTEGER)")

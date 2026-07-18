@@ -4,6 +4,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 def _make_db(plan_turns=0, template_key=None, dungeon_run=None, turns_since=20):
@@ -20,7 +21,7 @@ def _make_db(plan_turns=0, template_key=None, dungeon_run=None, turns_since=20):
             campaign_id INTEGER,
             turn_number INTEGER
         );
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE game_sessions (
             id INTEGER PRIMARY KEY,
             campaign_id INTEGER,

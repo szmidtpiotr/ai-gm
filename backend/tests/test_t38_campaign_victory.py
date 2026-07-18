@@ -15,6 +15,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 from app.services.campaign_plan_runtime import is_plan_complete, maybe_complete_campaign
 from app.services.xp_sources import process_narrative_xp_tags
@@ -62,9 +63,7 @@ def _make_db():
             reason TEXT, source TEXT, source_key TEXT, turn_number INTEGER,
             granted_by_user_id INTEGER DEFAULT 0
         );
-        CREATE TABLE game_config_xp_rewards (
-            key TEXT PRIMARY KEY, xp_amount INTEGER, is_active INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_xp_rewards") + """
         CREATE TABLE campaign_turns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             campaign_id INTEGER, turn_number INTEGER, created_at TEXT

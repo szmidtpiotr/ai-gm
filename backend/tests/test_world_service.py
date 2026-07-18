@@ -1,6 +1,7 @@
 """
 Tests for World Service — V2 Phase 03 Tasks 08/09/10
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 import pytest
@@ -39,14 +40,7 @@ def db():
             keyword_triggers TEXT DEFAULT '[]', review_status TEXT DEFAULT 'permanent',
             is_active INTEGER DEFAULT 1, is_shop INTEGER DEFAULT 0
         );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, tier TEXT DEFAULT 'standard',
-            hp_base INTEGER DEFAULT 10, ac_base INTEGER DEFAULT 10,
-            attack_bonus INTEGER DEFAULT 0, damage_die TEXT DEFAULT 'd6',
-            damage_bonus INTEGER DEFAULT 0, attacks_per_turn INTEGER DEFAULT 1,
-            xp_award INTEGER DEFAULT 10, is_active INTEGER DEFAULT 1,
-            review_status TEXT DEFAULT 'permanent'
-        );
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE location_npc_assignments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             location_key TEXT, npc_key TEXT, is_active INTEGER DEFAULT 1,

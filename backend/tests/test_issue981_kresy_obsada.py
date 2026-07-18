@@ -6,6 +6,7 @@ LLM "[AVAILABLE CONTENT]" block from location_npc_assignments /
 location_enemy_assignments. The seed (scripts/seed_kresy_obsada.apply) is what
 wires Kresy canon places to their characters/threats.
 """
+from _fixtures_schema import table_sql
 import importlib.util
 import os
 import sqlite3
@@ -37,10 +38,7 @@ def db():
             shop_inventory_json TEXT DEFAULT '[]', is_active INTEGER DEFAULT 1,
             review_status TEXT DEFAULT 'permanent', keyword_triggers TEXT DEFAULT '[]'
         );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, tier TEXT DEFAULT 'standard',
-            is_active INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE game_locations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             key TEXT UNIQUE NOT NULL, label TEXT, biome TEXT,

@@ -10,6 +10,7 @@ import sqlite3
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 import pytest
 
@@ -78,10 +79,7 @@ def _make_db_with_equipped_weapon_and_armor():
             source TEXT,
             meta_json TEXT
         );
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
+        """ + table_sql("game_config_meta") + """
         INSERT INTO characters (id, gold_gp) VALUES (1, 5000);
         -- Broń (weapon_key = miecz)
         INSERT INTO character_inventory (id, character_id, weapon_key, equipped, durability_current, durability_max)

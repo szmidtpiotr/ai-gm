@@ -15,6 +15,7 @@ Weryfikuje:
 - nieznany klucz riddle → None (nie crash, nie goły string)
 """
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import sqlite3
 
@@ -25,17 +26,7 @@ from app.api.dungeons import enter_dungeon, DungeonEnterReq
 
 
 SCHEMA = """
-CREATE TABLE game_config_riddles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT UNIQUE NOT NULL,
-    text TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    answer_alts TEXT DEFAULT '[]',
-    hints TEXT DEFAULT '["Wskazówka pierwsza"]',
-    difficulty TEXT DEFAULT 'medium',
-    theme TEXT DEFAULT 'general',
-    is_active INTEGER DEFAULT 1
-);
+""" + table_sql("game_config_riddles") + """
 """
 
 

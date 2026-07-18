@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.routers import settings as settings_mod
 from app.routers.settings import router as settings_router
@@ -23,10 +24,7 @@ def _make_db(path: Path) -> None:
     conn = sqlite3.connect(str(path))
     conn.execute(
         """
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )
+        """ + table_sql("game_config_meta") + """
         """
     )
     conn.commit()

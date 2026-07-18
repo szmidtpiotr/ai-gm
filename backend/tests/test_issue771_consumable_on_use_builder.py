@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import loot_service as loot_mod
 
@@ -20,42 +21,13 @@ CREATE TABLE characters (
     sheet_json TEXT NOT NULL DEFAULT '{}'
 );
 
-CREATE TABLE game_config_items (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    item_type TEXT NOT NULL DEFAULT 'misc',
-    description TEXT NOT NULL DEFAULT '',
-    effect_json TEXT,
-    charges INTEGER NOT NULL DEFAULT 1,
-    approved INTEGER NOT NULL DEFAULT 1,
-    is_active INTEGER NOT NULL DEFAULT 1
-);
+""" + table_sql("game_config_items") + """
 
-CREATE TABLE game_config_conditions (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    effect_json TEXT NOT NULL DEFAULT '{}',
-    stackable INTEGER NOT NULL DEFAULT 0,
-    is_active INTEGER NOT NULL DEFAULT 1
-);
+""" + table_sql("game_config_conditions") + """
 
-CREATE TABLE game_config_weapons (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 1
-);
+""" + table_sql("game_config_weapons") + """
 
-CREATE TABLE game_config_consumables (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    effect_type TEXT NOT NULL DEFAULT 'misc',
-    effect_dice TEXT,
-    effect_bonus INTEGER NOT NULL DEFAULT 0,
-    effect_target TEXT NOT NULL DEFAULT 'self',
-    is_active INTEGER NOT NULL DEFAULT 1,
-    effect_json TEXT
-);
+""" + table_sql("game_config_consumables") + """
 
 CREATE TABLE character_inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

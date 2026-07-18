@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import xp_service as xp_mod
 
@@ -16,18 +17,7 @@ def _mk_conn(path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
-        CREATE TABLE game_config_xp_rewards (
-            key TEXT PRIMARY KEY,
-            category TEXT NOT NULL,
-            label TEXT NOT NULL,
-            description TEXT,
-            xp_amount INTEGER NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            sort_order INTEGER NOT NULL DEFAULT 0,
-            locked_at TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
+        """ + table_sql("game_config_xp_rewards") + """
         INSERT INTO game_config_xp_rewards (key, category, label, xp_amount, sort_order)
         VALUES
             ('enemy_tier_weak', 'enemy_tier', 'weak', 11, 1),

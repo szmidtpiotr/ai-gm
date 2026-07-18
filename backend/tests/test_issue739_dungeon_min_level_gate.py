@@ -6,6 +6,7 @@ Weryfikuje:
 - enter_dungeon() przepuszcza bohatera na/powyżej min_level (gate nie odpala)
 """
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -32,7 +33,7 @@ CREATE TABLE game_dungeons (
     is_active INTEGER DEFAULT 1
 );
 
-CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+""" + table_sql("game_config_meta") + """
 """
 
 

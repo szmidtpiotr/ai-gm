@@ -12,6 +12,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from _fixtures_schema import table_sql
 
 from app.system_prompt_loader import load_system_prompt_text
 from app.services.spend_gold_service import apply_spend_gold_to_narrative
@@ -74,10 +75,7 @@ def _mk_conn():
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
-        CREATE TABLE game_config_services (
-            key TEXT PRIMARY KEY, label TEXT, cost_gp INTEGER,
-            description TEXT, is_active INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_services") + """
         CREATE TABLE characters (id INTEGER PRIMARY KEY, gold_gp INTEGER);
         INSERT INTO game_config_services (key, label, cost_gp, is_active)
             VALUES ('inn_night', 'Gospoda', 5, 1);

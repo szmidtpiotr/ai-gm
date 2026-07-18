@@ -20,6 +20,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import app.services.dungeon_service as ds
 import app.services.dungeon_tile_service as dts
@@ -54,26 +55,12 @@ CREATE TABLE dungeon_tiles (
     is_active INTEGER DEFAULT 1
 );
 
-CREATE TABLE game_config_enemies (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    hp_base INTEGER DEFAULT 5,
-    ac_base INTEGER DEFAULT 8,
-    attack_bonus INTEGER DEFAULT 0,
-    damage_die TEXT DEFAULT '1d6',
-    damage_bonus INTEGER DEFAULT 0,
-    dex_modifier INTEGER DEFAULT 0,
-    tier TEXT DEFAULT 'standard',
-    stats_json TEXT DEFAULT NULL
-);
+""" + table_sql("game_config_enemies") + """
 
-CREATE TABLE game_config_items (key TEXT PRIMARY KEY, label TEXT NOT NULL);
-CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT NOT NULL);
-CREATE TABLE game_config_consumables (key TEXT PRIMARY KEY, label TEXT NOT NULL);
-CREATE TABLE game_config_riddles (
-    key TEXT PRIMARY KEY, text TEXT NOT NULL, answer TEXT NOT NULL,
-    answer_alts TEXT DEFAULT '[]', hints TEXT DEFAULT '[]', is_active INTEGER DEFAULT 1
-);
+""" + table_sql("game_config_items") + """
+""" + table_sql("game_config_weapons") + """
+""" + table_sql("game_config_consumables") + """
+""" + table_sql("game_config_riddles") + """
 
 CREATE TABLE game_dungeons (
     key TEXT PRIMARY KEY,
@@ -100,22 +87,9 @@ CREATE TABLE game_dungeons (
     endless_growth_n INTEGER DEFAULT 0
 );
 
-CREATE TABLE game_config_loot_tables (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    is_active INTEGER DEFAULT 1
-);
+""" + table_sql("game_config_loot_tables") + """
 
-CREATE TABLE game_config_loot_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    loot_table_key TEXT NOT NULL,
-    item_key TEXT,
-    weapon_key TEXT,
-    consumable_key TEXT,
-    weight INTEGER DEFAULT 50,
-    qty_min INTEGER DEFAULT 1,
-    qty_max INTEGER DEFAULT 1
-);
+""" + table_sql("game_config_loot_entries") + """
 
 CREATE TABLE game_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

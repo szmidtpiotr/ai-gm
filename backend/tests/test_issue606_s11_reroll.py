@@ -25,6 +25,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import skill_service as ss
 from app.services import reroll_service as rr
@@ -153,12 +154,11 @@ def _conn_with_cursed(d20_committed_unused=None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript("""
         CREATE TABLE characters (id INTEGER PRIMARY KEY, sheet_json TEXT);
-        CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, label TEXT, effect_json TEXT,
-          description TEXT, is_active INTEGER DEFAULT 1);
+        """ + table_sql("game_config_conditions") + """
         CREATE TABLE game_sessions (campaign_id INTEGER PRIMARY KEY, session_flags TEXT,
           current_location_id INTEGER);
         CREATE TABLE game_locations (id INTEGER PRIMARY KEY, key TEXT);
-        CREATE TABLE game_config_skills (key TEXT PRIMARY KEY, linked_stat TEXT, label TEXT);
+        """ + table_sql("game_config_skills") + """
         CREATE TABLE skill_counters (player_skill_key TEXT, counter_type TEXT, counter_key TEXT, default_dc INTEGER);
     """)
     conn.execute("INSERT INTO game_config_conditions (key,label,effect_json) VALUES (?,?,?)",

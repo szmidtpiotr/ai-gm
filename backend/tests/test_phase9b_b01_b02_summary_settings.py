@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.api import campaigns as campaigns_mod
 from app.main import app
@@ -21,11 +22,7 @@ from app.services.admin_auth import hash_admin_token
 
 def _schema() -> str:
     return """
-    CREATE TABLE game_config_meta (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'
-    );
+    """ + table_sql("game_config_meta") + """
     CREATE TABLE campaigns (
         id INTEGER PRIMARY KEY,
         title TEXT NOT NULL,

@@ -18,6 +18,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service, spell_service
 
@@ -122,14 +123,11 @@ def _combat_db(tmp_path, *, int_stat=16, enemy_con=8, enemy_wis=8, mana=10, max_
           turn_number REAL, actor TEXT, event_type TEXT, roll_value INTEGER, damage INTEGER, hp_after INTEGER,
           target_id TEXT, target_name TEXT, hit INTEGER, narrative TEXT,
           created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
-        CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, label TEXT, effect_json TEXT,
-          is_active INTEGER DEFAULT 1, stackable INTEGER DEFAULT 0);
+        """ + table_sql("game_config_conditions") + """
         INSERT INTO game_config_conditions (key,label,effect_json,is_active,stackable) VALUES
           ('slowed','Spowolniony','{{"effects":[{{"type":"static_stat_modifier","stat":"DEX","value":-2}}]}}',1,0),
           ('cursed','Przeklęty','{{"effects":[{{"type":"static_stat_modifier","stat":"LCK","value":-2}}]}}',1,0);
-        CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, label TEXT, spell_type TEXT,
-          effect_type TEXT, effect_stat TEXT, effect_duration INTEGER, mana_cost INTEGER,
-          tier INTEGER, damage_die TEXT, effect_json TEXT, is_active INTEGER DEFAULT 1);
+        """ + table_sql("game_config_spells") + """
         INSERT INTO game_config_spells (key,label,spell_type,effect_type,effect_stat,effect_duration,mana_cost,tier,damage_die) VALUES
           ('frost_grip','Lodowy Uścisk','effect','slowed','WIS',2,2,1,NULL),
           ('hex','Klątwa','effect','cursed','WIS',3,2,2,NULL),
@@ -137,11 +135,7 @@ def _combat_db(tmp_path, *, int_stat=16, enemy_con=8, enemy_wis=8, mana=10, max_
           ('fire_bolt','Ognisty Pocisk','attack',NULL,NULL,1,2,1,'1d8');
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER DEFAULT 1,
           learned_at_level INTEGER DEFAULT 1);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER,
-          ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, dex_modifier INTEGER,
-          skills_json TEXT, stats_json TEXT, tier TEXT, loot_table_key TEXT,
-          drop_chance REAL, xp_award INTEGER, attacks_per_turn INTEGER DEFAULT 1,
-          image_url TEXT);
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,skills_json,stats_json,tier,loot_table_key,drop_chance,xp_award)
           VALUES ('goblin','Goblin',20,10,0,'1d6',0,NULL,NULL,'minion',NULL,0,10);
         """)

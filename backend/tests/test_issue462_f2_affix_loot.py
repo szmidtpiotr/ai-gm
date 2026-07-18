@@ -6,6 +6,7 @@ dungeon_service.generate_dungeon_instance includes loot_tier so the API can pass
 """
 import sys
 sys.path.insert(0, '/app')
+from _fixtures_schema import table_sql
 
 import json
 import random
@@ -20,10 +21,7 @@ def _affix_conn():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_affixes (
-            key TEXT PRIMARY KEY, name TEXT, tier INTEGER DEFAULT 1,
-            allowed_item_types TEXT, effect_json TEXT, is_active INTEGER DEFAULT 1
-        )
+        """ + table_sql("game_config_affixes") + """
     """)
     conn.executemany(
         "INSERT INTO game_config_affixes (key, name, tier, allowed_item_types, is_active) VALUES (?,?,?,?,1)",

@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 import app.routers.admin as admin_router_module
 import app.services.admin_config as admin_config_service
@@ -27,18 +28,7 @@ def _init_db(path: Path) -> None:
                 new_values TEXT,
                 performed_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                effect_json TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                stackable INTEGER NOT NULL DEFAULT 0,
-                auto_remove TEXT,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
+            """ + table_sql("game_config_conditions") + """
             """
         )
         conn.commit()

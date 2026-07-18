@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import admin_config_transfer as transfer_mod
 
@@ -30,150 +31,20 @@ def _init_transfer_db(path: Path) -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE game_config_meta (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            );
+            """ + table_sql("game_config_meta") + """
             INSERT INTO game_config_meta(key, value) VALUES ('config_version', '1.0.0');
 
-            CREATE TABLE game_config_stats (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                description TEXT,
-                sort_order INTEGER,
-                locked_at TEXT
-            );
-            CREATE TABLE game_config_skills (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                linked_stat TEXT,
-                rank_ceiling INTEGER,
-                sort_order INTEGER,
-                locked_at TEXT,
-                description TEXT
-            );
-            CREATE TABLE game_config_dc (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                value INTEGER,
-                sort_order INTEGER,
-                locked_at TEXT,
-                description TEXT
-            );
-            CREATE TABLE game_config_xp_rewards (
-                key TEXT PRIMARY KEY,
-                category TEXT,
-                label TEXT,
-                description TEXT,
-                xp_amount INTEGER,
-                is_active INTEGER,
-                sort_order INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_weapons (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                damage_die TEXT,
-                weapon_type TEXT,
-                linked_stat TEXT,
-                allowed_classes TEXT,
-                two_handed INTEGER,
-                finesse INTEGER,
-                range_m INTEGER,
-                targeting TEXT,
-                aoe_radius_m REAL,
-                magic_school TEXT,
-                weight_kg REAL,
-                description TEXT,
-                note TEXT,
-                value_gp INTEGER,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_enemies (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                hp_base INTEGER,
-                ac_base INTEGER,
-                attack_bonus INTEGER,
-                dex_modifier INTEGER,
-                damage_die TEXT,
-                description TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                effect_json TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                item_type TEXT,
-                description TEXT,
-                value_gp INTEGER,
-                effect_json TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT,
-                note TEXT,
-                weight_kg REAL,
-                ac_bonus INTEGER,
-                charges INTEGER,
-                ai_generated INTEGER,
-                approved INTEGER,
-                allowed_classes TEXT
-            );
-            CREATE TABLE game_config_consumables (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                description TEXT,
-                effect_type TEXT,
-                effect_dice TEXT,
-                effect_bonus INTEGER,
-                effect_target TEXT,
-                weight_kg REAL,
-                charges INTEGER,
-                base_price INTEGER,
-                note TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_loot_tables (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                description TEXT,
-                is_active INTEGER,
-                gold_min INTEGER,
-                gold_max INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_loot_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                loot_table_key TEXT,
-                item_key TEXT,
-                weapon_key TEXT,
-                weight INTEGER,
-                qty_min INTEGER,
-                qty_max INTEGER
-            );
+            """ + table_sql("game_config_stats") + """
+            """ + table_sql("game_config_skills") + """
+            """ + table_sql("game_config_dc") + """
+            """ + table_sql("game_config_xp_rewards") + """
+            """ + table_sql("game_config_weapons") + """
+            """ + table_sql("game_config_enemies") + """
+            """ + table_sql("game_config_conditions") + """
+            """ + table_sql("game_config_items") + """
+            """ + table_sql("game_config_consumables") + """
+            """ + table_sql("game_config_loot_tables") + """
+            """ + table_sql("game_config_loot_entries") + """
             """
         )
         conn.commit()

@@ -7,6 +7,7 @@ spark_burst: tier 1, mana 3, spell_type='attack_aoe', damage_die='1d4', aoe=1.
 Słabszy od burning_arc (T2, 1d6) — zachowuje progresję, ale daje magowi
 opcję obszarową od pierwszego poziomu.
 """
+from _fixtures_schema import table_sql
 import sqlite3
 import pytest
 
@@ -56,21 +57,7 @@ def _mem_db_with_spell_catalog():
     conn.row_factory = sqlite3.Row
     conn.execute(
         """
-        CREATE TABLE game_config_spells (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            tier INTEGER NOT NULL DEFAULT 1,
-            mana_cost INTEGER NOT NULL DEFAULT 2,
-            spell_type TEXT NOT NULL DEFAULT 'attack',
-            damage_die TEXT,
-            heal_die TEXT,
-            effect_stat TEXT,
-            effect_type TEXT,
-            effect_duration INTEGER DEFAULT 1,
-            target_zone TEXT NOT NULL DEFAULT 'any',
-            aoe INTEGER NOT NULL DEFAULT 0,
-            description TEXT
-        )
+        """ + table_sql("game_config_spells") + """
         """
     )
     return conn

@@ -22,6 +22,7 @@ import pytest
 
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import app.services.dungeon_tile_service as dts
 import app.services.dungeon_service as ds
@@ -42,23 +43,7 @@ CREATE TABLE dungeon_tile_categories (
     is_active INTEGER DEFAULT 1
 );
 
-CREATE TABLE game_config_enemies (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    hp_base INTEGER DEFAULT 5,
-    ac_base INTEGER DEFAULT 8,
-    attack_bonus INTEGER DEFAULT 0,
-    damage_die TEXT DEFAULT '1d6',
-    damage_bonus INTEGER DEFAULT 0,
-    dex_modifier INTEGER DEFAULT 0,
-    tier TEXT DEFAULT 'common',
-    stats_json TEXT DEFAULT NULL,
-    xp_award INTEGER DEFAULT 0,
-    loot_table_key TEXT DEFAULT NULL,
-    drop_chance REAL DEFAULT 1.0,
-    loot_tier TEXT DEFAULT NULL,
-    skills_json TEXT DEFAULT NULL
-);
+""" + table_sql("game_config_enemies") + """
 
 CREATE TABLE game_dungeons (
     key TEXT PRIMARY KEY,

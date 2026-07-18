@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.api import turns as turns_mod
 from app.api import campaign_history as ch_mod
@@ -24,7 +25,7 @@ from app.services.history_summary_service import (
 
 def _schema() -> str:
     return """
-    CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+    """ + table_sql("game_config_meta") + """
     INSERT INTO game_config_meta (key, value) VALUES ('summary_rollup_cooldown_turns', '3');
     CREATE TABLE campaigns (
         id INTEGER PRIMARY KEY,
@@ -113,7 +114,7 @@ def test_evaluate_cooldown_meta_default_from_memory():
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE campaigns (
             id INTEGER PRIMARY KEY,
             last_rollup_narrative_turn_count INTEGER

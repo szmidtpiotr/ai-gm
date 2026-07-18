@@ -25,6 +25,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service
 
@@ -133,7 +134,7 @@ def _inv_db(tmp_path, *, weapon_key, equipped=1, label="Tarcza", w_key=None, dur
     conn = sqlite3.connect(str(db))
     try:
         conn.executescript("""
-        CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT);
+        """ + table_sql("game_config_weapons") + """
         CREATE TABLE character_inventory (id INTEGER PRIMARY KEY AUTOINCREMENT,
           character_id INTEGER, weapon_key TEXT, item_key TEXT, equipped INTEGER DEFAULT 0,
           durability_current INTEGER, durability_max INTEGER);
@@ -224,7 +225,7 @@ def _combat_db(tmp_path, *, declared, skill_rank, shield=True, shield_durability
           name TEXT, system_id TEXT, sheet_json TEXT);
         INSERT INTO characters (id,campaign_id,user_id,name,system_id,sheet_json)
           VALUES (1,1,1,'Aldric','fantasy','{sj}');
-        CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT);
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons (key,label) VALUES ('wooden_shield','Drewniana Tarcza'),('shortsword','Krótki Miecz');
         CREATE TABLE character_inventory (id INTEGER PRIMARY KEY AUTOINCREMENT,
           character_id INTEGER, weapon_key TEXT, item_key TEXT, equipped INTEGER DEFAULT 0,

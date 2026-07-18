@@ -17,6 +17,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 def _make_test_db() -> tuple[str, sqlite3.Connection]:
@@ -29,42 +30,11 @@ def _make_test_db() -> tuple[str, sqlite3.Connection]:
     os.close(fd)
     conn = sqlite3.connect(path)
     conn.executescript("""
-        CREATE TABLE game_config_loot_tables (
-            key   TEXT PRIMARY KEY,
-            label TEXT NOT NULL
-        );
-        CREATE TABLE game_config_loot_entries (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            loot_table_key TEXT NOT NULL,
-            item_key    TEXT,
-            weight      INTEGER NOT NULL DEFAULT 50,
-            qty_min     INTEGER NOT NULL DEFAULT 1,
-            qty_max     INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_enemies (
-            key           TEXT PRIMARY KEY,
-            label         TEXT,
-            hp_base       INTEGER NOT NULL DEFAULT 10,
-            ac_base       INTEGER NOT NULL DEFAULT 10,
-            attack_bonus  INTEGER NOT NULL DEFAULT 0,
-            dex_modifier  INTEGER NOT NULL DEFAULT 0,
-            damage_die    TEXT NOT NULL DEFAULT '1d6',
-            loot_table_key TEXT,
-            is_active     INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_weapons (
-            key        TEXT PRIMARY KEY,
-            label      TEXT NOT NULL,
-            damage_die TEXT NOT NULL DEFAULT '1d6',
-            weight_kg  REAL NOT NULL DEFAULT 0.0,
-            value_gp   INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE game_config_items (
-            key      TEXT PRIMARY KEY,
-            label    TEXT NOT NULL,
-            rarity   INTEGER NOT NULL DEFAULT 1,
-            value_gp INTEGER NOT NULL DEFAULT 0
-        );
+        """ + table_sql("game_config_loot_tables") + """
+        """ + table_sql("game_config_loot_entries") + """
+        """ + table_sql("game_config_enemies") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
         CREATE TABLE game_items (
             key       TEXT,
             kind      TEXT NOT NULL,

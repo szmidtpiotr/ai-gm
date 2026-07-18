@@ -9,6 +9,7 @@ Acceptance:
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import json
 import random
@@ -54,14 +55,7 @@ def db():
             game_clock_day INTEGER DEFAULT 1,
             reverted_at TEXT
         );
-        CREATE TABLE game_config_affixes (
-            key TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            tier INTEGER NOT NULL DEFAULT 1,
-            allowed_item_types TEXT NOT NULL DEFAULT 'weapon',
-            effect_json TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
+        """ + table_sql("game_config_affixes") + """
 
         -- Affix catalog: T1, T2, T3
         INSERT INTO game_config_affixes VALUES ('sharp',    'Ostry',     1, 'weapon', '{}', 1);

@@ -15,28 +15,15 @@ import sys
 import tempfile
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 # Minimal schema mirroring the columns the lint touches. lint_seeds copies the
 # *source* DB schema, so we hand-build a tiny source DB here.
 _SCHEMA = """
-CREATE TABLE game_config_loot_tables (
-    key   TEXT PRIMARY KEY,
-    label TEXT NOT NULL
-);
-CREATE TABLE game_config_enemies (
-    key            TEXT PRIMARY KEY,
-    label          TEXT,
-    hp_base        INTEGER,
-    loot_table_key TEXT
-);
-CREATE TABLE game_config_weapons (
-    key         TEXT PRIMARY KEY,
-    label       TEXT,
-    value_gp    INTEGER,
-    weight_kg   REAL,
-    effect_json TEXT
-);
+""" + table_sql("game_config_loot_tables") + """
+""" + table_sql("game_config_enemies") + """
+""" + table_sql("game_config_weapons") + """
 CREATE TABLE game_items (
     key         TEXT PRIMARY KEY,
     label       TEXT,
