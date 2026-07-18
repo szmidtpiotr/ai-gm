@@ -47,7 +47,7 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
     // Mobile: przełącznik paneli = dolny TabBar (wspólny store gameTab), więc górny
     // scroll usunięty — dublował się i wychodził poza szerokość ekranu. Desktop = rail.
     <div className="flex min-h-0 flex-1 flex-col">
-      {active === "character" && <PanelCharacter sheet={sheet} />}
+      {active === "character" && <PanelCharacter sheet={sheet} characterId={characterId} />}
       {active === "spells" && (
         <PanelSpells
           sheet={sheet}

@@ -1,11 +1,13 @@
 // F-21/F-54 · Postać + Umiejętności — żywotność, atrybuty, stan, wyuczone skille.
 // Umiejętności wchłonięte z osobnej zakładki (jedna zakładka = mniej przełączeń).
 import { useState } from "react";
-import { CaretDown } from "@phosphor-icons/react";
+import { CaretDown, Horse, Dog, Sword, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { readConditions, readStatMods, readSkills, PROFICIENCY_RANK } from "@/lib/sheet";
 import { readVitals } from "@/lib/game";
 import { usePublicSkills } from "@/hooks/useSheetData";
+import { useCompanions, useDismissCompanion } from "@/hooks/useCompanions";
+import type { ActiveCompanion } from "@/lib/companions";
 import type { HeroSheet } from "@/lib/types";
 import { SecHead, PanelScroll } from "./sheetUi";
 
@@ -18,7 +20,13 @@ function fmtMod(m: number) {
   return (m >= 0 ? "+" : "") + m;
 }
 
-export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
+export function PanelCharacter({
+  sheet,
+  characterId,
+}: {
+  sheet: HeroSheet | undefined;
+  characterId?: number;
+}) {
   const v = readVitals(sheet);
   const mods = readStatMods(sheet);
   const conditions = readConditions(sheet);
@@ -256,7 +264,82 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
           </div>
         )}
       </section>
+
+      <CompanionsSection characterId={characterId} />
     </PanelScroll>
+  );
+}
+
+// #1192 FAZA TW — sekcja towarzyszy podróży + wierzchowców w karcie postaci.
+function CompanionsSection({ characterId }: { characterId?: number }) {
+  const { data, isLoading } = useCompanions(characterId);
+  const dismiss = useDismissCompanion(characterId);
+  if (isLoading || !data || data.length === 0) return null;
+  return (
+    <section className="mb-6">
+      <SecHead>Towarzysze</SecHead>
+      <div className="space-y-2">
+        {data.map((c) => (
+          <CompanionRow
+            key={c.id}
+            c={c}
+            onDismiss={() => dismiss.mutate(c.id)}
+            busy={dismiss.isPending}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CompanionRow({
+  c,
+  onDismiss,
+  busy,
+}: {
+  c: ActiveCompanion;
+  onDismiss: () => void;
+  busy: boolean;
+}) {
+  const Icon = c.type === "mount" ? Horse : c.type === "animal" ? Dog : Sword;
+  const hpPct = pct(c.current_hp, c.hp_max);
+  return (
+    <div className="rounded-lg border border-line-soft bg-surface px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <Icon size={18} weight="duotone" className="shrink-0 text-text-2" />
+        <span className="font-serif text-sm font-semibold text-text-1">{c.name}</span>
+        <span className="rounded bg-bg px-1.5 py-0.5 text-micro uppercase tracking-wide text-text-3">
+          {c.ownership === "owned" ? "własny" : "najęty"}
+        </span>
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={busy}
+          title="Zwolnij"
+          className="ml-auto text-text-3 hover:text-danger disabled:opacity-40"
+        >
+          <X size={15} />
+        </button>
+      </div>
+      {c.type !== "mount" && (
+        <div className="mt-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-bg">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#c14a2b] to-ember"
+              style={{ width: `${hpPct}%` }}
+            />
+          </div>
+          <div className="mt-0.5 text-micro text-text-3">
+            {c.current_hp} / {c.hp_max} HP
+          </div>
+        </div>
+      )}
+      {(c.underfed || c.unpaid_days > 0) && (
+        <p className="mt-1 text-micro text-danger">
+          {c.underfed ? "Głodny — traci siły, nakarm w stajni." : `Zaległy żołd (${c.unpaid_days} dni) — grozi odejściem.`}
+        </p>
+      )}
+    </div>
   );
 }
 
