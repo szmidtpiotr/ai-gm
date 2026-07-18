@@ -4962,6 +4962,19 @@ def export_session(campaign_id: int, authorization: str | None = Header(default=
 # create_turn helpers (R1.5 — extracted for line-count reduction)
 # ---------------------------------------------------------------------------
 
+def _user_is_admin(conn, character) -> bool:
+    """#1428 (AUDIT): is the character's owner an admin? Gates who may pass an explicit
+    numeric raw_roll / attack DC on /roll. Fails closed (non-admin) on any lookup error."""
+    try:
+        _row = conn.execute(
+            "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
+            (character["user_id"],),
+        ).fetchone()
+        return bool(_row and int(_row["is_admin"] or 0))
+    except Exception:
+        return False
+
+
 def _ct_roll_and_death_save(conn, campaign_id, payload, character, text, turn_id):
     """Handle /roll command parsing, XS9/10/11 XP grants, death save processing.
 
@@ -4992,22 +5005,36 @@ def _ct_roll_and_death_save(conn, campaign_id, payload, character, text, turn_id
                     status_code=400,
                     detail="Nieprawidłowy rzut: death_save przy HP > 0",
                 )
+        # #1428 (AUDIT — server dice authority on /roll): only admins (testing/replay) may
+        # dictate the die face or an attack DC. For everyone else the server rolls the d20 and
+        # the attack DC comes from the target/engine — a crafted "/roll Attack 20 dc 5" can no
+        # longer force a Nat 20 auto-success. Non-attack DCs (scene difficulty) stay as sent.
+        _roll_is_admin = _user_is_admin(conn, character)
+        _client_raw_roll = roll_request.get("raw_roll") if _roll_is_admin else None
+        if not _roll_is_admin and roll_request.get("raw_roll") is not None:
+            logger.warning(
+                "roll_client_raw_rejected",
+                character_id=payload.character_id,
+                raw_roll=roll_request.get("raw_roll"),
+            )
         if is_attack_test(roll_request.get("skill")):
             weapon_row = resolve_sheet_weapon(conn, character_sheet, int(payload.character_id))
-            raw_roll = roll_request.get("raw_roll")
             roll_result = resolve_attack_roll_for_weapon(
                 character_sheet,
-                raw_roll=int(raw_roll) if raw_roll is not None else roll_d20(),
+                raw_roll=int(_client_raw_roll) if _client_raw_roll is not None else roll_d20(),
                 weapon_row=weapon_row,
             )
-            roll_result["dc"] = resolve_dc_for_roll(roll_request.get("dc"))
+            # Attack DC is engine/target-owned; ignore player-supplied dc unless admin.
+            roll_result["dc"] = resolve_dc_for_roll(
+                roll_request.get("dc") if _roll_is_admin else None
+            )
             if roll_result["dc"] is not None:
                 roll_result["success"] = roll_result["total"] >= int(roll_result["dc"])
         else:
             roll_result = resolve_roll(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
-                raw_roll=roll_request.get("raw_roll"),
+                raw_roll=_client_raw_roll,
                 dc=resolve_dc_for_roll(roll_request.get("dc")),
             )
         roll_result_data = roll_result
@@ -6741,22 +6768,35 @@ def create_turn_stream(
                         media_type="text/event-stream",
                         headers=stream_headers,
                     )
+            # #1428 (AUDIT — server dice authority on /roll): mirror of the sync path. Only
+            # admins may dictate the die face or an attack DC; non-admins get a server d20 and
+            # an engine/target-owned attack DC. Non-attack DCs (scene difficulty) stay as sent.
+            _roll_is_admin = _user_is_admin(conn, character)
+            _client_raw_roll = roll_request.get("raw_roll") if _roll_is_admin else None
+            if not _roll_is_admin and roll_request.get("raw_roll") is not None:
+                logger.warning(
+                    "roll_client_raw_rejected_stream",
+                    character_id=payload.character_id,
+                    raw_roll=roll_request.get("raw_roll"),
+                )
             if is_attack_test(roll_request.get("skill")):
                 weapon_row = resolve_sheet_weapon(conn, character_sheet, int(payload.character_id))
-                raw_roll = roll_request.get("raw_roll")
                 roll_result = resolve_attack_roll_for_weapon(
                     character_sheet,
-                    raw_roll=int(raw_roll) if raw_roll is not None else roll_d20(),
+                    raw_roll=int(_client_raw_roll) if _client_raw_roll is not None else roll_d20(),
                     weapon_row=weapon_row,
                 )
-                roll_result["dc"] = resolve_dc_for_roll(roll_request.get("dc"))
+                # Attack DC is engine/target-owned; ignore player-supplied dc unless admin.
+                roll_result["dc"] = resolve_dc_for_roll(
+                    roll_request.get("dc") if _roll_is_admin else None
+                )
                 if roll_result["dc"] is not None:
                     roll_result["success"] = roll_result["total"] >= int(roll_result["dc"])
             else:
                 roll_result = resolve_roll(
                     character_sheet=character_sheet,
                     test_name=roll_request["skill"],
-                    raw_roll=roll_request.get("raw_roll"),
+                    raw_roll=_client_raw_roll,
                     dc=resolve_dc_for_roll(roll_request.get("dc")),
                 )
             roll_result_data = roll_result

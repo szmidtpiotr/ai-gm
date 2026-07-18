@@ -2100,6 +2100,7 @@ def submit_mp_combat_action(
             raw_d20=raw_d20,
             spell_key=spell_key,
             target_id=target_id,
+            authoritative=True,  # #1427: server rolls the player d20; client values display-only
         )
         player_result = result
         # Advance turn after player action (unless already advanced via loot/end)

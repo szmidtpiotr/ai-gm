@@ -6115,6 +6115,11 @@ def _choose_behavior_target(
 # gracz↔wróg: ten sam silnik obrażeń po trafieniu w obie strony.
 MARGIN_DAMAGE_STEP = 5        # co ile pełnych pkt ataku ponad obronę → bonus obrażeń (PRIMARY)
 MARGIN_DAMAGE_BONUS = 1       # +1 dmg za próg (BACKUP w #826: +1 KOŚĆ — gdy +1 dmg za słabe na Sandboxie)
+MARGIN_DAMAGE_BONUS_CAP = 5   # #1427 (AUDIT): twardy cap bonusu marginesowego na CIOS. Nawet przy
+                              # rzucie serwerowym bardzo wysoki attack_total (buffy/przewaga) nie
+                              # ma lawinowo skalować obrażeń — bez capu client-forced total (przed
+                              # #1427) lub skrajny margines dawał nieograniczony bonus. STARTOWA,
+                              # strojna na Sandboxie razem z MARGIN_DAMAGE_STEP/BONUS.
 ARMOR_REDUCTION_OFFSET = 10   # pancerz = max(0, ac_base − OFFSET); 10 = część `ac_base`/AC ponad
                               # nieopancerzony próg (AC 10). OFFSET=0 → literalne ac_base ze spec #826
                               # (zeruje słabe ciosy → ratuje min 1 dmg). Strój na Sandboxie.
@@ -6426,7 +6431,9 @@ def _margin_damage_bonus(attack_total: int, defense_stat: int) -> int:
     margin = int(attack_total or 0) - int(defense_stat or 0)
     if margin < MARGIN_DAMAGE_STEP:
         return 0
-    return (margin // MARGIN_DAMAGE_STEP) * MARGIN_DAMAGE_BONUS
+    raw_bonus = (margin // MARGIN_DAMAGE_STEP) * MARGIN_DAMAGE_BONUS
+    # #1427 (AUDIT): cap bonus per cios — brak nieograniczonego skalowania obrażeń.
+    return min(raw_bonus, MARGIN_DAMAGE_BONUS_CAP)
 
 
 # #972 R3: Twardy jak kamień — damage types reduced for dwarves (STARTING value, tunable).
@@ -7220,8 +7227,18 @@ def _resolve_player_attack_turn(
     _mp_ch_id,
     _player_comb_id: str,
     _b14_req_target,
+    authoritative: bool = False,
 ) -> dict:
     """R2.3 (#878): player attack path extracted from resolve_attack."""
+    # #1427 (AUDIT — server dice authority): the client's raw_d20 / roll_result are
+    # DISPLAY-ONLY. Roll the player's d20 server-side HERE (before any spell / AoE branch
+    # consumes raw_d20) and drop the client attack total so it's re-derived from the sheet.
+    # A tampered request body can no longer dictate the die face or the attack total —
+    # covers solo + MP (shared entry) + every spell handler downstream. Internal callers
+    # that already roll server-side (off-hand #598) pass authoritative=False and keep theirs.
+    if authoritative:
+        raw_d20 = roll_d20()
+        roll_result = None
     target_id, enemy, _tgt_early = _attack_target_select(
         combatants, _player_comb_id, spell_key, sheet, conn, ch_id, row, target_id, out,
     )
@@ -8465,12 +8482,20 @@ def resolve_attack(
     spell_key: str | None = None,
     target_id: str | None = None,
     weapon_override: dict[str, Any] | None = None,
+    authoritative: bool = False,
 ) -> dict[str, Any]:
     """
     attacker: 'player' uses roll_result as total attack vs enemy dodge roll.
     attacker: 'enemy' ignores roll_result; rolls d20+attack_bonus internally vs player AC.
     weapon_override: #598 dual-wield — force this weapon row (off-hand) instead of the
       sheet/inventory main weapon. Used by :func:`resolve_offhand_followup`.
+    authoritative: #1427 (AUDIT — server dice authority). When True the caller-supplied
+      ``raw_d20``/``roll_result`` for a PLAYER attack are treated as DISPLAY-ONLY: the
+      server rolls the player's d20 itself and derives the attack total from the sheet,
+      so a tampered request body can't force a Nat 20 / arbitrary total. The two request
+      entry points (solo :func:`post_resolve_attack`, MP :func:`submit_mp_combat_action`)
+      pass ``authoritative=True``. Internal callers that already roll server-side
+      (off-hand #598, enemy path) keep the default ``False``.
     """
     turn_effects = evaluate_current_turn_conditions(campaign_id)
     if turn_effects.get("blocked"):
@@ -8528,7 +8553,7 @@ def resolve_attack(
             return _resolve_player_attack_turn(
                 conn, row, campaign_id, combatants, loot_pool_accum, ch_id, sheet,
                 attacker, roll_result, raw_d20, spell_key, target_id, weapon_override,
-                out, _mp_ch_id, _player_comb_id, _b14_req_target,
+                out, _mp_ch_id, _player_comb_id, _b14_req_target, authoritative,
             )
 
         if attacker != "enemy":

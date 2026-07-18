@@ -20,6 +20,10 @@ class CombatStartRequest(BaseModel):
 
 
 class ResolveAttackRequest(BaseModel):
+    # #1427 (AUDIT): roll_result / raw_d20 are DISPLAY-ONLY. The server rolls the player's
+    # d20 itself (resolve_attack authoritative=True) and derives the attack total from the
+    # sheet — these client values are NOT trusted for the mechanic (kept only so the UI can
+    # send its animated die; the response's player_raw_d20 is the authoritative result).
     roll_result: int | None = None
     raw_d20: int | None = None
     attacker: str = "player"
@@ -130,6 +134,7 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest, authorizat
             raw_d20=body.raw_d20,
             spell_key=body.spell_key,
             target_id=body.target_id,
+            authoritative=True,  # #1427: server rolls the player d20; body values display-only
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
