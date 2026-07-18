@@ -22,6 +22,7 @@ import {
   type TravelNotice as TravelNoticeData,
 } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/appStore";
+import { useMountEscape } from "@/hooks/useCompanions";
 import { useToast } from "@/components/ui/toast";
 import { voice } from "@/lib/voice";
 import { GameMenu } from "@/components/game/GameMenu";
@@ -115,6 +116,8 @@ export default function Game() {
   const resolveSkill = useResolveSkillTest(campaignId);
   // F-80 (#1268): mechaniczne akcje po przerwaniu podróży (omijają narratora).
   const travelResume = useTravelResume(campaignId);
+  // #1192 TW7: ucieczka konno z zasadzki (test Jeździectwa).
+  const mountEscape = useMountEscape(campaignId, characterId);
   const buildCamp = useBuildCamp(campaignId);
   const restLong = useRestLong(campaignId, characterId, currentUser?.id);
   const waitMutation = useWait(campaignId, characterId, currentUser?.id);
@@ -834,6 +837,22 @@ export default function Game() {
           onResume={() => { setInterruptModal(null); onChip({ label: "Kontynuuj podróż", text: "TRAVEL_RESUME", action: "TRAVEL_RESUME" }, shownChips); }}
           onRest={() => { setInterruptModal(null); onChip({ label: "Odpocznij", text: "REST:long", action: "REST:long" }, shownChips); }}
           onCamp={() => { setInterruptModal(null); onChip({ label: "Rozbij obóz", text: "BUILD_CAMP", action: "BUILD_CAMP" }, shownChips); }}
+          onEscapeMounted={async () => {
+            try {
+              const r = await mountEscape.mutateAsync();
+              if (r.escaped) {
+                setInterruptModal(null);
+                toast("Udało się! Wyrywasz się konno przed walką.", "success");
+              } else {
+                // Porażka → walka rusza normalnie (TRAVEL_RESUME wstrzyknie COMBAT_START).
+                setInterruptModal(null);
+                toast(r.nat1 ? "Wypadasz z siodła! Wróg cię dopada." : "Nie udało się uciec — wróg cię dopada.", "danger");
+                onChip({ label: "Walcz", text: "TRAVEL_RESUME", action: "TRAVEL_RESUME" }, shownChips);
+              }
+            } catch {
+              toast("Nie można teraz uciec konno.", "danger");
+            }
+          }}
           onClose={() => setInterruptModal(null)}
         />
       )}
@@ -1028,12 +1047,14 @@ function TravelInterruptModal({
   onResume,
   onRest,
   onCamp,
+  onEscapeMounted,
   onClose,
 }: {
   notice: TravelNoticeData;
   onResume: () => void;
   onRest: () => void;
   onCamp: () => void;
+  onEscapeMounted?: () => void;
   onClose: () => void;
 }) {
   const danger = notice.severity === "danger";
@@ -1104,6 +1125,16 @@ function TravelInterruptModal({
             >
               {isEncounter ? "⚔ Walcz" : "🧭 Kontynuuj podróż"}
             </button>
+            {isEncounter && notice.can_escape_mounted && onEscapeMounted && (
+              <button
+                type="button"
+                onClick={onEscapeMounted}
+                className="flex items-center justify-center gap-2 rounded-md border border-line-ember bg-ember/[0.06] px-3 py-2.5 font-ui text-body font-semibold text-ember-glow transition-colors hover:bg-ember/[0.14]"
+                title="Test Jeździectwa — udany zdejmuje walkę, nieudany oddaje inicjatywę wrogowi."
+              >
+                🐎 Uciekaj konno
+              </button>
+            )}
             {(canRest || canCamp) && (
               <div className="flex gap-2">
                 {canRest && (

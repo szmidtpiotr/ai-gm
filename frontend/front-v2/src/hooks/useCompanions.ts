@@ -73,6 +73,33 @@ export function useBuyCompanion(characterId: number | undefined) {
   });
 }
 
+export interface MountEscapeResult {
+  escaped: boolean;
+  roll: number;
+  total: number;
+  dc: number;
+  nat1: boolean;
+  self_damage: number;
+  enemy_key?: string;
+  enemy_tier?: number;
+}
+
+/** POST /campaigns/{id}/travel/escape-mounted — ucieczka konno z encountera (TW7). */
+export function useMountEscape(campaignId: number | undefined, characterId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<Envelope<MountEscapeResult>>(`/campaigns/${campaignId}/travel/escape-mounted`, {
+        method: "POST",
+        body: { character_id: characterId },
+      }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character", characterId] });
+    },
+  });
+}
+
 /** POST /characters/{id}/companions/dismiss — zwolnienie. */
 export function useDismissCompanion(characterId: number | undefined) {
   const qc = useQueryClient();

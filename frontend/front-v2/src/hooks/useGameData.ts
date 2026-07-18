@@ -37,6 +37,8 @@ export interface TravelNotice {
   enemy?: { key: string; label: string; image_url: string | null; count: number } | null;
   /** WALKA-T1 (#1349): wskaźnik zagrożenia zasadzki (glyph/label/tier), surowy ratio ukryty. */
   relative_threat?: RelativeThreat | null;
+  /** #1192 TW7: gracz ma najedzonego wierzchowca → pokaż „Uciekaj konno". */
+  can_escape_mounted?: boolean;
 }
 
 /** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) +
