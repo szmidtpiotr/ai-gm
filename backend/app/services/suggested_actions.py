@@ -299,6 +299,19 @@ def _build_narrative_actions(
                 label="Rzemiosło", action=f"OPEN_CRAFTING:{current_loc_key}", enabled=True, icon="🔨",
             ))
 
+    # #1192 FAZA TW: Towarzysze — rekrutacja w stajni (wierzchowce) / karczmie
+    # (najemnicy, psy). Deterministyczny modal, bez narratora.
+    if current_loc_key and len(actions) < MAX_ACTIONS:
+        try:
+            from app.services.companion_service import companions_at_location
+            _cmp = companions_at_location(conn, current_loc_key)
+            if _cmp.get("items"):
+                actions.append(SuggestedAction(
+                    label="Towarzysze", action=f"OPEN_COMPANIONS:{current_loc_key}", enabled=True, icon="🐴",
+                ))
+        except Exception:
+            pass
+
     # 1) NPCs present at current location — #1215: tylko ci realnie wprowadzeni do
     # sceny w ostatniej narracji (mieszkaniec lokacji ≠ obecny tu i teraz; bez tego
     # na turze przybycia chip proponował dialog z NPC, którego narrator nie pokazał).

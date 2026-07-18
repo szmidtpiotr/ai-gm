@@ -50,6 +50,7 @@ import { EndedCampaignScreen } from "@/components/game/outcomes/EndedCampaignScr
 import { Journal } from "@/components/game/journal/Journal";
 import { ShopOverlay } from "@/components/game/ShopOverlay";
 import { ServicesOverlay } from "@/components/game/ServicesOverlay";
+import { CompanionsOverlay } from "@/components/game/CompanionsOverlay";
 import { CraftingOverlay } from "@/components/game/CraftingOverlay";
 import { CommandPalette } from "@/components/game/CommandPalette";
 import { BugReportFab } from "@/components/game/BugReportFab";
@@ -89,6 +90,7 @@ export default function Game() {
   const openShop = useAppStore((s) => s.openShop);
   const openServices = useAppStore((s) => s.openServices);
   const openCrafting = useAppStore((s) => s.openCrafting);
+  const openCompanions = useAppStore((s) => s.openCompanions);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
   const openWait = useAppStore((s) => s.openWait);
   const closeWait = useAppStore((s) => s.closeWait);
@@ -520,6 +522,11 @@ export default function Game() {
       openServices(act.slice("OPEN_SERVICES:".length));
       return;
     }
+    // #1192 FAZA TW: modal rekrutacji Towarzyszy — deterministyczny.
+    if (act.startsWith("OPEN_COMPANIONS:")) {
+      openCompanions(act.slice("OPEN_COMPANIONS:".length));
+      return;
+    }
     // #1338 BL-C3: modal Rzemiosła — deterministyczny, klucz lokacji w akcji.
     if (act.startsWith("OPEN_CRAFTING:")) {
       openCrafting(act.slice("OPEN_CRAFTING:".length));
@@ -881,6 +888,7 @@ export default function Game() {
 
       {/* #1292: modal Usług — deterministyczny (chip "Usługi" / skrót tekstowy), omija LLM */}
       <ServicesOverlay />
+      <CompanionsOverlay />
 
       {/* #1338 BL-C3: modal Rzemiosła — deterministyczny (chip "Rzemiosło"), omija LLM */}
       <CraftingOverlay />

@@ -106,6 +106,8 @@ export interface AppState {
   services: string | null;
   /** #1338 BL-C3 — otwarty modal Rzemiosła (klucz lokacji) albo null. Deterministyczny. */
   crafting: string | null;
+  /** #1192 FAZA TW — otwarty modal Towarzyszy (klucz lokacji) albo null. */
+  companions: string | null;
   /** #1292 — po zamknięciu modala Usług: ukryta tura proszona o narrację odbioru
    *  (zakup już opłacony mechanicznie). Game.tsx konsumuje i czyści. */
   servicesReceiptPending: string | null;
@@ -145,6 +147,8 @@ export interface AppState {
   closeServices: () => void;
   openCrafting: (locationKey: string) => void;
   closeCrafting: () => void;
+  openCompanions: (locationKey: string) => void;
+  closeCompanions: () => void;
   setServicesReceiptPending: (text: string | null) => void;
   setCombatEpiloguePending: (text: string | null) => void;
   openPalette: () => void;
@@ -205,6 +209,7 @@ export const useAppStore = create<AppState>((set) => ({
   shop: null,
   services: null,
   crafting: null,
+  companions: null,
   servicesReceiptPending: null,
   combatEpiloguePending: null,
   paletteOpen: false,
@@ -223,7 +228,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", shop: null, services: null, crafting: null, gameMenuOpen: false, finishFlow: "idle" },
+        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", shop: null, services: null, crafting: null, companions: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
@@ -234,6 +239,8 @@ export const useAppStore = create<AppState>((set) => ({
   closeShop: () => set({ shop: null }),
   openServices: (locationKey) => set({ services: locationKey }),
   closeServices: () => set({ services: null }),
+  openCompanions: (locationKey) => set({ companions: locationKey }),
+  closeCompanions: () => set({ companions: null }),
   openCrafting: (locationKey) => set({ crafting: locationKey }),
   closeCrafting: () => set({ crafting: null }),
   setServicesReceiptPending: (servicesReceiptPending) => set({ servicesReceiptPending }),
