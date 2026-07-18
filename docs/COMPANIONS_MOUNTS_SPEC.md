@@ -210,11 +210,12 @@ Ledger: wpis F-NN w `frontend_design.md` §7.
 | TW4 endpointy | ✅ WDROŻONE | `api/companions.py`, live smoke buy/list/dismiss OK |
 | TW5 podróż konna | ✅ WDROŻONE | mult+cap wpięte w `hex_travel_service` |
 | TW6 pies encounter | ✅ WDROŻONE | `_companion_enc_mult` w `_step_mult` |
-| TW7 ucieczka | 🟡 PRYMITYW | `resolve_mount_escape`/`can_escape_mounted` gotowe+testowane; brak wpięcia w flow encountera (turns.py) + przycisk ŻAR |
+| TW7 ucieczka | ✅ WDROŻONE | `resolve_travel_escape` (travel_plan.combat_seen=True na sukces skiuje walkę); `POST /campaigns/{id}/travel/escape-mounted`; `can_escape_mounted` w travel notice; przycisk „🐎 Uciekaj konno" w TravelInterruptModal (ŻAR); 4 testy |
 | TW8 walka | ✅ WDROŻONE | towarzysz wstrzykiwany na starcie walki; tura rozwiązywana SERWEROWO w `_advance_turn_impl` (auto-atak, current_turn nigdy nie zatrzyma się na `companion_*` → front się nie zawiesi); HP sync + śmierć permanentna na końcu walki; 3 testy flow + regresja summonów/advance zielona. Enemy-targets-companion (koń może zginąć od AoE) = follow-up |
-| TW9 frontend ŻAR | ⬜ TODO | build+visual verify |
-| TW10 admin | 🟡 CZĘŚĆ | Smart Entry schema ✅ (`smart_entry.py`); brak zakładki Świat→Towarzysze + monitor + cheat |
-| TW11 Księga | ⬜ TODO | rozdział wg checklisty #868 |
+| TW9 frontend ŻAR | ✅ WDROŻONE | karta towarzyszy w Postaci (F-91); modal rekrutacji `CompanionsOverlay` (chip Towarzysze); build zielony. Chip inicjatywy towarzysza w walce = drobny polish pominięty |
+| TW10 admin | ✅ WDROŻONE | Smart Entry ✅; backend CRUD `/admin/companions` (live smoke create→patch→delete); zakładka Świat→Towarzysze (world.js); cheat `grant companion` (live smoke); Instrukcja (manual.js). Monitor kampanii: backend `/admin/campaigns/{id}/companions` ✅, readout frontend pominięty |
+| TW11 Księga | ✅ WDROŻONE | rozdział XV „Towarzysze i wierzchowce" w `frontend/front/rules/` (live) |
+| follow-up | ⬜ TODO | enemy-targets-companion (towarzysz ginie od AoE) — wymaga chirurgii ścieżki ataku wroga (SF10 reakcje + death handling player-specific) |
 
 
 Kolejność = zależności. Jedno zadanie = jedna sesja agenta (konwencja FAZA-U). Testy: TYLKO pliki zadania (nigdy pełna suita). TDD: docker cp → pytest w kontenerze (`ai-gm-dev-backend-1`, testy w `/app/tests/`).
