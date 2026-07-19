@@ -109,6 +109,23 @@ def _stat_mod(sheet: dict, stat: str) -> int:
     return stat_modifier(sheet, stat)
 
 
+def _time_of_day_initiative_bonus(conn, campaign_id: int) -> int:
+    """#1463 — bonus do inicjatywy zależny od pory dnia (świt = +1).
+
+    Wpina istniejące, przetestowane jednostkowo wartości z time_of_day_service
+    (dotąd zdefiniowane, ale nigdzie nie wołane). Faza czytana z zegara kampanii
+    (`ingame_hours`). Defensywny — każdy błąd → 0 (zero regresji)."""
+    try:
+        from app.services import time_of_day_service as _tod
+        from app.services.clock_service import get_clock_state
+        hours = int(get_clock_state(int(campaign_id), conn=conn).get("ingame_hours", 0))
+        phase = _tod.get_time_of_day_phase(hours)
+        eff = _tod.get_active_effects_for_phase(phase, _tod.get_time_of_day_effects(conn))
+        return int(eff.get("initiative_bonus", 0) or 0)
+    except Exception:
+        return 0
+
+
 def _player_ac_from_sheet(sheet: dict) -> int:
     d = sheet.get("defense")
     if isinstance(d, dict) and d.get("base") is not None:
@@ -3107,7 +3124,7 @@ def _resolve_aoe_single_target(
                     _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier, conn=conn)
                     if loot_items else []
                 )
-                gold = int(roll_gold_drop(ek) or 0)
+                gold = int(roll_gold_drop(ek, campaign_id=campaign_id) or 0)  # #1464
                 if gold > 0:
                     apply_character_gold_delta(ch_id, gold, reason="combat_loot")
                 hit_info["gold_drop"] = gold
@@ -4997,7 +5014,10 @@ def initiate_combat(
                    + int(_relic_stats.get("DEX", 0) or 0) - 10) // 2
         # PT-D1 (#1124): od 2 stacków zmęczenia gorsza inicjatywa.
         from app.services.fatigue_service import compute_initiative_penalty
-        init_player = roll_d20() + dex_mod + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
+        _tod_init_bonus = _time_of_day_initiative_bonus(conn, campaign_id)  # #1463 świt=+1
+        init_player = (roll_d20() + dex_mod
+                       + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
+                       + _tod_init_bonus)
         ability_stats = _ability_stats_seven(sheet)
         # F1 (#461): weapon Effect Objects applied at combat-start
         _wrow_init = resolve_sheet_weapon(conn, sheet, int(character_id))
@@ -5043,6 +5063,7 @@ def initiate_combat(
                 "defense": ac,
                 "stats": ability_stats,
                 "initiative_roll": init_player,
+                "initiative_tod_bonus": _tod_init_bonus,  # #1463: składnik pory dnia
                 "conditions": _sheet_conditions(sheet),
                 "zone": _default_zone_for_player(sheet),
                 "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
@@ -5913,7 +5934,10 @@ def initiate_combat_mp(
             dex_mod = _stat_mod(sheet, "DEX")
             # PT-D1 (#1124): od 2 stacków zmęczenia gorsza inicjatywa.
             from app.services.fatigue_service import compute_initiative_penalty
-            init_roll = roll_d20() + dex_mod + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
+            _tod_init_bonus = _time_of_day_initiative_bonus(conn, campaign_id)  # #1463 świt=+1
+            init_roll = (roll_d20() + dex_mod
+                         + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
+                         + _tod_init_bonus)
             ability_stats = _ability_stats_seven(sheet)
 
             # Apply weapon AC bonus (same as solo)
@@ -5935,6 +5959,7 @@ def initiate_combat_mp(
                 "defense": ac,
                 "stats": ability_stats,
                 "initiative_roll": init_roll,
+                "initiative_tod_bonus": _tod_init_bonus,  # #1463: składnik pory dnia
                 "conditions": _sheet_conditions(sheet),
                 "zone": _default_zone_for_player(sheet),
                 "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
@@ -7568,7 +7593,7 @@ def _process_enemy_death(
                     _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
                     if loot_items else []
                 )
-                gold_drop = int(roll_gold_drop(ek) or 0)
+                gold_drop = int(roll_gold_drop(ek, campaign_id=campaign_id) or 0)  # #1464
                 if gold_drop > 0:
                     apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
                 out["gold_drop"] = max(0, gold_drop)

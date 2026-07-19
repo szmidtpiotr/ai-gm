@@ -951,7 +951,7 @@ def distribute_mp_loot(campaign_id: int, enemy_key: str) -> dict:
         return {"per_player": {}, "total_gold": 0}
 
     n = len(members)
-    total_gold = int(roll_gold_drop(ek) or 0)
+    total_gold = int(roll_gold_drop(ek, campaign_id=campaign_id) or 0)  # #1464
     base_share = total_gold // n
     remainder = total_gold % n
 
@@ -970,11 +970,16 @@ def distribute_mp_loot(campaign_id: int, enemy_key: str) -> dict:
     return {"per_player": per_player, "total_gold": total_gold}
 
 
-def roll_gold_drop(enemy_key: str) -> int:
+def roll_gold_drop(enemy_key: str, campaign_id: int | None = None) -> int:
     """
     Roll gold reward for an enemy from its loot table range.
     Returns 0 when enemy/table missing, range is empty, or drop_chance gate fails.
     drop_chance is shared with roll_loot() — one gate controls both gold and items.
+
+    #1464: gdy podano `campaign_id`, kwota jest skalowana mnożnikiem złota z
+    aktywnego wydarzenia regionalnego (`world_event_service.loot_gold_multiplier`,
+    np. jarmark ↑ / zaraza ↓). Region czytany z kampanii (`resolve_region`).
+    Brak eventu / błąd → mnożnik 1.0 (defensywnie, nigdy nie zeruje łupu).
     """
     ek = str(enemy_key or "").strip()
     if not ek:
@@ -1005,7 +1010,21 @@ def roll_gold_drop(enemy_key: str) -> int:
         return 0
     if gmax < gmin:
         gmax = gmin
-    return random.randint(gmin, gmax)
+    gold = random.randint(gmin, gmax)
+
+    # #1464 — mnożnik złota z „żywego świata" (wydarzenie regionalne).
+    if campaign_id is not None and gold > 0:
+        try:
+            from app.services import world_event_service as _wes
+            from app.services import reputation_service as _rep
+            with _conn() as _c2:
+                region = _rep.resolve_region(_c2, int(campaign_id))
+                mult = float(_wes.loot_gold_multiplier(_c2, region) or 1.0)
+            if mult != 1.0:
+                gold = max(0, int(round(gold * mult)))
+        except Exception:
+            pass  # mnożnik jest opcjonalny — nigdy nie psuje wypłaty złota
+    return gold
 
 
 def _starter_durability(conn: sqlite3.Connection, key: str, item_type: str) -> int | None:

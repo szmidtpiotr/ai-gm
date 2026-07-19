@@ -794,6 +794,34 @@ def resolve_skill_test(
     except Exception:
         darkvision_delta = 0
 
+    # #1463 — mechanika pory dnia: o zmierzchu/nocy percepcja jest trudniejsza
+    # (wyższe DC), a nocą skradanie łatwiejsze (bonus do rzutu). Wpina istniejące,
+    # przetestowane jednostkowo wartości z time_of_day_service (dotąd nie wołane).
+    # DC podbijamy PRZED _resolve_opponent, by próg to uwzględnił. Defensywny.
+    tod_perception_dc_bonus = 0
+    tod_stealth_bonus = 0
+    try:
+        from app.services import time_of_day_service as _tod
+        from app.services.clock_service import get_clock_state
+        _hours = int(get_clock_state(int(campaign_id), conn=conn).get("ingame_hours", 0))
+        _tod_eff = _tod.get_active_effects_for_phase(
+            _tod.get_time_of_day_phase(_hours), _tod.get_time_of_day_effects(conn)
+        )
+        _sk = str(skill_key).strip().lower()
+        if _sk in _PERCEPTION_SKILLS:
+            _pdc = int(_tod_eff.get("perception_dc_bonus", 0) or 0)
+            if _pdc and counter.get("counter_type") == "dc":
+                counter["dc"] = int(counter.get("dc", 12)) + _pdc
+                tod_perception_dc_bonus = _pdc
+        elif _sk == "stealth":
+            _sb = int(_tod_eff.get("stealth_bonus", 0) or 0)
+            if _sb:
+                mod_total += _sb
+                tod_stealth_bonus = _sb
+    except Exception:
+        tod_perception_dc_bonus = 0
+        tod_stealth_bonus = 0
+
     # Opponent side (rolled once — a forced reroll keeps the same threshold).
     opponent_total, opponent_roll = _resolve_opponent(conn, counter, campaign_id)
 
@@ -813,6 +841,8 @@ def resolve_skill_test(
         "nat1": derived["nat1"],
         "success": derived["success"],
         "darkvision_bonus": darkvision_delta,  # #1461: +3 dwarf / −4 human w lochu (0 poza)
+        "tod_perception_dc_bonus": tod_perception_dc_bonus,  # #1463: dusk +1 / night +2
+        "tod_stealth_bonus": tod_stealth_bonus,              # #1463: night +2
     }
 
     # S11 (#606) — wymuszony przerzut ("zły omen"): klątwa psuje UDANY (korzystny) test.

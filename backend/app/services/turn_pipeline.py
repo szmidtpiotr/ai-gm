@@ -1070,13 +1070,38 @@ def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | 
             _persist()
             return None
 
-        if reason not in ("encounter", "dusk", "forced_camp"):
+        if reason not in ("encounter", "dusk", "forced_camp", "social"):
             return None
 
         dest_label = tp.get("destination_label") or (
             f"hex ({tp.get('destination_hex', {}).get('q')},{tp.get('destination_hex', {}).get('r')})"
         )
         remaining = int(tp.get("hours_remaining", 0))
+
+        if reason == "social":
+            # #1473 — scena społeczna w podróży (handlarz/patrol/uchodźcy). Miękka
+            # przerwa FABULARNA: narruj spotkanie i zapytaj o kontynuację marszu —
+            # BEZ walki, bez czekania na combat (czysty stan, patrz #1455).
+            _ev = tp.get("social_event") or "spotkanie"
+            _flavor = {
+                "traveling_merchant": "wędrowny handlarz zatrzymuje wóz przy trakcie",
+                "patrol": "konny patrol zajeżdża drogę i lustruje podróżnego",
+                "refugees": "grupa uchodźców wlecze się poboczem, prosząc o wieści",
+            }.get(_ev, "napotkani wędrowcy przystają na chwilę")
+            hint = (
+                f"\n[SYSTEM: W drodze do {dest_label} (~{remaining}h) na trakcie dochodzi "
+                f"do spotkania: {_flavor}. Odegraj krótką scenę fabularną (2-3 zdania), "
+                f"po polsku, klimat dark fantasy. NIE wszczynaj walki, NIE rozstrzygaj "
+                f"testów za gracza. Na koniec zapytaj prozą, czy bohater kontynuuje "
+                f"podróż do {dest_label}. Nie decyduj za gracza.]"
+            )
+            flags["travel_plan"]["interrupt_reason"] = "social_prompted"
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(flags, ensure_ascii=False), gs["id"]),
+            )
+            conn.commit()
+            return hint
 
         if reason == "encounter":
             # PT-F1 #1135: the encounter combat spawns POST-LLM, so on the turn the

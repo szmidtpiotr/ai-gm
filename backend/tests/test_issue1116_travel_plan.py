@@ -142,8 +142,22 @@ def conn():
 
 # ── RED 1: resolve_chain_travel saves travel_plan on encounter interrupt ──────
 
-def test_travel_plan_saved_when_encounter_interrupts(conn):
-    """#1116 RED: encounter on hex (2,0) → travel_plan in session_flags with destination."""
+def test_travel_plan_saved_when_encounter_interrupts(conn, monkeypatch):
+    """#1116 RED: encounter on hex (2,0) → travel_plan in session_flags with destination.
+
+    #1473: spotkania overworld dzielą się 50/50 walka/scena społeczna, a rzut ryzyka
+    podlega TRIP_ENCOUNTER_CAP — więc wymuszamy tu ścieżkę WALKI deterministycznie
+    (ten test pilnuje zapisu travel_plan przy zasadzce bojowej, nie samego losowania).
+    """
+    import app.services.hex_travel_service as _hts
+    from app.services import social_encounter_service as _ses
+    # Odpal ryzyko tylko na hexie z encounter_chance>=1.0 (czyli (2,0)) — pomija
+    # TRIP_ENCOUNTER_CAP i losowość, zostawiając deterministyczną zasadzkę na (2,0).
+    monkeypatch.setattr(
+        _hts, "_roll_encounter",
+        lambda hex_data, *a, **k: float((hex_data or {}).get("encounter_chance", 0) or 0) >= 1.0,
+    )
+    monkeypatch.setattr(_ses, "classify_encounter_kind", lambda roll: "combat")
     from app.services.hex_travel_service import resolve_chain_travel
 
     result = resolve_chain_travel(

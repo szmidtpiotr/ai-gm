@@ -1066,6 +1066,25 @@ def resolve_chain_travel(
         hex_data = step.data
         _mult = _step_mult(hex_data) * _trip_cap_mult
         if _roll_encounter(hex_data, hex_type_cfg, chance_mult=_mult):
+            # #1473 — moneta walka/scena społeczna po TRAFIONYM rzucie ryzyka
+            # (lustro local_map: reużywa social_encounter_service, bez duplikacji).
+            # Połowa społeczna NIE startuje walki — czysta scena fabularna
+            # (handlarz/patrol/uchodźcy), bez enemy_key → nie wpada w bramkę
+            # „walka nie odbyta" (#1455). Split 50/50 startowy, Sandbox-tunable.
+            try:
+                from app.services import social_encounter_service as _ses
+                if _ses.classify_encounter_kind(random.random()) == "social":
+                    _scene = _ses.build_travel_social_scene(conn=conn)
+                    return {
+                        "kind": "social",
+                        "social_event": _scene.get("social_event"),
+                        "subtype": _scene.get("subtype"),
+                        "hex_type": hex_data.get("hex_type", "plains"),
+                        "hex_label": hex_data.get("label"),
+                        "atmosphere": hex_data.get("atmosphere"),
+                    }
+            except Exception as _soc_err:
+                logger.warning("travel_social_split_failed", error=str(_soc_err))
             # BL-A7 (#1423): composer skalowany f(Power) — wataha/herszt zamiast
             # jednego wroga poz. 1-2. Pusto → legacy single-pick (zero regresji).
             try:
@@ -1378,7 +1397,26 @@ def resolve_chain_travel(
                     lbl = d.get("label") or f"hex ({to_hex[0]},{to_hex[1]})"
                 return lk, lbl
 
-            if encounter_result and len(path) > 1:
+            if encounter_result and encounter_result.get("kind") == "social" and len(path) > 1:
+                # #1473 — scena społeczna: przerwa FABULARNA, nie walka. Czysty stan
+                # (bez enemy_key / combat_seen) → nie wyzwala bramki #1455 ani
+                # wstrzyknięcia [COMBAT_START] (turns.py gate na interrupt_reason=="encounter").
+                dest_loc_key, dest_label = _resolve_dest_label()
+                enc_idx = path.index(encounter_hex)
+                remaining_hexes = max(0, len(path) - 1 - enc_idx)
+                sf_tp["travel_plan"] = {
+                    "destination_hex": {"q": to_hex[0], "r": to_hex[1]},
+                    "destination_key": dest_loc_key,
+                    "destination_label": dest_label,
+                    "path": [{"q": h[0], "r": h[1]} for h in path],
+                    "step_index": enc_idx,
+                    "hours_remaining": float(remaining_hexes),
+                    "interrupt_reason": "social",
+                    "route_mode": route_mode,
+                    "social_event": encounter_result.get("social_event"),
+                    "age": 0,
+                }
+            elif encounter_result and len(path) > 1:
                 dest_loc_key, dest_label = _resolve_dest_label()
                 enc_idx = path.index(encounter_hex)
                 remaining_hexes = max(0, len(path) - 1 - enc_idx)

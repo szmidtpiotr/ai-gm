@@ -62,10 +62,21 @@ _EVENT_DEFS: dict[str, dict] = {
                     "faction_tag": "zakon_straznikow"},
 }
 
+# #1473 — sceny społeczne w PODRÓŻY overworld (nie miasto): handlarz / patrol /
+# uchodźcy. Miękkie zdarzenia fabularne (kind='soft') — NIE odejmują złota i NIE
+# startują walki; służą tylko za zaczep narracyjny spójny z travel_plan.
+_EVENT_DEFS.update({
+    "traveling_merchant": {"stat": "CHA", "skill": "persuasion", "dc": 10, "kind": "soft"},
+    "patrol":             {"stat": "CHA", "skill": "persuasion", "dc": 12, "kind": "soft"},
+    "refugees":           {"stat": "WIS", "skill": "insight",    "dc": 10, "kind": "soft"},
+})
+
 _SUBTYPE_EVENTS: dict[str, list[str]] = {
     "alley": ["pickpocket", "drunk_harassment"],
     "tavern": ["card_cheat", "quest_rumor"],
     "market": ["tout", "guard_check"],
+    # #1473 — pula overworld (dzicz / trakt).
+    "wilderness": ["traveling_merchant", "patrol", "refugees"],
 }
 
 # Słowa-klucze mapujące dowolny opis location_subtype na kanoniczny subtyp.
@@ -158,6 +169,29 @@ def pick_social_event(
     ev = dict(_EVENT_DEFS[key])
     ev["key"] = key
     return ev
+
+
+# ── Scena społeczna PODRÓŻY (#1473) ───────────────────────────────────────────
+
+def build_travel_social_scene(subtype: str = "wilderness", conn=None, rng=random) -> dict:
+    """#1473 — czysta scena społeczna dla podróży overworld (handlarz/patrol/uchodźcy).
+
+    Wspólny helper wydzielony z `local_map._resolve_social_encounter`: reużywa
+    `classify_encounter_kind` (moneta u konsumenta) i `pick_social_event` zamiast
+    duplikować logikę doboru. W przeciwieństwie do wariantu miejskiego NIE odejmuje
+    złota ani nie rozstrzyga rzutu — zwraca CZYSTY stan (bez enemy_key, bez pending
+    walki), więc nie wpada w bramkę „walka nie odbyta" (#1455). `conn` (opcjonalne)
+    pozwala dobrać zdarzenie z katalogu `game_config_encounters`; pusty → hardcode.
+
+    Zwraca dict do wpięcia w encounter_result:
+      {"kind": "social", "social_event": <klucz>, "subtype": <subtyp>}
+    """
+    event = pick_social_event(subtype, conn=conn, rng=rng)
+    return {
+        "kind": "social",
+        "social_event": event.get("key"),
+        "subtype": subtype,
+    }
 
 
 # ── Kieszonkowiec ─────────────────────────────────────────────────────────────
