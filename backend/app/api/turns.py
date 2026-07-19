@@ -2653,16 +2653,71 @@ def strip_last_open_shop_cue(assistant_text: str) -> str:
     return "\n".join(lines[:-1]).rstrip()
 
 
+# #1468: salvage the `narrative` field from a JSON envelope that json.loads can
+# NOT parse (observed on gemma — truncated / unbalanced braces / dangling commas).
+# Matches `"narrative": "<value>"` with proper handling of escaped quotes and
+# backslashes inside the string value (`(?:[^"\\]|\\.)*`), so a mid-value `\"`
+# does not terminate the capture early. DOTALL because the SSE path decodes
+# `\n` to literal newlines before this runs.
+_NARRATIVE_FIELD_RE = re.compile(r'"narrative"\s*:\s*"((?:[^"\\]|\\.)*)"', re.DOTALL)
+
+
+def _recover_narrative_from_broken_json(text: str) -> str | None:
+    """#1468: pull the narrative out of a broken JSON envelope via regex.
+
+    Returns the un-escaped narrative string, or None when no `narrative` field is
+    present at all (caller then falls back to leading-brace cleanup).
+    """
+    if not text:
+        return None
+    m = _NARRATIVE_FIELD_RE.search(text)
+    if not m:
+        return None
+    raw = m.group(1)
+    try:
+        # Re-parse just the string literal so JSON escapes (\" \\ \n \t \uXXXX) decode.
+        return json.loads('"' + raw + '"')
+    except Exception:
+        # Best-effort manual unescape of the common escapes if the tail is malformed.
+        return (
+            raw.replace('\\"', '"')
+            .replace('\\n', '\n')
+            .replace('\\t', '\t')
+            .replace('\\\\', '\\')
+        )
+
+
+def _strip_leading_json_brace(text: str) -> str:
+    """#1468: last-resort cleanup for a broken envelope with no recoverable
+    narrative field — drop a leading `{` (+ any `"narrative":` scaffold and a
+    dangling trailing `}`) so the player never sees raw JSON braces."""
+    if not text:
+        return text or ""
+    s = text.lstrip()
+    if not s.startswith("{"):
+        return text
+    s = s[1:]
+    s = re.sub(r'^\s*"?narrative"?\s*:\s*"?', '', s, flags=re.IGNORECASE)
+    if s.rstrip().endswith("}"):
+        s = s.rstrip()[:-1]
+    return s.strip().strip('"').strip()
+
+
 def _extract_narrative_for_cues(text: str) -> tuple[str, dict | None]:
     """
     If text is JSON containing `narrative`, return (narrative, parsed_dict).
-    Otherwise return (text, None) as plain-text fallback.
+    Otherwise return (narrative, None) after salvaging as much clean prose as
+    possible — never the raw `{"narrative": ...` envelope (#1468).
 
     The SSE streaming path encodes newlines as \\n then decodes them back to
     literal newline characters before this function is called. Literal newlines
     inside JSON string values are technically invalid per spec, so json.loads
     rejects them. We use strict=False to allow literal control characters inside
     strings so that grant_item and other top-level fields are extracted correctly.
+
+    #1468 (P1): when even strict=False fails on a hard-broken envelope (gemma),
+    fall back to a regex extraction of the `narrative` field; if that also fails,
+    strip a leading brace so no JSON scaffold reaches the player.
     """
     _decoder = json.JSONDecoder(strict=False)
     stripped = _strip_json_code_fence(text)
@@ -2672,7 +2727,14 @@ def _extract_narrative_for_cues(text: str) -> tuple[str, dict | None]:
             return str(parsed.get("narrative") or ""), parsed
     except (ValueError, TypeError):
         pass
-    return text, None
+    # Broken envelope — salvage narrative via regex (cues from other fields lost,
+    # but the player sees clean prose instead of leaking JSON).
+    recovered = _recover_narrative_from_broken_json(stripped)
+    if recovered is not None:
+        return recovered, None
+    # No recoverable narrative field: strip a leading `{` if the text still looks
+    # like a leaked envelope; otherwise return the text unchanged.
+    return _strip_leading_json_brace(text), None
 
 
 def _repack_narrative(_original_text: str, narrative: str, parsed: dict | None) -> str:

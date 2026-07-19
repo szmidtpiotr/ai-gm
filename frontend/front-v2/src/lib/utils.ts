@@ -15,7 +15,8 @@ export function cn(...inputs: ClassValue[]) {
 export function stripMechanicTags(s: string | null | undefined): string {
   if (!s) return "";
   return s
-    .replace(/\s*\[[A-Z][A-Z0-9_]+:[^\]]*\]/g, "")
+    // #1469: colon optional — also strips bare tags like [DEATH_TRIGGER].
+    .replace(/\s*\[[A-Z][A-Z0-9_]+(?::[^\]]*)?\]/g, "")
     // #1299: narrator czasem dokleja "Roll <skill> d20" jako końcową linię narracji
     // (zamiast pola roll_cue). Backend to przechwytuje i tnie, ale stare tury w bazie
     // oraz tokeny streamowane na żywo mogą ją zawierać — usuń, by dyrektywa mechaniczna

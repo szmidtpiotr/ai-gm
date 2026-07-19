@@ -129,6 +129,12 @@ TAG_REGISTRY: dict[str, re.Pattern] = {
         r'\[CAMPAIGN_END:\s*([^\]]+?)\s*\]',
         re.IGNORECASE,
     ),
+    # #1469: scripted / environmental death (lava, fall, drown). Colon+reason
+    # optional — the system prompt emits the bare form `[DEATH_TRIGGER]`.
+    "DEATH_TRIGGER": re.compile(
+        r'\[DEATH_TRIGGER(?::\s*([^\]]*))?\]',
+        re.IGNORECASE,
+    ),
     # Dungeons
     "DUNGEON_CLEAR": re.compile(
         r'\[DUNGEON_CLEAR:\s*([^\]]+?)\s*\]',
@@ -142,18 +148,40 @@ _ANY_TAG_RE = re.compile(r'\[([A-Z][A-Z0-9_]+):([^\]]*)\]')
 
 # ── Generic mechanic-tag strip ────────────────────────────────────────────────
 
-_STRIP_TAG_RE = re.compile(r'\s*\[[A-Z][A-Z0-9_]+:[^\]]*\]')
+# #1469: colon is now OPTIONAL — covers both `[TAG:payload]` and bare `[TAG]`
+# (e.g. [DEATH_TRIGGER]) so no colon-less mechanic tag ever leaks to the player.
+_STRIP_TAG_RE = re.compile(r'\s*\[[A-Z][A-Z0-9_]+(?::[^\]]*)?\]')
+
+# #1469: presence check for the environmental-death tag (bare or with reason).
+_DEATH_TRIGGER_RE = re.compile(r'\[DEATH_TRIGGER(?::\s*([^\]]*))?\]', re.IGNORECASE)
 
 
 def strip_all_mechanic_tags(text: Optional[str]) -> str:
-    """Remove every [ALLCAPS_TAG: ...] from text.
+    """Remove every [ALLCAPS_TAG] / [ALLCAPS_TAG: ...] from text.
 
-    Covers all known (and future) mechanic tags emitted by the LLM.
+    Covers all known (and future) mechanic tags emitted by the LLM, including
+    colon-less tags such as [DEATH_TRIGGER] (#1469).
     Mirrors the JS-side mechanic-tag stripping in the ŻAR frontend (front-v2).
     """
     if not text:
         return ''
     return _STRIP_TAG_RE.sub('', str(text)).strip()
+
+
+def parse_death_trigger(text: Optional[str]) -> "tuple[bool, str | None]":
+    """#1469: detect a [DEATH_TRIGGER] tag (bare or `[DEATH_TRIGGER: reason]`).
+
+    Returns (present, reason) where reason is the optional narrative cause or None.
+    The tag authorises environmental/scripted death per the system-prompt RESTRICT
+    block; the actual death mechanic is run by the turn pipeline (xp_sources).
+    """
+    if not text:
+        return (False, None)
+    m = _DEATH_TRIGGER_RE.search(str(text))
+    if not m:
+        return (False, None)
+    reason = (m.group(1) or "").strip() if m.lastindex else ""
+    return (True, reason or None)
 
 
 # ── Leaked JSON-envelope field lines ──────────────────────────────────────────

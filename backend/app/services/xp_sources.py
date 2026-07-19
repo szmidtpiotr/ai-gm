@@ -38,6 +38,8 @@ _DUNGEON_RE = re.compile(r"\[DUNGEON_CLEAR:\s*([^\]\s]+)\s*\]", re.I)
 _CAMPAIGN_RE= re.compile(r"\[CAMPAIGN_END:\s*([^\]\s]+)\s*\]", re.I)
 _DISC_RE    = re.compile(r"\[DISCOVERY:\s*([^\]\s]+)\s*\]", re.I)
 _XP_GRANT_RE= re.compile(r"\[XP_GRANT:\s*([^:\]]+):\s*(\d+)\s*\]", re.I)
+# #1469: environmental/scripted death — bare or `[DEATH_TRIGGER: reason]`.
+_DEATH_TRIGGER_RE = re.compile(r"\[DEATH_TRIGGER(?::\s*([^\]]*))?\]", re.I)
 
 SESSION_GAP_MINUTES = 30
 XP_GRANT_SESSION_CAP = 50  # XS12 cap per session
@@ -321,6 +323,61 @@ def grant_session_start(conn: sqlite3.Connection, character_id: int,
                   f"Powrót do sesji ({gap:.0f} min przerwy)", turn_number)
 
 
+# ── #1469: environmental / scripted death mechanic ───────────────────────────
+
+def _trigger_environmental_death(
+    conn: sqlite3.Connection,
+    character_id: int,
+    campaign_id: int,
+    narrative: str,
+) -> bool:
+    """Run the death mechanic for a [DEATH_TRIGGER] tag. Returns True if fired.
+
+    Gated so it fires exactly once and never kills a test hero during a smoke run:
+      - campaign must still be active (status guard blocks re-fire on later turns)
+      - autopilot [TEST] heroes are skipped (see `feedback_smoke_test_db_cheat`)
+    Reuses the same `end_solo_campaign_on_death` flow as death_save / combat death,
+    so no new player-facing death behaviour is introduced — only a new trigger.
+    """
+    camp = conn.execute(
+        "SELECT status FROM campaigns WHERE id = ?", (campaign_id,)
+    ).fetchone()
+    if camp is not None:
+        status = str(camp["status"] or "").strip().lower()
+        if status not in ("", "active"):
+            return False  # already ended/completed — never re-fire
+
+    char_row = conn.execute(
+        "SELECT * FROM characters WHERE id = ?", (character_id,)
+    ).fetchone()
+    if char_row is None:
+        return False
+
+    try:
+        from app.services.playthrough_service import is_autopilot_active, is_test_hero
+        if is_autopilot_active() and is_test_hero(char_row):
+            logger.info("death_trigger_test_hero_skipped",
+                        campaign_id=campaign_id, character_id=character_id)
+            return False
+    except Exception:
+        pass
+
+    m = _DEATH_TRIGGER_RE.search(narrative or "")
+    reason = (m.group(1) or "").strip() if (m and m.lastindex) else ""
+    death_reason = reason or "Śmierć w wyniku wydarzeń w świecie gry"
+
+    from app.services.solo_death_service import end_solo_campaign_on_death
+    end_solo_campaign_on_death(
+        conn,
+        campaign_id=campaign_id,
+        character_row=char_row,
+        death_reason=death_reason,
+    )
+    logger.error("death_trigger_fired", campaign_id=campaign_id,
+                 character_id=character_id, reason=death_reason)
+    return True
+
+
 # ── Narrative tag bulk processor ─────────────────────────────────────────────
 
 def process_narrative_xp_tags(
@@ -425,6 +482,17 @@ def process_narrative_xp_tags(
             _store_selected_ending(conn, campaign_id, _ending_id_from_tag)
         except Exception as _se_err:
             logger.warning("campaign_end_store_ending_error", error=str(_se_err))
+
+    # #1469: [DEATH_TRIGGER] — scripted/environmental death (lava, fall, drown).
+    # The system-prompt RESTRICT block allows narrative death ONLY via this tag
+    # (or death_save fail / combat HP<=0). Honour that contract: run the real
+    # death mechanic (end campaign + epitaph) instead of leaving a dead promise.
+    if _DEATH_TRIGGER_RE.search(narrative):
+        try:
+            _trigger_environmental_death(conn, character_id, campaign_id, narrative)
+        except Exception as _dt_err:  # never crash a turn on a death-trigger hiccup
+            logger.warning("death_trigger_error", error=str(_dt_err),
+                           campaign_id=campaign_id, character_id=character_id)
 
     for m in _DISC_RE.finditer(narrative):
         total += grant_discovery(conn, character_id, campaign_id, m.group(1), turn_number)
