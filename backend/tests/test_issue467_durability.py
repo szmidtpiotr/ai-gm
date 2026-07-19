@@ -226,7 +226,7 @@ def test_repair_cost_t1_sword(db):
     """Sword (T1, rarity=1): 20 gold per missing point."""
     db.execute("UPDATE character_inventory SET durability_current = 50 WHERE id = 1")
     db.commit()
-    result = get_repair_cost(db, 1)
+    result = get_repair_cost(db, 1, 1)
     assert result["ok"] is True
     assert result["cost"] == 50 * 20  # 50 missing pts × 20g = 1000g
 
@@ -236,20 +236,20 @@ def test_repair_cost_t2_weapon(db):
     db.execute("UPDATE character_inventory SET durability_current = 100, durability_max = 150, weapon_key = 'longsword' WHERE id = 3")
     db.execute("UPDATE character_inventory SET equipped = 1 WHERE id = 3")
     db.commit()
-    result = get_repair_cost(db, 3)
+    result = get_repair_cost(db, 1, 3)
     assert result["ok"] is True
     assert result["cost"] == 50 * 50  # 50 missing × 50g = 2500g
 
 
 def test_repair_cost_zero_when_full(db):
     """No repair cost when durability is full."""
-    result = get_repair_cost(db, 1)  # 80/100 → 20 missing
+    result = get_repair_cost(db, 1, 1)  # 80/100 → 20 missing
     assert result["cost"] == 20 * 20  # 20 × 20g
 
 
 def test_repair_cost_null_durability(db):
     """Item with NULL durability_max → ok=False (nothing to repair)."""
-    result = get_repair_cost(db, 4)
+    result = get_repair_cost(db, 1, 4)
     assert result["ok"] is False
 
 

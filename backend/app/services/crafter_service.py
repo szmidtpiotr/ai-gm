@@ -13,10 +13,14 @@ REROLL_COSTS = {1: 100, 2: 350, 3: 700}
 UPGRADE_COSTS = {1: 350, 2: 700}
 
 
-def _get_item_type(conn, inv_id: int) -> str | None:
+def _get_item_type(conn, char_id: int, inv_id: int) -> str | None:
+    # #1448: scope by character_id — the router only proves the HERO belongs to the
+    # user, not that inv_id belongs to that hero. Without this an authed user can pass
+    # a rival's inventory_id and scramble/repair their gear (IDOR).
     row = conn.execute(
-        "SELECT weapon_key, item_key, consumable_key FROM character_inventory WHERE id = ?",
-        (inv_id,),
+        "SELECT weapon_key, item_key, consumable_key FROM character_inventory "
+        "WHERE id = ? AND character_id = ?",
+        (inv_id, char_id),
     ).fetchone()
     if not row:
         return None
@@ -56,17 +60,20 @@ def _deduct_gold(conn, char_id: int, amount: int, source: str, meta: dict | None
     conn.commit()
 
 
-def _get_current_affixes(conn, inv_id: int) -> list[str]:
-    row = conn.execute("SELECT affixes_json FROM character_inventory WHERE id = ?", (inv_id,)).fetchone()
+def _get_current_affixes(conn, char_id: int, inv_id: int) -> list[str]:
+    row = conn.execute(
+        "SELECT affixes_json FROM character_inventory WHERE id = ? AND character_id = ?",
+        (inv_id, char_id),
+    ).fetchone()
     if not row:
         return []
     return json.loads(row["affixes_json"] or "[]")
 
 
-def _save_affixes(conn, inv_id: int, affixes: list[str]) -> None:
+def _save_affixes(conn, char_id: int, inv_id: int, affixes: list[str]) -> None:
     conn.execute(
-        "UPDATE character_inventory SET affixes_json = ? WHERE id = ?",
-        (json.dumps(affixes), inv_id),
+        "UPDATE character_inventory SET affixes_json = ? WHERE id = ? AND character_id = ?",
+        (json.dumps(affixes), inv_id, char_id),
     )
     conn.commit()
 
@@ -80,12 +87,12 @@ def get_affix_costs(conn, char_id: int, inv_id: int) -> dict:
     koszt rerollu i ulepszenia, plus aktualne złoto bohatera — żeby UI pokazało
     cenę i saldo PO transakcji PRZED kliknięciem.
     """
-    item_type = _get_item_type(conn, inv_id)
+    item_type = _get_item_type(conn, char_id, inv_id)
     if not item_type:
         return {"ok": False, "reason": "item_not_found"}
     gold = _get_char_gold(conn, char_id)
     try:
-        current = _get_current_affixes(conn, inv_id)
+        current = _get_current_affixes(conn, char_id, inv_id)
     except Exception:
         # Bazy bez kolumny affixes_json (luka migracji #462) → podgląd kosztów nadal działa.
         current = []
@@ -113,13 +120,15 @@ def apply_affix(conn, char_id: int, inv_id: int, tier: int) -> dict:
     if cost is None:
         return {"ok": False, "reason": "invalid_tier"}
 
+    # #1448: prove item ownership (scoped) BEFORE touching gold, so a foreign
+    # inventory_id returns item_not_found rather than leaking a gold check.
+    item_type = _get_item_type(conn, char_id, inv_id)
+    if not item_type:
+        return {"ok": False, "reason": "item_not_found"}
+
     gold = _get_char_gold(conn, char_id)
     if gold < cost:
         return {"ok": False, "reason": "insufficient_gold", "have": gold, "need": cost}
-
-    item_type = _get_item_type(conn, inv_id)
-    if not item_type:
-        return {"ok": False, "reason": "item_not_found"}
 
     pool = _get_affixes_for_tier(conn, tier, item_type)
     if not pool:
@@ -127,9 +136,9 @@ def apply_affix(conn, char_id: int, inv_id: int, tier: int) -> dict:
 
     new_key = random.choice(pool)
 
-    affixes = _get_current_affixes(conn, inv_id)
+    affixes = _get_current_affixes(conn, char_id, inv_id)
     affixes.append(new_key)
-    _save_affixes(conn, inv_id, affixes)
+    _save_affixes(conn, char_id, inv_id, affixes)
     _deduct_gold(conn, char_id, cost, "craft_apply_affix", {"inv_id": inv_id, "tier": tier, "affix_key": new_key})
 
     return {"ok": True, "affix_key": new_key, "cost": cost}
@@ -137,7 +146,12 @@ def apply_affix(conn, char_id: int, inv_id: int, tier: int) -> dict:
 
 def reroll_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
     """Replace existing affix with a new random one of the same tier. Deducts gold."""
-    affixes = _get_current_affixes(conn, inv_id)
+    # #1448: scoped ownership check first → foreign inventory_id = item_not_found.
+    item_type = _get_item_type(conn, char_id, inv_id)
+    if not item_type:
+        return {"ok": False, "reason": "item_not_found"}
+
+    affixes = _get_current_affixes(conn, char_id, inv_id)
     if affix_key not in affixes:
         return {"ok": False, "reason": "affix_not_on_item"}
 
@@ -153,7 +167,6 @@ def reroll_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
     if gold < cost:
         return {"ok": False, "reason": "insufficient_gold", "have": gold, "need": cost}
 
-    item_type = _get_item_type(conn, inv_id)
     pool = _get_affixes_for_tier(conn, tier, item_type)
     if not pool:
         return {"ok": False, "reason": "no_affixes_available"}
@@ -170,7 +183,7 @@ def reroll_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
 
     idx = affixes.index(affix_key)
     affixes[idx] = new_key
-    _save_affixes(conn, inv_id, affixes)
+    _save_affixes(conn, char_id, inv_id, affixes)
     _deduct_gold(conn, char_id, cost, "craft_reroll_affix", {"inv_id": inv_id, "old_key": affix_key, "new_key": new_key})
 
     # Track whether the key actually changed so the pity counter resets on a real change.
@@ -181,7 +194,12 @@ def reroll_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
 
 def upgrade_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
     """Replace an affix with a higher-tier random affix. Deducts gold."""
-    affixes = _get_current_affixes(conn, inv_id)
+    # #1448: scoped ownership check first → foreign inventory_id = item_not_found.
+    item_type = _get_item_type(conn, char_id, inv_id)
+    if not item_type:
+        return {"ok": False, "reason": "item_not_found"}
+
+    affixes = _get_current_affixes(conn, char_id, inv_id)
     if affix_key not in affixes:
         return {"ok": False, "reason": "affix_not_on_item"}
 
@@ -198,7 +216,6 @@ def upgrade_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
         return {"ok": False, "reason": "insufficient_gold", "have": gold, "need": cost}
 
     new_tier = tier + 1
-    item_type = _get_item_type(conn, inv_id)
     pool = _get_affixes_for_tier(conn, new_tier, item_type)
     if not pool:
         return {"ok": False, "reason": "no_affixes_available"}
@@ -207,7 +224,7 @@ def upgrade_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
 
     idx = affixes.index(affix_key)
     affixes[idx] = new_key
-    _save_affixes(conn, inv_id, affixes)
+    _save_affixes(conn, char_id, inv_id, affixes)
     _deduct_gold(conn, char_id, cost, "craft_upgrade_affix", {"inv_id": inv_id, "old_key": affix_key, "new_key": new_key, "tier": new_tier})
 
     return {"ok": True, "affix_key": new_key, "cost": cost, "new_tier": new_tier}

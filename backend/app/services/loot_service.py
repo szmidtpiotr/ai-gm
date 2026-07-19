@@ -355,6 +355,35 @@ def _decode_effect_json(raw: Any) -> dict[str, Any] | None:
     return None
 
 
+# #1448: passive "worn" effect types that project stat/skill/ac bonuses while the
+# item stays equipped (mirror of equipment_effects_service._apply_effect). An item
+# carrying any of these is relic-class and belongs in a relic slot, not a body slot.
+_WORN_PASSIVE_EFFECT_TYPES = frozenset(
+    {"static_stat_modifier", "static_skill_modifier", "ac_bonus"}
+)
+
+
+def _has_worn_passive_effect(effect_json_raw: Any) -> bool:
+    """True when effect_json carries at least one passive worn effect (relic-class)."""
+    parsed = _decode_effect_json(effect_json_raw)
+    if not parsed:
+        return False
+    effects = parsed.get("effects")
+    if not isinstance(effects, list):
+        return False
+    for e in effects:
+        if not isinstance(e, dict):
+            continue
+        etype = str(e.get("type") or "").strip().lower()
+        if etype in _WORN_PASSIVE_EFFECT_TYPES:
+            try:
+                if int(e.get("value") or 0) != 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
 def _effect_payloads_from_item_row(row: sqlite3.Row) -> list[dict[str, Any]]:
     parsed = _decode_effect_json(row["effect_json"] if "effect_json" in row.keys() else None)
     if parsed and isinstance(parsed.get("effects"), list):
@@ -2591,7 +2620,7 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
         row = conn.execute(
             """
             SELECT ci.id, ci.weapon_key, ci.item_key,
-                   gi.item_type, gi.armor_coverage,
+                   gi.item_type, gi.armor_coverage, gi.effect_json AS item_effect_json,
                    gw.weapon_slot AS weapon_slot
             FROM character_inventory ci
             LEFT JOIN game_config_items gi ON gi.key = ci.item_key
@@ -2611,6 +2640,20 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
 
         if auto_armor and not is_armor:
             raise ValueError("invalid slot")
+
+        # #1448: relic-class = non-weapon, non-armor item carrying a passive
+        # (worn) effect_json. `get_equipment_bonuses` SUMS every equipped row's
+        # static_stat/skill/ac effect regardless of slot, so a relic squeezed
+        # into a body slot (head/torso/…) stacks its +CHA on top of the 2 real
+        # relic slots (#1302). Force such rows to a relic slot only — the
+        # 2-slot cap is then enforced by the relic-slot branch below.
+        is_relic_class = (
+            not is_weapon and not is_armor and _has_worn_passive_effect(row["item_effect_json"])
+        )
+        if is_relic_class and not relic_target:
+            raise ValueError(
+                "relic-class items (passive effect) can only be equipped to a relic slot"
+            )
 
         slots_to_free: list[str] = [s]
         anchor_slot = s

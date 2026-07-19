@@ -2333,30 +2333,25 @@ def dwarf_repair(
     Koszt: DWARF_REPAIR_COST_GP złota. Efekt: tag repaired_by_dwarf=true na pierwszej broni
     bez tego tagu w ekwipunku + komunikat o naprawie. Nie stackuje na tej samej broni.
     """
-    resolve_authed_user_id(authorization, user_id)
+    authed_uid = resolve_authed_user_id(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         char = conn.execute(
-            "SELECT id, race FROM characters WHERE id = ? LIMIT 1",
+            "SELECT id, race, user_id FROM characters WHERE id = ? LIMIT 1",
             (character_id,),
         ).fetchone()
         if not char:
             raise HTTPException(status_code=404, detail="Character not found")
+        # #1448: ownership check — resolve_authed_user_id only authenticates the
+        # caller; without this any authed user could drain 20 gp from a foreign hero.
+        if int(char["user_id"] or -1) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
         race = str(char["race"] or "human").strip().lower()
         if race != "dwarf":
             raise HTTPException(status_code=403, detail="Akcja Reperuj dostępna tylko dla krasnoludów")
 
         from app.services.economy_service import change_gold
-        gold_row = conn.execute(
-            "SELECT gold_gp FROM characters WHERE id = ?", (character_id,)
-        ).fetchone()
-        gold = int((gold_row["gold_gp"] if gold_row else None) or 0)
-        if gold < DWARF_REPAIR_COST_GP:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Niewystarczające złoto. Potrzebujesz {DWARF_REPAIR_COST_GP} gp, masz {gold} gp.",
-            )
 
         # Find first weapon in inventory without repaired_by_dwarf tag
         weapon_row = conn.execute(
@@ -2370,19 +2365,46 @@ def dwarf_repair(
             (character_id,),
         ).fetchone()
 
-        repaired_label = None
+        # #1448: decide the no-op case (no weapon, or first weapon already
+        # repaired) BEFORE touching gold — the old code charged 20 gp even when
+        # nothing was repaired.
+        needs_repair = False
+        item_data: dict = {}
         if weapon_row:
             try:
                 item_data = json.loads(weapon_row["meta_json"] or "{}")
             except Exception:
                 item_data = {}
-            if not item_data.get("repaired_by_dwarf"):
-                item_data["repaired_by_dwarf"] = True
-                conn.execute(
-                    "UPDATE character_inventory SET meta_json = ? WHERE id = ?",
-                    (json.dumps(item_data, ensure_ascii=False), weapon_row["id"]),
-                )
-                repaired_label = weapon_row["label"]
+            needs_repair = not item_data.get("repaired_by_dwarf")
+
+        if not needs_repair:
+            # Nothing to fix → charge nothing (idempotent no-op).
+            return {
+                "ok": True,
+                "cost_gp": 0,
+                "repaired_weapon": None,
+                "message": "Brak broni do naprawy w ekwipunku.",
+            }
+
+        gold_row = conn.execute(
+            "SELECT gold_gp FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        gold = int((gold_row["gold_gp"] if gold_row else None) or 0)
+        if gold < DWARF_REPAIR_COST_GP:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Niewystarczające złoto. Potrzebujesz {DWARF_REPAIR_COST_GP} gp, masz {gold} gp.",
+            )
+
+        # #1448: "kowalskie oko" actually restores durability — not just a flavor tag.
+        item_data["repaired_by_dwarf"] = True
+        conn.execute(
+            "UPDATE character_inventory "
+            "SET meta_json = ?, durability_current = durability_max "
+            "WHERE id = ? AND character_id = ?",
+            (json.dumps(item_data, ensure_ascii=False), weapon_row["id"], character_id),
+        )
+        repaired_label = weapon_row["label"]
 
         # Use same conn to avoid second-connection deadlock in WAL mode
         change_gold(conn, character_id, -DWARF_REPAIR_COST_GP, "dwarf_repair")
@@ -2392,11 +2414,7 @@ def dwarf_repair(
             "ok": True,
             "cost_gp": DWARF_REPAIR_COST_GP,
             "repaired_weapon": repaired_label,
-            "message": (
-                f"Krasnolud naprawił {repaired_label} za {DWARF_REPAIR_COST_GP} gp."
-                if repaired_label
-                else f"Zapłacono {DWARF_REPAIR_COST_GP} gp — brak broni do naprawy w ekwipunku."
-            ),
+            "message": f"Krasnolud naprawił {repaired_label} za {DWARF_REPAIR_COST_GP} gp.",
         }
     finally:
         conn.close()
@@ -3668,7 +3686,7 @@ def get_repair_cost_endpoint(
             raise HTTPException(status_code=404, detail="character not found")
         if int(char["user_id"]) != int(authed_uid):
             raise HTTPException(status_code=403, detail="not your hero")
-        result = get_repair_cost(conn, inventory_id)
+        result = get_repair_cost(conn, character_id, inventory_id)
         if not result["ok"]:
             raise HTTPException(status_code=422, detail=result.get("reason", "no_durability"))
         return result

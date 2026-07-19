@@ -228,10 +228,16 @@ def get_attack_penalty_for_char(conn, char_id: int) -> int:
     return penalty
 
 
-def get_repair_cost(conn, inv_id: int) -> dict:
-    """Return repair cost for a specific inventory item."""
+def get_repair_cost(conn, char_id: int, inv_id: int) -> dict:
+    """Return repair cost for a specific inventory item.
+
+    #1448: scoped by character_id — the endpoint proves the HERO belongs to the
+    user but forwards a raw inventory_id; without this AND a user could preview /
+    repair a rival's gear (IDOR). Mismatch → item_not_found.
+    """
     row = conn.execute(
-        "SELECT * FROM character_inventory WHERE id = ?", (inv_id,)
+        "SELECT * FROM character_inventory WHERE id = ? AND character_id = ?",
+        (inv_id, char_id),
     ).fetchone()
     if not row:
         return {"ok": False, "reason": "item_not_found"}
@@ -259,7 +265,7 @@ def get_repair_cost(conn, inv_id: int) -> dict:
 
 def repair_item(conn, char_id: int, inv_id: int) -> dict:
     """Restore durability to max and deduct gold. Returns {ok, cost}."""
-    cost_info = get_repair_cost(conn, inv_id)
+    cost_info = get_repair_cost(conn, char_id, inv_id)
     if not cost_info["ok"]:
         return {"ok": False, "reason": cost_info.get("reason")}
 
@@ -281,8 +287,9 @@ def repair_item(conn, char_id: int, inv_id: int) -> dict:
         )
 
     conn.execute(
-        "UPDATE character_inventory SET durability_current = durability_max WHERE id = ?",
-        (inv_id,),
+        "UPDATE character_inventory SET durability_current = durability_max "
+        "WHERE id = ? AND character_id = ?",
+        (inv_id, char_id),
     )
     conn.commit()
 
