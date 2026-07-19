@@ -777,6 +777,23 @@ def resolve_skill_test(
     counter = pending.get("counter", {"counter_type": "dc", "dc": 12})
     mod_total = int(mod_info.get("total", 0))
 
+    # #1461: Wzrok górnika — w aktywnej sesji lochu (session_flags.dungeon_run) krasnolud
+    # dostaje +3 do percepcji/obserwacji/pułapek, człowiek −4 (kara za brak darkvision).
+    # Data-driven z dungeon_service.get_darkvision_bonus; obejmuje wykrywanie pułapek
+    # (te same rzuty percepcji z tagu [TRAP:...]). Bonus wchodzi do rzutu (mod_total).
+    _PERCEPTION_SKILLS = {"perception", "awareness", "investigation", "spot", "search"}
+    darkvision_delta = 0
+    try:
+        _in_dungeon = bool((session_flags or {}).get("dungeon_run"))
+        if _in_dungeon and str(skill_key).strip().lower() in _PERCEPTION_SKILLS:
+            from app.services.dungeon_service import get_darkvision_bonus
+            _dv = get_darkvision_bonus(character_id, is_dungeon=True)
+            darkvision_delta = int(_dv.get("perception_bonus", 0)) + int(_dv.get("darkness_penalty", 0))
+            if darkvision_delta:
+                mod_total += darkvision_delta
+    except Exception:
+        darkvision_delta = 0
+
     # Opponent side (rolled once — a forced reroll keeps the same threshold).
     opponent_total, opponent_roll = _resolve_opponent(conn, counter, campaign_id)
 
@@ -795,6 +812,7 @@ def resolve_skill_test(
         "nat20": derived["nat20"],
         "nat1": derived["nat1"],
         "success": derived["success"],
+        "darkvision_bonus": darkvision_delta,  # #1461: +3 dwarf / −4 human w lochu (0 poza)
     }
 
     # S11 (#606) — wymuszony przerzut ("zły omen"): klątwa psuje UDANY (korzystny) test.

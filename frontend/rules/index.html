@@ -2276,9 +2276,9 @@ document.addEventListener('DOMContentLoaded',function(){
         <p>Krasnolud ocenia wartość materiałów i narzędzi instynktownie — co przekłada się na dwa efekty mechaniczne:</p>
         <ul>
           <li><strong>Zniżka sklepowa 15%</strong> — ceny kupna w każdym sklepie obniżone o 15%. Sprzedaż: bez zmiany.</li>
-          <li><strong>Reperuj</strong> — przycisk dostępny w sekcji odpoczynku. Koszt: 20 złota. Efekt: +20 PŻ (nie przekracza max HP). Działa zawsze — krasnolud skleja się sznurkiem i smaruje smołą.</li>
+          <li><strong>Reperuj</strong> — przycisk dostępny w sekcji odpoczynku. Koszt: 20 złota. Efekt: przywraca <strong>pełną trwałość</strong> całemu zużytemu sprzętowi (broń i zbroja) — krasnolud skleja, klepie i smaruje smołą. Gdy nic nie jest uszkodzone, przycisk nic nie kosztuje.</li>
         </ul>
-        <p><em>Przykład:</em> Miecz kosztuje 100 sz. Krasnolud płaci 85 sz. Przycisk „Reperuj" pojawia się na karcie postaci obok odpoczynku.</p>
+        <p><em>Przykład:</em> Miecz kosztuje 100 sz. Krasnolud płaci 85 sz. Przycisk „Reperuj" pojawia się na karcie postaci obok odpoczynku i naprawia nadszarpniętą trwałość ekwipunku (nie leczy Punktów Życia).</p>
       </div>
 
       <h2 id="rasy-wzrok">Wzrok górnika</h2>
@@ -2297,14 +2297,14 @@ document.addEventListener('DOMContentLoaded',function(){
         <h4>Cecha rasowa · Rdzeń-magia (Uczony-krasnolud)</h4>
         <p>Krasnolud-uczony nie korzysta ze standardowych zaklęć arcańskich. Zamiast nich poznaje <strong>6 czarów Rdzenia</strong> — magii wydobytej z żył ziemi:</p>
         <table class="mechanic-table" style="margin:0.8em 0">
-          <thead><tr><th>Klucz</th><th>Nazwa robocza</th></tr></thead>
+          <thead><tr><th>Klucz</th><th>Nazwa robocza</th><th>Efekt bojowy</th></tr></thead>
           <tbody>
-            <tr><td>vein_tremor</td><td>Drżenie żyły</td></tr>
-            <tr><td>rdzen_pulse</td><td>Puls Rdzenia</td></tr>
-            <tr><td>vein_bleed</td><td>Krwawienie żyły</td></tr>
-            <tr><td>rdzen_shield</td><td>Tarcza Rdzenia</td></tr>
-            <tr><td>deep_quake</td><td>Głębinowe wstrząsy</td></tr>
-            <tr><td>black_vein</td><td>Czarna żyła</td></tr>
+            <tr><td>vein_tremor</td><td>Drżenie żyły</td><td>2k6 obrażeń + <strong>powala</strong> wroga (rzut obronny CON DC 10, by ustać).</td></tr>
+            <tr><td>rdzen_pulse</td><td>Puls Rdzenia</td><td>2k4 <strong>obszarowo</strong> (wszyscy wrogowie) + <strong>ogłuszenie</strong> na 1 turę.</td></tr>
+            <tr><td>vein_bleed</td><td>Krwawienie żyły</td><td>3k6 obrażeń <strong>ignorujących pancerz</strong> (Rdzeń przebija zbroję).</td></tr>
+            <tr><td>rdzen_shield</td><td>Tarcza Rdzenia</td><td>Absorbuje następny cios wroga (czar obronny).</td></tr>
+            <tr><td>deep_quake</td><td>Głębinowe wstrząsy</td><td>2k8 <strong>obszarowo</strong> + <strong>powala</strong> (bez rzutu obronnego); rzucający ZAWSZE traci 1k4 PŻ.</td></tr>
+            <tr><td>black_vein</td><td>Czarna żyła</td><td>4k8 obrażeń + <strong>zatrucie Rdzenia</strong> (−2 PŻ/turę przez 3 tury, ignoruje odporności).</td></tr>
           </tbody>
         </table>
         <p><strong>Miscast (Rdzeń-czerpanie):</strong> porażka zaklęcia na <em>Nat 1 i Nat 2</em> (nie tylko Nat 1). Narrator opisuje to inaczej niż ludzki miscast: żyła ziemi vibruje w kościach, krew z uszu lub nosa, zapach rozgrzanego metalu, stukot głębinowych machin.</p>

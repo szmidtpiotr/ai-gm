@@ -2328,10 +2328,16 @@ def dwarf_repair(
     user_id: int | None = Query(None),
     authorization: str | None = Header(default=None),
 ):
-    """#973 R4: Kowalskie oko — akcja Reperuj. Tylko dla krasnoludów.
+    """#973 R4 / #1462 (Wariant B): Kowalskie oko — akcja Reperuj. Tylko dla krasnoludów.
 
-    Koszt: DWARF_REPAIR_COST_GP złota. Efekt: tag repaired_by_dwarf=true na pierwszej broni
-    bez tego tagu w ekwipunku + komunikat o naprawie. Nie stackuje na tej samej broni.
+    Koszt: DWARF_REPAIR_COST_GP złota. Efekt: przywraca `durability_current = durability_max`
+    KAŻDEMU uszkodzonemu przedmiotowi (broń/zbroja) w ekwipunku bohatera.
+
+    #1462: decyzja Piotra — „Reperuj" NAPRAWIA TRWAŁOŚĆ sprzętu (nie leczy PŻ; Księga
+    zsynchronizowana). Bramkowane realną trwałością (`durability_current < durability_max`),
+    NIE martwym tagiem `repaired_by_dwarf` — więc działa wielokrotnie, gdy sprzęt znów się
+    zużyje. Gdy nic nie jest uszkodzone → no-op, ZERO pobranego złota (#1448). Wszystkie
+    SELECT/UPDATE scope'owane po `character_id` (ownership, anty-IDOR z #1448).
     """
     authed_uid = resolve_authed_user_id(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
@@ -2353,37 +2359,30 @@ def dwarf_repair(
 
         from app.services.economy_service import change_gold
 
-        # Find first weapon in inventory without repaired_by_dwarf tag
-        weapon_row = conn.execute(
+        # #1462: gear that actually needs repair (durability below max). Scoped by
+        # character_id (anti-IDOR). Covers weapons AND armor — any inventory row with
+        # a durability track that has been worn down.
+        damaged = conn.execute(
             """
-            SELECT ci.id, ci.meta_json, gw.label
-            FROM character_inventory ci
-            JOIN game_config_weapons gw ON gw.key = ci.weapon_key
-            WHERE ci.character_id = ? AND ci.weapon_key IS NOT NULL
-            ORDER BY ci.id ASC LIMIT 1
+            SELECT id, durability_current, durability_max
+            FROM character_inventory
+            WHERE character_id = ?
+              AND durability_max IS NOT NULL
+              AND durability_current IS NOT NULL
+              AND durability_current < durability_max
+            ORDER BY id ASC
             """,
             (character_id,),
-        ).fetchone()
+        ).fetchall()
 
-        # #1448: decide the no-op case (no weapon, or first weapon already
-        # repaired) BEFORE touching gold — the old code charged 20 gp even when
-        # nothing was repaired.
-        needs_repair = False
-        item_data: dict = {}
-        if weapon_row:
-            try:
-                item_data = json.loads(weapon_row["meta_json"] or "{}")
-            except Exception:
-                item_data = {}
-            needs_repair = not item_data.get("repaired_by_dwarf")
-
-        if not needs_repair:
-            # Nothing to fix → charge nothing (idempotent no-op).
+        # #1448/#1462: no-op case (nothing damaged) BEFORE touching gold — the old
+        # code charged 20 gp even when nothing was repaired.
+        if not damaged:
             return {
                 "ok": True,
                 "cost_gp": 0,
-                "repaired_weapon": None,
-                "message": "Brak broni do naprawy w ekwipunku.",
+                "repaired_count": 0,
+                "message": "Cały sprzęt jest w pełni sprawny — nie ma czego reperować.",
             }
 
         gold_row = conn.execute(
@@ -2396,15 +2395,19 @@ def dwarf_repair(
                 detail=f"Niewystarczające złoto. Potrzebujesz {DWARF_REPAIR_COST_GP} gp, masz {gold} gp.",
             )
 
-        # #1448: "kowalskie oko" actually restores durability — not just a flavor tag.
-        item_data["repaired_by_dwarf"] = True
+        # #1462: restore durability to max on every damaged item (scoped by character_id).
         conn.execute(
-            "UPDATE character_inventory "
-            "SET meta_json = ?, durability_current = durability_max "
-            "WHERE id = ? AND character_id = ?",
-            (json.dumps(item_data, ensure_ascii=False), weapon_row["id"], character_id),
+            """
+            UPDATE character_inventory
+            SET durability_current = durability_max
+            WHERE character_id = ?
+              AND durability_max IS NOT NULL
+              AND durability_current IS NOT NULL
+              AND durability_current < durability_max
+            """,
+            (character_id,),
         )
-        repaired_label = weapon_row["label"]
+        repaired_count = len(damaged)
 
         # Use same conn to avoid second-connection deadlock in WAL mode
         change_gold(conn, character_id, -DWARF_REPAIR_COST_GP, "dwarf_repair")
@@ -2413,8 +2416,11 @@ def dwarf_repair(
         return {
             "ok": True,
             "cost_gp": DWARF_REPAIR_COST_GP,
-            "repaired_weapon": repaired_label,
-            "message": f"Krasnolud naprawił {repaired_label} za {DWARF_REPAIR_COST_GP} gp.",
+            "repaired_count": repaired_count,
+            "message": (
+                f"Krasnolud przywrócił pełną trwałość {repaired_count} "
+                f"{'przedmiotowi' if repaired_count == 1 else 'przedmiotom'} za {DWARF_REPAIR_COST_GP} gp."
+            ),
         }
     finally:
         conn.close()

@@ -3343,7 +3343,13 @@ def _resolve_aoe_spell_in_combat(
             attack_total=attack_total,
             combatants=combatants,
         )
+        # #1460: kondycje po trafieniu z effect_json czaru (stun rdzen_pulse, prone deep_quake)
+        # nakładane KAŻDEMU trafionemu wrogowi — data-driven, opcjonalny save per cel.
+        _apply_spell_on_hit_conditions(conn, spell_row, tgt, out)
         aoe_hits.append(hit_info)
+
+    # #1460: self-damage casteru (deep_quake „ZAWSZE −1d4 HP") z effect_json.self_damage_die.
+    _apply_spell_self_damage(conn, spell_row, sheet, campaign_id, ch_id, out)
 
     primary_damage = int(out.get("damage", 0))
     _xp_total = sum(int(h.get("xp_granted") or 0) for h in aoe_hits)
@@ -7144,9 +7150,13 @@ def _attack_compute_damage(
     # Obrona celu = `ac_base` wroga (już nie próg trafienia — to liczy unik d20+DEX).
     # Nat 20 pomija pancerz (×2 obrażeń policzone wyżej, osobno).
     if dmg > 0:
+        # #1460: vein_bleed i podobne czary z `ignore_armor` w effect_json przebijają
+        # pancerz jak Nat 20 (Rdzeń przenika zbroję). Flaga niesiona na syntetycznym
+        # weapon_row czaru (patrz dispatch: "ignore_armor").
+        _spell_ignores_armor = bool((wrow or {}).get("ignore_armor"))
         _dm826 = apply_defense_model(
             dmg, roll_result, int(enemy.get("defense", 0) or 0),
-            ignore_armor=bool(player_nat20),
+            ignore_armor=bool(player_nat20) or _spell_ignores_armor,
         )
         if _dm826["margin_bonus"]:
             out["margin_damage_bonus"] = _dm826["margin_bonus"]
@@ -7291,6 +7301,91 @@ def _attack_spell_secondary(
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, ch_id, sheet)
+
+
+def _spell_effect_json(spell_stats: dict[str, Any] | None) -> dict[str, Any]:
+    """#1460: parse the spell's `effect_json` (TEXT) into a dict. {} when absent/invalid."""
+    if not spell_stats:
+        return {}
+    raw = spell_stats.get("effect_json") if isinstance(spell_stats, dict) else None
+    return _decode_effect_json(raw) or {}
+
+
+def _apply_spell_on_hit_conditions(
+    conn, spell_stats: dict[str, Any] | None, target: dict[str, Any], out: dict[str, Any],
+) -> list[str]:
+    """#1460: DATA-DRIVEN on-hit conditions from spell `effect_json` (prone/stunned/poison).
+
+    Reads ``effect_json.on_hit_conditions`` = list of ``{"key": ..., "save": {"stat","dc"}?}``.
+    Each condition is applied to ``target`` via ``_build_condition_entry`` (so the engine
+    actually enforces it: stunned→skip_turn, prone→attacker bonus, rdzen_poison→DoT).
+    Optional ``save`` lets the target roll ``stat`` vs ``dc`` to negate (vein_tremor: CON DC 10).
+    Zero ``if spell_key == ...`` — behaviour lives in the seed, not the engine.
+    """
+    ej = _spell_effect_json(spell_stats)
+    specs = ej.get("on_hit_conditions") or []
+    if not isinstance(specs, list):
+        return []
+    applied: list[str] = []
+    for spec in specs:
+        if not isinstance(spec, dict):
+            continue
+        ckey = str(spec.get("key") or "").strip().lower()
+        if not ckey:
+            continue
+        # Optional save: target rolls stat vs DC (Nat 20 always saves, Nat 1 always fails).
+        save = spec.get("save")
+        if isinstance(save, dict):
+            stat = str(save.get("stat") or "CON").strip().lower()
+            try:
+                dc = int(save.get("dc") or 10)
+            except (TypeError, ValueError):
+                dc = 10
+            raw = int(roll_d20())
+            mod = int(target.get(f"{stat}_modifier") or 0)
+            if raw == 20 or (raw != 1 and raw + mod >= dc):
+                out.setdefault("spell_condition_saves", []).append(
+                    {"condition_key": ckey, "stat": stat.upper(), "dc": dc, "raw": raw, "saved": True}
+                )
+                continue
+        if not isinstance(target.get("conditions"), list):
+            target["conditions"] = []
+        if any(
+            isinstance(c, dict) and str(c.get("key", "")).strip().lower() == ckey
+            for c in target["conditions"]
+        ):
+            continue
+        entry = _build_condition_entry(conn, ckey, applied_at="spell_on_hit")
+        if entry is not None:
+            target["conditions"].append(entry)
+            applied.append(ckey)
+    if applied:
+        out.setdefault("spell_conditions_applied", []).extend(applied)
+    return applied
+
+
+def _apply_spell_self_damage(
+    conn, spell_stats: dict[str, Any] | None, sheet: dict[str, Any],
+    campaign_id: int, ch_id: int, out: dict[str, Any],
+) -> int:
+    """#1460: caster self-damage from spell `effect_json.self_damage_die` (deep_quake −1d4).
+
+    Rolls the die, subtracts from the caster's current_hp (min 0), persists the sheet.
+    Returns the damage dealt (0 when the spell has no self-damage)."""
+    ej = _spell_effect_json(spell_stats)
+    die = str(ej.get("self_damage_die") or "").strip()
+    if not die:
+        return 0
+    dmg = int(roll_damage_dice(die))
+    if dmg <= 0:
+        return 0
+    cur = int(sheet.get("current_hp") or 0)
+    new_hp = max(0, cur - dmg)
+    sheet["current_hp"] = new_hp
+    out["self_damage"] = dmg
+    out["hp_after"] = new_hp
+    _save_char_sheet(conn, campaign_id, ch_id, sheet)
+    return dmg
 
 
 def _load_player_spell_gate(
@@ -7758,6 +7853,8 @@ def _resolve_player_attack_turn(
             "linked_stat": "INT",
             "attack_bonus": 0,
             "damage_bonus": 0,
+            # #1460: nieś flagę ignore_armor (vein_bleed) do modelu obrony (_attack_compute_damage).
+            "ignore_armor": bool(_spell_effect_json(_spell_stats).get("ignore_armor")),
         }
     elif spell_key:
         weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
@@ -8001,6 +8098,12 @@ def _resolve_player_attack_turn(
             weapon_row, sheet, enemy, combatants, _player_comb_id,
             player_raw, _surprise_fx, conn, ch_id, out, dmg,
         )
+        # ── #1460: efekty specjalne czaru single-target (attack) ──────
+        # Kondycje po trafieniu z effect_json czaru (prone/rdzen_poison; opcjonalny save).
+        # AoE (attack_aoe) NIE tędy — dispatch zwraca wcześniej (własna ścieżka per-cel).
+        if _is_spell and _spell_stats is not None:
+            _apply_spell_on_hit_conditions(conn, _spell_stats, enemy, out)
+        # ─────────────────────────────────────────────────────────────
         # ── #1432 (AUDIT): drain_life / lifesteal ─────────────────────
         # Czar-wampir (heal_pct w statach rangi, np. drain_life R3 → 100%) leczy
         # castera o dmg*pct/100, cap max_hp. Wcześniej „heal_pct" był martwym seedem.

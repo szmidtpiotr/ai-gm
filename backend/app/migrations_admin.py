@@ -1748,6 +1748,19 @@ ADMIN_SEEDS = [
     VALUES
     ('schwytany', 'Schwytany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"block_action"}]}', 'Cel obezwładniony i unieruchomiony — nie może atakować ani uciec. Gracz może go przesłuchać, związać, ogłuszyć lub uwolnić kolejnymi akcjami. Wejście: udany test obezwładnienia (grapple/Athletics) poza walką. Nie generuje XP (poza ewentualną misją).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
     """,
+    # #1460 — kondycje kontroli używane przez czary Rdzenia (krasnolud). Data-driven,
+    # spinane z effect_json czaru przez _build_condition_entry (silnik faktycznie stosuje
+    # efekt): stunned=skip_turn 1 rundę, prone=DEX −2 + atakujący +2 do trafienia 1 rundę,
+    # rdzen_poison=DoT −2 PŻ/turę przez 3 tury (ignoruje odporności — flavor black_vein).
+    # Nowe klucze → INSERT OR IGNORE dokłada je też na istniejących bazach.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('stunned', 'Ogłuszony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"skip_turn","chance":1.0,"expires":"duration_rounds:1"}]}', 'Cel ogłuszony — traci jedną turę (nie działa). Wygasa po 1 rundzie.', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('prone', 'Powalony', '{"schema_version":1,"effect_category":"character_condition","grants_attacker_bonus":{"atk_bonus":2},"effects":[{"type":"static_stat_modifier","stat":"DEX","value":-2,"expires":"duration_rounds:1"}]}', 'Cel powalony na ziemię — DEX −2, a atakujący zyskuje +2 do trafienia. Wstaje po 1 rundzie.', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('rdzen_poison', 'Zatrucie Rdzenia', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"dot","value":2,"damage_type":"poison","tick":"start_turn","expires":"duration_rounds:3"}]}', 'Krew zatruta magią Rdzenia — −2 PŻ na początku każdej tury przez 3 tury (ignoruje odporności).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
     """
     UPDATE game_config_stats
     SET locked_at = COALESCE(locked_at, '2026-04-14T00:00:00Z')
@@ -5910,51 +5923,64 @@ def _ensure_character_race_column(conn: sqlite3.Connection) -> None:
 
 def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
     """#975 R6 — 6 ekskluzywnych czarów krasnoludów + pole race_lock w game_config_spells."""
-    try:
-        conn.execute("ALTER TABLE game_config_spells ADD COLUMN race_lock TEXT")
-        conn.commit()
-    except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
-            pass
-        else:
-            raise
+    for _col, _decl in (("race_lock", "TEXT"), ("effect_json", "TEXT"), ("aoe", "INTEGER")):
+        try:
+            conn.execute(f"ALTER TABLE game_config_spells ADD COLUMN {_col} {_decl}")
+            conn.commit()
+        except Exception as e:
+            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                pass
+            else:
+                raise
 
     # #1353 WALKA-T3 — spell_type jawnie (bez niego DEFAULT 'attack' fałszował
     # rdzen_shield na 'attack'; teraz obronny czar ląduje w sekcji Ochronne).
+    # #1460 — efekty specjalne DATA-DRIVEN przez `effect_json` (nie hardcode w silniku):
+    #   • rdzen_pulse/deep_quake → spell_type='attack_aoe', aoe=1 (obszar, wszyscy wrogowie);
+    #   • on_hit_conditions → kondycje z katalogu (prone/stunned/rdzen_poison) po trafieniu,
+    #     opcjonalny `save` (stat+dc) neguje (vein_tremor: CON DC 10);
+    #   • ignore_armor → Rdzeń przebija pancerz (vein_bleed);
+    #   • self_damage_die → obrażenia własne casteru (deep_quake −1d4).
     dwarf_spells = [
         {
             "key": "vein_tremor", "label": "Żyłowy Wstrząs", "tier": 1, "mana_cost": 1,
-            "spell_type": "attack", "damage_die": "2d6",
+            "spell_type": "attack", "damage_die": "2d6", "aoe": 0,
+            "effect_json": '{"on_hit_conditions":[{"key":"prone","save":{"stat":"CON","dc":10}}]}',
             "description": "2d6 dmg fizycznych (wstrząs ziemi) + wróg prone (DC 10 CON).",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "rdzen_pulse", "label": "Rdzeń-Puls", "tier": 2, "mana_cost": 2,
-            "spell_type": "attack", "damage_die": "2d4",
+            "spell_type": "attack_aoe", "damage_die": "2d4", "aoe": 1,
+            "effect_json": '{"on_hit_conditions":[{"key":"stunned"}]}',
             "description": "2d4 dmg obszarowe (wszyscy wrogowie) + ogłuszenie 1 tura.",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "vein_bleed", "label": "Żyłokrwawienie", "tier": 3, "mana_cost": 3,
-            "spell_type": "attack", "damage_die": "3d6",
+            "spell_type": "attack", "damage_die": "3d6", "aoe": 0,
+            "effect_json": '{"ignore_armor":true}',
             "description": "3d6 dmg ignoruje AC (Rdzeń przebija zbroję).",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "rdzen_shield", "label": "Rdzeń-Tarcza", "tier": 2, "mana_cost": 2,
-            "spell_type": "defense", "damage_die": None,
+            "spell_type": "defense", "damage_die": None, "aoe": 0,
+            "effect_json": None,
             "description": "Absorb następny atak (anuluj dmg). Chaotyczna tarcza Rdzenia.",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "deep_quake", "label": "Trzęsienie Głębinowe", "tier": 4, "mana_cost": 4,
-            "spell_type": "attack", "damage_die": "2d8",
+            "spell_type": "attack_aoe", "damage_die": "2d8", "aoe": 1,
+            "effect_json": '{"on_hit_conditions":[{"key":"prone"}],"self_damage_die":"1d4"}',
             "description": "2d8 dmg obszarowe + prone (brak save). ZAWSZE −1d4 HP casteru.",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "black_vein", "label": "Czarna Żyła", "tier": 5, "mana_cost": 5,
-            "spell_type": "attack", "damage_die": "4d8",
+            "spell_type": "attack", "damage_die": "4d8", "aoe": 0,
+            "effect_json": '{"on_hit_conditions":[{"key":"rdzen_poison"}]}',
             "description": "4d8 dmg + zatrucie Rdzenia (−2 HP/tura, 3 tury, ignoruje odporności).",
             "is_active": 1, "race_lock": "dwarf",
         },
@@ -5964,9 +5990,9 @@ def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO game_config_spells
-                    (key, label, tier, mana_cost, spell_type, damage_die, description, is_active, race_lock)
+                    (key, label, tier, mana_cost, spell_type, damage_die, aoe, effect_json, description, is_active, race_lock)
                 VALUES
-                    (:key, :label, :tier, :mana_cost, :spell_type, :damage_die, :description, :is_active, :race_lock)
+                    (:key, :label, :tier, :mana_cost, :spell_type, :damage_die, :aoe, :effect_json, :description, :is_active, :race_lock)
                 """,
                 sp,
             )
@@ -6042,6 +6068,39 @@ def _fix_dwarf_spell_dice(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "UPDATE game_config_spells SET damage_die = ? WHERE key = ?",
                 (die, key),
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
+def _fix_1460_rdzen_effects(conn: sqlite3.Connection) -> None:
+    """#1460 — efekty specjalne czarów Rdzenia na ISTNIEJĄCYCH bazach.
+
+    `_seed_dwarf_spells` używa INSERT OR IGNORE, więc rekordy zaseedowane starszą
+    wersją (bez effect_json / z spell_type='attack' / aoe=NULL) nigdy się nie
+    odświeżają. Tu jawny UPDATE: ustawia spell_type, aoe i effect_json — silnik
+    walki jest data-driven (czyta te pola), więc AoE/prone/stun/ignore_armor/
+    poison-DoT/self-damage wchodzą do walki bez hardcode per spell_key. Idempotentne.
+    """
+    # (key, spell_type, aoe, effect_json)
+    fixes = [
+        ("vein_tremor", "attack", 0,
+         '{"on_hit_conditions":[{"key":"prone","save":{"stat":"CON","dc":10}}]}'),
+        ("rdzen_pulse", "attack_aoe", 1,
+         '{"on_hit_conditions":[{"key":"stunned"}]}'),
+        ("vein_bleed", "attack", 0,
+         '{"ignore_armor":true}'),
+        ("deep_quake", "attack_aoe", 1,
+         '{"on_hit_conditions":[{"key":"prone"}],"self_damage_die":"1d4"}'),
+        ("black_vein", "attack", 0,
+         '{"on_hit_conditions":[{"key":"rdzen_poison"}]}'),
+    ]
+    for key, stype, aoe, ejson in fixes:
+        try:
+            conn.execute(
+                "UPDATE game_config_spells SET spell_type = ?, aoe = ?, effect_json = ? WHERE key = ?",
+                (stype, aoe, ejson, key),
             )
         except Exception:
             pass
@@ -7719,6 +7778,7 @@ def run_admin_migrations() -> None:
         _seed_dwarf_spells(conn)  # #975 R6
         _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)
         _fix_1353_spell_metadata(conn)  # #1353 WALKA-T3 — rdzen_shield→defense + opisy
+        _fix_1460_rdzen_effects(conn)  # #1460 — effect_json + attack_aoe + aoe (efekty specjalne Rdzenia)
         _ensure_enemy_min_level(conn)  # #1023
         _ensure_enemy_terrain_scope_bands(conn)  # #1327 BL-A1
         _seed_dwarf_toughness_enemy(conn)  # #1005
