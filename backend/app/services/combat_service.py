@@ -6527,6 +6527,18 @@ DWARF_TOUGHNESS_TYPES = {"poison", "dark", "rdzen"}
 DWARF_TOUGHNESS_REDUCTION = 2
 
 
+def _effective_defense_stat(
+    base_defense: int, defender: dict, *, sheet: dict | None = None
+) -> int:
+    """#1465: obrona obrońcy skorygowana o modyfikatory kondycji (stat 'ac').
+
+    Kondycje typu slowed (−2), berserk (−3) itp. deklarują `static_stat_modifier`
+    na stacie `ac`. Dotąd silnik nie doliczał ich do `defense_stat` #826 (martwe
+    „−X do obrony"). Tu foldujemy je RAZ, danymi — żadnego ``if key == "slowed"``.
+    Ujemny modyfikator → niższa obrona → większy margines/mniejsza redukcja pancerza."""
+    return int(base_defense or 0) + _combatant_stat_modifier(defender, sheet=sheet, stat="ac")
+
+
 def apply_defense_model(
     base_damage: int,
     attack_total: int,
@@ -7155,7 +7167,8 @@ def _attack_compute_damage(
         # weapon_row czaru (patrz dispatch: "ignore_armor").
         _spell_ignores_armor = bool((wrow or {}).get("ignore_armor"))
         _dm826 = apply_defense_model(
-            dmg, roll_result, int(enemy.get("defense", 0) or 0),
+            dmg, roll_result,
+            _effective_defense_stat(int(enemy.get("defense", 0) or 0), enemy),  # #1465: slowed −2 obrony wroga
             ignore_armor=bool(player_nat20) or _spell_ignores_armor,
         )
         if _dm826["margin_bonus"]:
@@ -8534,6 +8547,12 @@ def _resolve_enemy_attack_turn(
             _ov_cs(conn, campaign_id, ch_id, sheet)
     pac = int(p.get("defense", _player_ac_from_sheet(sheet)))
     p["defense"] = pac  # przechowujemy BAZOWĄ obronę (bez parowania)
+    # #1465: kondycje obrońcy (np. slowed −2) obniżają obronę na TEN cios. Doliczane PO
+    # zapisie bazy (jak wound/parry) — nie kumulują się na p["defense"] między ciosami.
+    _cond_ac = _combatant_stat_modifier(p, sheet=None, stat="ac")
+    if _cond_ac:
+        pac += _cond_ac
+        out["condition_ac_mod"] = int(_cond_ac)
     # G1 #1458 (wariant A): −1 DEX na skraju śmierci (≤10% HP) → −1 do obrony gracza.
     # Efekt ODRĘBNY od kary −2 do ataku/testów (ta już wpięta w weapon_rules/skill_service);
     # DEX rusza obronę, której tamta kara nie dotyka. Wróg używa ac_base (bez DEX) → asymetria
@@ -8999,6 +9018,11 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         # po nieudanym uniku). Obrona gracza = pac (AC). Nat 20 wroga (z pending) pomija pancerz.
         if dmg > 0:
             _pac826 = int(p.get("defense", _player_ac_from_sheet(sheet)))
+            # #1465: kondycje obrońcy (np. slowed −2) obniżają obronę także na ścieżce reakcji.
+            _cond_ac_r = _combatant_stat_modifier(p, sheet=None, stat="ac")
+            if _cond_ac_r:
+                _pac826 += _cond_ac_r
+                out["condition_ac_mod"] = int(_cond_ac_r)
             # #598: parowanie dolicza obronę także na ścieżce reakcji (take/blok)
             try:
                 _parry598r = int(parry_defense_bonus(conn, ch_id, sheet) or 0)

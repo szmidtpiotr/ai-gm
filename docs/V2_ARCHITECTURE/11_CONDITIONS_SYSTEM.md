@@ -72,9 +72,11 @@ Applied by: poison_vial with `apply_to_weapon: true` on hit, or narrative wounds
 | Property | Value |
 |----------|-------|
 | Duration | 3 rounds (or until cleared) |
-| Effect | -1 HP at end of each round |
+| Effect | **-1 HP** at start of each turn (flat, not a dice roll) |
 | Cleared by | Bandage (out of combat), Mend Wounds (in combat), 3 rounds expire |
 | Stacking | If stacking enabled: each additional bleed adds +1 dmg/round, max 3 stacks |
+
+*(#1465 — seed `bleeding` normalised to flat `dot value:1` to match this spec. It previously carried a malformed `{"damage":"1d3"}` whose key the DoT loop ignored → it silently rolled the 1d4 default. Now it deals exactly 1/round.)*
 
 #### POISONED
 Applied by: `poison_vial` item applied to weapon before attack, or specific enemy abilities.
@@ -82,11 +84,29 @@ Applied by: `poison_vial` item applied to weapon before attack, or specific enem
 | Property | Value |
 |----------|-------|
 | Duration | Max 3 rounds (or until saved/cleared) |
-| Effect | -2 HP at end of each round |
-| Save | CON save DC 13 at end of each round — pass = poison ends early |
-| Cleared by | Antidote item (immediate), 3 rounds, or passing CON save |
+| Effect | **STR −2** AND **1d4 poison damage** at start of each turn (DoT). *(#1465 — value is a STARTING value, Sandbox-tunable.)* |
+| Cleared by | Antidote item (immediate), 3 rounds expire |
 
-The CON save creates meaningful tension: tough characters (high CON) can fight through poison; fragile Scholars may need to use their antidote.
+The DoT models the venom eating away at the victim while the STR penalty saps their strikes; tough characters simply outlast the 3 rounds. *(Implemented as seed `poisoned`: `static_stat_modifier STR −2` + `dot 1d4 poison`. The earlier CON-save-early-out from the draft spec is not wired — kept simple per #1465.)*
+
+#### FROZEN
+Applied by: frost spells / ice effects.
+
+| Property | Value |
+|----------|-------|
+| Duration | Until a successful CON save |
+| Effect | **Odbiera akcje** (`block_action` — traci turę) AND **DEX −4** |
+| Save | CON save DC 14 at start of each turn — success shatters the ice and frees the actor (that turn is NOT lost); failure = frozen solid, turn skipped |
+| Cleared by | Passing CON save, or contact with heat/fire (narrative remove) |
+
+#### SLOWED
+Applied by: frost_grip and similar control effects, or a critical-fumble/wrestling result.
+
+| Property | Value |
+|----------|-------|
+| Duration | 2 rounds |
+| Effect | **50% chance to skip the turn** each round AND **−2 to defense** (`ac`, folds into the #826 defense_stat) |
+| Cleared by | 2 rounds expire |
 
 #### BLINDED
 Applied by: smoke_bomb area effect (3m radius), magical effects, or darkness (future).

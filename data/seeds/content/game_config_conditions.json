@@ -26,8 +26,8 @@
   {
     "key": "bleeding",
     "label": "Krwawienie",
-    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"dot\",\"damage\":\"1d3\",\"stat\":null,\"duration_rounds\":3}],\"clear_on\":\"duration\"}",
-    "description": "Cel otrzymuje 1k3 obrażeń na początku każdej tury przez 3 rundy.",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"dot\",\"value\":1,\"damage_type\":\"physical\",\"tick\":\"start_turn\",\"expires\":\"duration_rounds:3\"}],\"clear_on\":\"duration\"}",
+    "description": "Cel traci 1 PŻ na początku każdej tury przez 3 rundy (zgodnie z Księgą: -1 PŻ/rundę).",
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:25:21",
@@ -206,8 +206,8 @@
   {
     "key": "frozen",
     "label": "Zmrożony",
-    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"DEX\",\"value\":-4},{\"type\":\"periodic_save\",\"stat\":\"CON\",\"value\":14,\"tick\":\"start_turn\",\"expires\":\"save_success\"}]}",
-    "description": "Postać pokryta lodem — DEX -4, ruch spowolniony. Udany rzut CON DC 14 (rozgrzewanie) lub kontakt z ciepłem zdejmuje stan.",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"DEX\",\"value\":-4},{\"type\":\"block_action\"},{\"type\":\"periodic_save\",\"stat\":\"CON\",\"value\":14,\"tick\":\"start_turn\",\"expires\":\"save_success\"}]}",
+    "description": "Postać skuta lodem — odbiera akcje (nie może działać) i DEX -4. Udany rzut CON DC 14 (rozgrzewanie) na początku tury lub kontakt z ciepłem wyrywa z lodu; póki lód trzyma, tura przepada.",
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-14 11:39:04",
@@ -326,8 +326,8 @@
   {
     "key": "poisoned",
     "label": "Poisoned",
-    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":-2,\"expires\":\"duration_rounds:3\"}]}",
-    "description": "Temporary STR penalty.",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":-2,\"expires\":\"duration_rounds:3\"},{\"type\":\"dot\",\"value\":\"1d4\",\"damage_type\":\"poison\",\"tick\":\"start_turn\",\"expires\":\"duration_rounds:3\"}]}",
+    "description": "Zatruty — -2 SIŁY oraz 1k4 obrażeń od trucizny na początku każdej tury przez 3 rundy. (DoT wartość startowa, Sandbox-tunable.)",
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:16:52",
@@ -386,8 +386,8 @@
   {
     "key": "slowed",
     "label": "Spowolniony",
-    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"skip_turn\",\"chance\":0.5,\"duration_rounds\":2}],\"clear_on\":\"duration\"}",
-    "description": "50% szansa na pominięcie tury przez 2 rundy.",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"skip_turn\",\"chance\":0.5,\"duration_rounds\":2},{\"type\":\"static_stat_modifier\",\"stat\":\"ac\",\"value\":-2}],\"clear_on\":\"duration\"}",
+    "description": "Ociężałe ruchy — 50% szansa na pominięcie tury oraz -2 do obrony przez 2 rundy.",
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:25:21",
