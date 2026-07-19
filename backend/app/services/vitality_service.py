@@ -76,6 +76,26 @@ def calculate_mana(archetype: str, int_stat: int, level: int = 1) -> int:
     return max(1, base + stat_modifier(int_stat) * level)
 
 
+# ── #1466 — single source of truth for max_hp / max_mana ────────────────────
+# Every path that (re)sets a hero's max_hp / max_mana — level-up on rest,
+# resurrection, admin recalc, stat purchase (#1436) — must funnel through these
+# two functions. They RECOMPUTE from the canonical formula rather than mutating
+# the stored value incrementally, so the result depends only on
+# (archetype, stat, level) and never on the order of prior operations. This
+# kills the path-dependence in the old incremental `apply_level_up` (which
+# clamped negative CON/INT modifiers with max(), so a hero levelled via rest
+# could end up with a different max than the same hero recomputed by admin).
+
+def recompute_max_hp(archetype: str, con: int, level: int) -> int:
+    """Authoritative max_hp = base_hp + CON_mod × level (min 1). See #1466."""
+    return calculate_hp(archetype, con, level)
+
+
+def recompute_max_mana(archetype: str, int_stat: int, level: int) -> int:
+    """Authoritative max_mana = 8 + INT_mod × level for scholars, else 0. See #1466."""
+    return calculate_mana(archetype, int_stat, level)
+
+
 def apply_level_up(
     archetype: str,
     current_max_hp: int,
@@ -84,9 +104,12 @@ def apply_level_up(
     int_stat: int,
 ) -> tuple[int, int]:
     """
-    Calculate new max_hp and max_mana after gaining one level.
+    DEPRECATED (#1466). Incremental level-up math kept only for backward compat
+    with older callers/tests. Production paths now recompute from the formula via
+    ``recompute_max_hp`` / ``recompute_max_mana`` (path-independent). Do not add
+    new callers.
 
-    Rules:
+    Rules (legacy):
     - max_hp += CON_modifier (never decreases below current max)
     - max_mana += INT_modifier (Scholar only, never decreases below current max)
 

@@ -682,6 +682,17 @@ def apply_resurrection(
         raise ValueError(f"Unknown cost mode: {cfg['mode']}")
 
     # ── Revive: HP, status, death flags, cooldowns ───────────────────────
+    # #1466 — recompute max_hp/mana from the formula before reviving, so a
+    # resurrected hero's max is identical to the same hero levelled via rest
+    # (path-independent). A drifted max never persists through a revive.
+    from app.services.vitality_service import recompute_max_hp, recompute_max_mana
+    _arch = str(sheet.get("archetype") or "warrior").strip().lower()
+    _lvl = int(sheet.get("level") or 1)
+    _stats = sheet.get("stats") or {}
+    _con = int(_stats.get("CON", 10) or 10)
+    _int = int(_stats.get("INT", 10) or 10)
+    sheet["max_hp"] = recompute_max_hp(_arch, _con, _lvl)
+    sheet["max_mana"] = recompute_max_mana(_arch, _int, _lvl)
     max_hp = int(sheet.get("max_hp") or 1)
     revive_hp = max(1, max_hp // 2)
     sheet["current_hp"] = revive_hp

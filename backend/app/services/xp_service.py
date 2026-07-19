@@ -448,6 +448,12 @@ def spend_skill_rank_up(
         raise ValueError("skill_at_ceiling")
 
     new_rank = current + 1
+    # #1467 — learning a NEW skill (rank 0→1) counts toward the per-level cap
+    # (max 2). Rank-ups of an already-known skill (current>=1) are unlimited.
+    adv_new_skill = None
+    if current == 0:
+        from app.services.advancement_service import check_new_skill
+        adv_new_skill = check_new_skill(sheet)  # raises new_skill_limit_per_level
     # #1382 — per-skill override wins; else global meta; else built-in default.
     per_skill = _load_skill_rank_cost(conn, sk)
     if new_rank in per_skill:
@@ -465,6 +471,11 @@ def spend_skill_rank_up(
     skills[sk] = new_rank
     sheet["skills"] = skills
     sheet["xp_available"] = xp - cost
+
+    # #1467 — consume a new-skill slot only when this was a first acquisition.
+    if adv_new_skill is not None:
+        from app.services.advancement_service import commit_new_skill
+        commit_new_skill(sheet, adv_new_skill)
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
@@ -523,6 +534,10 @@ def spend_stat_point_up(
     if new_value > ceiling:
         raise ValueError("stat_at_ceiling")
 
+    # #1467 — max 1 stat-up per character level.
+    from app.services.advancement_service import check_stat_up
+    adv_stat = check_stat_up(sheet)  # raises stat_up_limit_per_level
+
     cost = _cost_for_stat_target(costs, new_value)
     if cost <= 0:
         raise ValueError("stat_cost_not_configured")
@@ -535,28 +550,23 @@ def spend_stat_point_up(
     sheet["stats"] = stats
     sheet["xp_available"] = xp - cost
 
-    # CON change → recalculate hp_max: delta_mod × level
-    if sk.upper() == "CON":
-        level = int(sheet.get("level") or 1)
-        old_mod = (current - 10) // 2
-        new_mod = (new_value - 10) // 2
-        delta = new_mod - old_mod
-        if delta:
-            old_max = int(sheet.get("max_hp") or 0)
-            sheet["max_hp"] = old_max + delta * level
+    # #1467 — consume this level's stat-up slot.
+    from app.services.advancement_service import commit_stat_up
+    commit_stat_up(sheet, adv_stat)
 
-    # #1436 — INT change → recalculate max_mana for scholars: mana = 8 + INT_mod × level.
-    # Twin of the CON block; without it a scholar buying INT gets no extra mana.
-    if sk.upper() == "INT":
-        archetype = str(sheet.get("archetype") or "").strip().lower()
-        if archetype == "scholar":
-            level = int(sheet.get("level") or 1)
-            old_mod = (current - 10) // 2
-            new_mod = (new_value - 10) // 2
-            delta = new_mod - old_mod
-            if delta:
-                old_max = int(sheet.get("max_mana") or 0)
-                sheet["max_mana"] = max(1, old_max + delta * level)
+    # #1466 — recompute max_hp / max_mana from the canonical formula (single
+    # source of truth) instead of incremental delta math. Buying CON or INT
+    # yields exactly base + mod×level — identical to every other path (rest,
+    # resurrection, admin). Covers the #1436 "INT buy → no extra mana" gap too.
+    from app.services.vitality_service import recompute_max_hp, recompute_max_mana
+    archetype = str(sheet.get("archetype") or "warrior").strip().lower()
+    level = int(sheet.get("level") or 1)
+    con_val = int(stats.get("CON", 10) or 10)
+    int_val = int(stats.get("INT", 10) or 10)
+    if sk.upper() == "CON":
+        sheet["max_hp"] = recompute_max_hp(archetype, con_val, level)
+    if sk.upper() == "INT" and archetype == "scholar":
+        sheet["max_mana"] = recompute_max_mana(archetype, int_val, level)
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",

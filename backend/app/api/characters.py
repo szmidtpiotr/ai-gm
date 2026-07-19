@@ -2458,10 +2458,19 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: 
         sheet = parse_character_sheet(row["sheet_json"])
         if (sheet.get("archetype") or "").lower() != "scholar":
             raise HTTPException(status_code=400, detail="only_scholar")
+        # #1467 — learning a new spell counts toward the per-level cap (max 2
+        # new skills/spells). learn_spell rejects duplicates, so this is always
+        # a first acquisition here.
+        from app.services.advancement_service import check_new_skill, commit_new_skill
+        try:
+            adv_new = check_new_skill(sheet)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         xp = int(sheet.get("xp_available") or 0)
         if xp < SPELL_LEARN_COST:
             raise HTTPException(status_code=400, detail="insufficient_xp")
         sheet["xp_available"] = xp - SPELL_LEARN_COST
+        commit_new_skill(sheet, adv_new)
         conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
                      (json.dumps(sheet, ensure_ascii=False), character_id))
         try:

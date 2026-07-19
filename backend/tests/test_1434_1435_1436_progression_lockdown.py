@@ -254,9 +254,11 @@ def test_spell_spend_single_conn():
 
 def test_int_bump_recomputes_mana():
     cid, owner = 999_436_003, 770_439
-    # INT 13 (mod +1) → 14 (mod +2): delta +1 mod × level 3 = +3 mana.
+    # #1466 — unified formula recompute (supersedes the old incremental delta).
+    # Scholar level 3, INT 13→14: max_mana = 8 + INT_mod × level.
+    #   before: 8 + (+1)×3 = 11   after: 8 + (+2)×3 = 14   (single source of truth)
     _insert_char(cid, owner, _base_sheet(
-        archetype="scholar", xp_available=99999, max_mana=20,
+        archetype="scholar", xp_available=99999, max_mana=11,
         stats={"STR": 10, "DEX": 10, "CON": 10, "INT": 13, "WIS": 10, "CHA": 10, "LCK": 10},
     ))
     try:
@@ -269,7 +271,7 @@ def test_int_bump_recomputes_mana():
         assert r.status_code == 200, r.text
         s = _read_sheet(cid)
         assert s["stats"]["INT"] == 14
-        assert s["max_mana"] == 23, s["max_mana"]
+        assert s["max_mana"] == 14, s["max_mana"]
     finally:
         _cleanup(cid)
 

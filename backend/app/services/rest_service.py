@@ -231,7 +231,7 @@ def perform_long_rest(
     new_level = int(sheet.get("level") or 1)
 
     from app.services.xp_service import level_from_xp, get_xp_level_thresholds
-    from app.services.vitality_service import apply_level_up
+    from app.services.vitality_service import recompute_max_hp, recompute_max_mana
     old_level = new_level
     thresholds = get_xp_level_thresholds(conn)
     # xp_lifetime_earned zawiera już pending (grant_pending_xp dolicza od razu).
@@ -243,10 +243,11 @@ def perform_long_rest(
         stats = sheet.get("stats") or {}
         con = int(stats.get("CON", 10) or 10)
         int_stat = int(stats.get("INT", 10) or 10)
-        for _ in range(level_ups):
-            new_max_hp, new_max_mana = apply_level_up(
-                archetype, new_max_hp, new_max_mana, con, int_stat
-            )
+        # #1466 — recompute max_hp/mana from the formula for the NEW level
+        # (single source of truth, path-independent). Replaces the per-level
+        # incremental apply_level_up loop, which drifted for CON/INT < 10.
+        new_max_hp = recompute_max_hp(archetype, con, new_level)
+        new_max_mana = recompute_max_mana(archetype, int_stat, new_level)
         sheet["level"] = new_level
         sheet["max_hp"] = new_max_hp
         sheet["max_mana"] = new_max_mana
