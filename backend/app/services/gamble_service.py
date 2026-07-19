@@ -22,10 +22,25 @@ from typing import Any
 _FLAG_COUNT = "gamble_scene_count"   # int: gry rozegrane w bieżącej scenie/lokacji
 _FLAG_LOC = "gamble_scene_loc"       # str: lokacja, do której licznik się odnosi
 _FLAG_CHEAT = "gamble_cheat_accused" # bool: oskarżenie o oszustwo (sygnał dla narratora)
+_FLAG_DAY = "gamble_day"             # int: dzień gry, do którego odnosi się dzienny licznik
+_FLAG_DAY_COUNT = "gamble_day_count" # int: gry rozegrane w bieżącym dniu gry (survives bounce)
 
 # Anti-abuse + walidacja stawki (Numbers Policy).
 MAX_GAMBLES_PER_SCENE = 3
+# AUDIT #1445: per-scene limit resetuje się przy zmianie location_key → chodzenie tam
+# i z powrotem kasowało licznik (farm hazardu). Dzienny licznik (klucz = dzień gry,
+# nie lokacja) przeżywa „location bounce”. Wartość startowa, tuner w Sandboxie.
+MAX_GAMBLES_PER_DAY = 5
 MIN_STAKE = 1
+
+
+def _game_day(session_flags: dict) -> int:
+    """Dzień gry z zegara zapisanego w session_flags (ingame_hours). Bez zależności od
+    clock_service — funkcje hazardu i tak dostają session_flags."""
+    try:
+        return int(session_flags.get("ingame_hours", 0) or 0) // 24 + 1
+    except (TypeError, ValueError):
+        return 1
 
 # Stopień testu (S1) → mnożnik NETTO względem stawki. Design doc / CZĘŚĆ AI S7:
 # sukces +stawka, krytyczny +2×stawka, porażka −stawka, krytyczna porażka −stawka.
@@ -83,16 +98,35 @@ def gamble_count(session_flags: dict, location_key: str | None) -> int:
         return 0
 
 
+def gamble_day_count(session_flags: dict) -> int:
+    """Liczba gier rozegranych w bieżącym dniu gry (0 gdy zapisany dzień jest inny)."""
+    if int(session_flags.get(_FLAG_DAY) or 0) != _game_day(session_flags):
+        return 0
+    try:
+        return int(session_flags.get(_FLAG_DAY_COUNT) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def can_gamble(session_flags: dict, location_key: str | None) -> bool:
-    """Czy gracz może jeszcze zagrać w tej scenie (limit ``MAX_GAMBLES_PER_SCENE``)."""
-    return gamble_count(session_flags, location_key) < MAX_GAMBLES_PER_SCENE
+    """Czy gracz może jeszcze zagrać: limit per scena ORAZ dzienny (AUDIT #1445 —
+    dzienny cap nie resetuje się przy zmianie lokacji)."""
+    return (
+        gamble_count(session_flags, location_key) < MAX_GAMBLES_PER_SCENE
+        and gamble_day_count(session_flags) < MAX_GAMBLES_PER_DAY
+    )
 
 
 def record_gamble(session_flags: dict, location_key: str | None) -> int:
-    """Podbij licznik gier dla bieżącej lokacji (mutacja in-place). Zwraca nowy stan."""
+    """Podbij licznik gier dla bieżącej lokacji ORAZ dzienny (mutacja in-place)."""
     cur = gamble_count(session_flags, location_key)
     session_flags[_FLAG_LOC] = str(location_key or "")
     session_flags[_FLAG_COUNT] = cur + 1
+    # AUDIT #1445: dzienny licznik przeżywa bounce między lokacjami.
+    day = _game_day(session_flags)
+    day_cur = gamble_day_count(session_flags)
+    session_flags[_FLAG_DAY] = day
+    session_flags[_FLAG_DAY_COUNT] = day_cur + 1
     return cur + 1
 
 

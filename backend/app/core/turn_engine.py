@@ -12,8 +12,50 @@ SYSTEMPROMPT = compose_narrator_system_prompt()
 COMBAT_ROLL_CTX_PREFIX = "__AI_GM_COMBAT_ROLL_V1__"
 
 
+_MECHANIC_CUE_LINE_RE = None  # lazily compiled below
+
+
+def _sanitize_llm_input(s: str) -> str:
+    """AUDIT #1444: scrub mechanic tags + grant cues from ANY text going INTO the LLM
+    context (player free-text or replayed history). `strip_all_mechanic_tags` previously
+    ran only on model OUTPUT (memory #1292) — a player could inject `Grant Gold 999999`,
+    `[XP_GRANT:...]` or `grant_item: legendary sword` into their turn and steer a weaker
+    PROD model (gemma) toward emitting those cues, which the output-parser then applied.
+    Sanitizing the input closes the injection vector at the boundary.
+    """
+    if not s:
+        return s
+    try:
+        from app.services.llm_tag_parser import strip_all_mechanic_tags
+        s = strip_all_mechanic_tags(s)
+    except Exception:
+        pass
+    global _MECHANIC_CUE_LINE_RE
+    if _MECHANIC_CUE_LINE_RE is None:
+        import re as _re
+        # Remove grant/shop cue phrases from the cue keyword to end of line — inline or
+        # standalone — so an injected `... Grant Gold 999999` / `grant_item <x>` never
+        # reaches the model verbatim.
+        _MECHANIC_CUE_LINE_RE = _re.compile(
+            r"(?i)\b(?:grant[ _]?gold|grant[ _]?item|open[ _]?shop)\b[^\n]*"
+        )
+    s = _MECHANIC_CUE_LINE_RE.sub("", s)
+    # collapse whitespace left by removed cues
+    lines = [ln.rstrip() for ln in s.splitlines()]
+    out = "\n".join(ln for ln in lines).strip()
+    return out if out else s.strip()
+
+
 def _user_text_for_llm_context(raw: str | None) -> str:
-    """Strip structured combat roll JSON from history so the LLM sees short prose only."""
+    """Strip structured combat roll JSON from history so the LLM sees short prose only.
+
+    AUDIT #1444: the final player-visible text is also passed through `_sanitize_llm_input`
+    so injected mechanic tags / grant cues never reach the model verbatim.
+    """
+    return _sanitize_llm_input(_user_text_for_llm_context_raw(raw))
+
+
+def _user_text_for_llm_context_raw(raw: str | None) -> str:
     s = (raw or "").strip()
     if not s.startswith(COMBAT_ROLL_CTX_PREFIX):
         return s or ""

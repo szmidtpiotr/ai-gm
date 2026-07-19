@@ -41,24 +41,40 @@ _XP_GRANT_RE= re.compile(r"\[XP_GRANT:\s*([^:\]]+):\s*(\d+)\s*\]", re.I)
 
 SESSION_GAP_MINUTES = 30
 XP_GRANT_SESSION_CAP = 50  # XS12 cap per session
+SKILL_DC_XP_DAILY_CAP = 5  # AUDIT #1445 — max skill-DC XP grants per real day (starting value)
 
 
 # ── Core helper ───────────────────────────────────────────────────────────────
 
 def _grant(conn: sqlite3.Connection, character_id: int, campaign_id: int,
            reward_key: str, reason: str, turn_number: int | None,
-           override_amount: int | None = None) -> int:
+           override_amount: int | None = None, source_key: str = "") -> int:
     """Look up reward amount, grant to pending_xp; return amount or 0."""
     amount = override_amount if override_amount is not None else get_xp_reward_amount(conn, reward_key)
     if not amount or amount <= 0:
         return 0
     grant_pending_xp(
         conn, character_id, campaign_id, amount,
-        reason=reason, source=reward_key, turn_number=turn_number,
+        reason=reason, source=reward_key, source_key=source_key, turn_number=turn_number,
     )
     logger.info("xp_source_granted", reward_key=reward_key, amount=amount,
                 character_id=character_id, turn_number=turn_number)
     return amount
+
+
+def _already_granted(conn: sqlite3.Connection, character_id: int, source: str, source_key: str) -> bool:
+    """AUDIT #1445 — dedup guard (mirror of grant_first_npc_talk): a (source, source_key)
+    pair grants XP at most once per character. Used for discovery/dungeon-clear tags that
+    otherwise re-granted on every repeat (same tag in two turns, or twice in one response
+    via finditer)."""
+    if not source_key:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM character_xp_grants "
+        "WHERE character_id = ? AND source = ? AND source_key = ? LIMIT 1",
+        (character_id, source, source_key),
+    ).fetchone()
+    return row is not None
 
 
 # ── XS1: Beat complete ────────────────────────────────────────────────────────
@@ -81,8 +97,12 @@ def grant_quest_complete(conn: sqlite3.Connection, character_id: int, campaign_i
 
 def grant_dungeon_clear(conn: sqlite3.Connection, character_id: int, campaign_id: int,
                         dungeon_key: str, turn_number: int) -> int:
+    # AUDIT #1445: dedup by source_key — the same [DUNGEON_CLEAR:key] in two turns (or
+    # twice in one response via finditer) used to re-grant unbounded.
+    if _already_granted(conn, character_id, "campaign.dungeon_cleared", dungeon_key):
+        return 0
     return _grant(conn, character_id, campaign_id, "campaign.dungeon_cleared",
-                  f"Loch oczyszczony: {dungeon_key}", turn_number)
+                  f"Loch oczyszczony: {dungeon_key}", turn_number, source_key=dungeon_key)
 
 
 # ── XS4: Campaign end ─────────────────────────────────────────────────────────
@@ -136,10 +156,54 @@ def grant_first_location_visit(conn: sqlite3.Connection, character_id: int,
 
 # ── XS6: First NPC talk ───────────────────────────────────────────────────────
 
+def _norm_npc(s: Any) -> str:
+    import unicodedata
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", str(s or "").strip().lower())
+        if not unicodedata.combining(c)
+    )
+
+
+def _is_known_npc(conn: sqlite3.Connection, campaign_id: int, npc_key: str) -> bool:
+    """AUDIT #1445 — walidacja nazwy NPC względem rzeczywistej obsady sceny/kampanii.
+    `DIALOGUE:<any>` leci na TEKŚCIE GRACZA, więc bez tego `DIALOGUE:aaa`, `DIALOGUE:bbb`
+    farmiło XP „pierwszej rozmowy" dla zmyślonych NPC. Porównanie znormalizowane (bez
+    polskich znaków — gracze mobilni piszą bez ogonków, feedback_pl_diacritics_intent)."""
+    key = _norm_npc(npc_key)
+    if not key:
+        return False
+    import json as _j
+    try:
+        row = conn.execute(
+            "SELECT scene_npcs FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+        ).fetchone()
+        if row and row["scene_npcs"]:
+            for n in _j.loads(row["scene_npcs"] or "[]"):
+                if key in (_norm_npc(n.get("key")), _norm_npc(n.get("name")), _norm_npc(n.get("label"))):
+                    return True
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT npc_id, npc_name FROM campaign_known_npcs WHERE campaign_id = ?", (campaign_id,)
+        ).fetchall()
+        for r in rows:
+            if key in (_norm_npc(r["npc_id"]), _norm_npc(r["npc_name"])):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def grant_first_npc_talk(conn: sqlite3.Connection, character_id: int, campaign_id: int,
                          npc_key: str, turn_number: int) -> int:
     """Grant once per unique npc_key per character (tracked in character_xp_grants)."""
     if not npc_key:
+        return 0
+    # AUDIT #1445: reject XP for NPCs the campaign has never surfaced (anti-farm on
+    # `DIALOGUE:<fabricated>` player text).
+    if not _is_known_npc(conn, campaign_id, npc_key):
+        logger.info("dialogue_xp_unknown_npc_skipped", character_id=character_id, npc_key=npc_key)
         return 0
     existing = conn.execute(
         "SELECT id FROM character_xp_grants "
@@ -157,11 +221,15 @@ def grant_first_npc_talk(conn: sqlite3.Connection, character_id: int, campaign_i
 
 def grant_discovery(conn: sqlite3.Connection, character_id: int, campaign_id: int,
                     discovery_key: str, turn_number: int) -> int:
+    # AUDIT #1445: dedup by source_key so a repeated [DISCOVERY:key] can't farm XP.
+    source = "exploration.hidden_room" if discovery_key == "secret_location" else "exploration.secret"
+    if _already_granted(conn, character_id, source, discovery_key):
+        return 0
     if discovery_key == "secret_location":
         return _grant(conn, character_id, campaign_id, "exploration.hidden_room",
-                      f"Odkrycie ukrytej lokacji: {discovery_key}", turn_number)
+                      f"Odkrycie ukrytej lokacji: {discovery_key}", turn_number, source_key=discovery_key)
     return _grant(conn, character_id, campaign_id, "exploration.secret",
-                  f"Odkrycie lore: {discovery_key}", turn_number)
+                  f"Odkrycie lore: {discovery_key}", turn_number, source_key=discovery_key)
 
 
 # ── XS9/XS10/XS11: Skill DC success ─────────────────────────────────────────
@@ -176,7 +244,22 @@ def grant_skill_dc_success(conn: sqlite3.Connection, character_id: int, campaign
         key = "skills.skill_dc_12"
     else:
         return 0
-    return _grant(conn, character_id, campaign_id, key, f"Sukces DC {dc}", turn_number)
+    # AUDIT #1445: daily cap on skill-DC XP. Every successful DC≥12 test used to grant
+    # unbounded pending XP — spamming "wspinam się na mur" each turn = infinite XP. Cap the
+    # number of skill-DC grants per real day (starting value, Sandbox-tunable).
+    try:
+        cnt = conn.execute(
+            "SELECT COUNT(*) FROM character_xp_grants "
+            "WHERE character_id = ? AND source LIKE 'skills.skill_dc%' "
+            "AND date(created_at) = date('now')",
+            (character_id,),
+        ).fetchone()[0]
+    except Exception:
+        cnt = 0
+    if cnt >= SKILL_DC_XP_DAILY_CAP:
+        logger.info("skill_dc_xp_daily_cap_hit", character_id=character_id, cap=SKILL_DC_XP_DAILY_CAP)
+        return 0
+    return _grant(conn, character_id, campaign_id, key, f"Sukces DC {dc}", turn_number, source_key=key)
 
 
 # ── XS12: Narrative free grant ────────────────────────────────────────────────
@@ -246,10 +329,32 @@ def process_narrative_xp_tags(
     character_id: int,
     campaign_id: int,
     turn_number: int,
-    session_free_grant_total: int = 0,
+    session_free_grant_total: int | None = None,
 ) -> dict[str, Any]:
-    """Parse XS2-XS4, XS7-XS8, XS12 tags from GM narrative. Returns total granted."""
+    """Parse XS2-XS4, XS7-XS8, XS12 tags from GM narrative. Returns total granted.
+
+    AUDIT #1445: when the caller doesn't pass an explicit running total (default), the
+    [XP_GRANT] free-grant total is loaded from and persisted back to session_flags. Every
+    caller previously used the default 0 and discarded the returned total, so
+    XP_GRANT_SESSION_CAP reset every turn (50 XP/turn, unbounded per session).
+    """
+    import json as _pjson
     total = 0
+
+    _persist = session_free_grant_total is None
+    _sf_row = None
+    _sf: dict[str, Any] = {}
+    if _persist:
+        _sf_row = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if _sf_row and _sf_row["session_flags"]:
+            try:
+                _sf = _pjson.loads(_sf_row["session_flags"] or "{}")
+            except Exception:
+                _sf = {}
+        session_free_grant_total = int(_sf.get("xp_free_grant_session_total", 0) or 0)
 
     from app.services.event_logger import write_game_event
 
@@ -351,6 +456,18 @@ def process_narrative_xp_tags(
         finale_opened = maybe_complete_campaign(campaign_id, character_id, turn_number, conn)
     except Exception as _vc_err:
         logger.warning("campaign_victory_check_error", error=str(_vc_err))
+
+    # AUDIT #1445: persist the running free-grant total so the session cap survives turns.
+    if _persist and _sf_row is not None:
+        try:
+            _sf["xp_free_grant_session_total"] = int(session_free_grant_total or 0)
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (_pjson.dumps(_sf, ensure_ascii=False), _sf_row["id"]),
+            )
+            conn.commit()
+        except Exception as _persist_err:
+            logger.warning("xp_grant_session_total_persist_error", error=str(_persist_err))
 
     return {
         "total_granted": total,

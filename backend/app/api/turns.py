@@ -132,6 +132,13 @@ GRANT_ITEM_RE    = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
 
+# AUDIT #1444 — trust-boundary caps for narration-sourced grants (starting values,
+# Sandbox-tunable). Gold clamp mirrors the existing XP_GRANT_SESSION_CAP asymmetry;
+# pending-item cap rate-limits free-text (non-catalog) item creation per turn so a
+# player can't spam the narrator into minting unlimited pending loot.
+MAX_NARRATIVE_GOLD_GRANT = 500
+MAX_PENDING_ITEM_GRANTS_PER_TURN = 2
+
 
 def _should_emit_open_shop_in_mode(npc_key: str | None, campaign_mode: str) -> bool:
     """Return True only when npc_key is set and campaign is NOT in dungeon mode (#742)."""
@@ -3132,6 +3139,11 @@ _RUMOR_ROUND_COST = 5     # koszt postawionej kolejki (zł)
 _RUMOR_FREE_CHANCE = 0.6  # szansa na plotkę przy darmowym nadstawianiu ucha
 _RUMOR_SENSE_DC = 12      # DC testu wyczucia fałszu (Medium)
 _RUMOR_PAID_SENSE_BONUS = 2  # kolejka rozwiązuje języki → +2 do wyczucia
+# AUDIT #1445: darmowy eavesdrop nie ruszał zegara i nie miał limitu/dzień; po wyczerpaniu
+# puli regionu fallback generował świeżą plotkę za każdym razem → farm Atlasu / treasure_site.
+# Cap dzienny + koszt czasu (wartości startowe, tuner w Sandboxie).
+_RUMOR_DAILY_CAP = 3      # ile plotek gracz usłyszy dziennie zanim karczmarze zamilkną
+_RUMOR_TIME_COST_MIN = 30 # minuty gry na próbę nadstawiania ucha
 
 
 def _rumor_intent(text: str) -> str | None:
@@ -3192,6 +3204,51 @@ def _maybe_tavern_rumor_shortcut(conn: sqlite3.Connection, campaign_id: int,
         conn.commit()
         return {"prose": prose, "route": route, "turn_number": int(_tn),
                 "id": int(cur.lastrowid)}
+
+    # AUDIT #1445: dzienny cap plotek + koszt czasu. Licznik keyed po dniu gry (reset o
+    # świcie). Po wyczerpaniu — narracja odmowna, BEZ generowania świeżej plotki (koniec
+    # farmu Atlasu). Odczyt/zapis session_flags + advance_clock (~30 min/próbę).
+    _rum_gs = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+    ).fetchone()
+    _rum_sf = {}
+    if _rum_gs and _rum_gs["session_flags"]:
+        try:
+            _rum_sf = json.loads(_rum_gs["session_flags"] or "{}")
+        except Exception:
+            _rum_sf = {}
+    try:
+        from app.services.clock_service import get_clock_state as _rum_clock
+        _rum_day = int(_rum_clock(campaign_id, conn=conn).get("day", 1))
+    except Exception:
+        _rum_day = 1
+    _rum_heard = int(_rum_sf.get("rumors_heard_count", 0) or 0) if int(_rum_sf.get("rumors_heard_day", 0) or 0) == _rum_day else 0
+
+    def _rum_advance_clock():
+        try:
+            from app.services.clock_service import advance_clock as _rum_adv
+            _rum_adv(campaign_id, minutes=_RUMOR_TIME_COST_MIN, reason="tavern_rumor", conn=conn)
+        except Exception:
+            pass
+
+    def _rum_bump_heard():
+        _rum_sf["rumors_heard_day"] = _rum_day
+        _rum_sf["rumors_heard_count"] = _rum_heard + 1
+        if _rum_gs:
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(_rum_sf, ensure_ascii=False), _rum_gs["id"]),
+            )
+            conn.commit()
+
+    if _rum_heard >= _RUMOR_DAILY_CAP:
+        _rum_advance_clock()
+        return _commit_narration(
+            text,
+            "Nasłuchałeś się dziś dość plotek — te same twarze powtarzają w kółko to samo, "
+            "a karczmarz patrzy podejrzliwie. Wróć jutro po świeże wieści.",
+            "tavern_rumor_capped",
+        )
 
     # Kolejka kosztuje — brak złota = odmowa narracyjna (tura zapisana, bez plotki).
     if paid:
@@ -3254,6 +3311,9 @@ def _maybe_tavern_rumor_shortcut(conn: sqlite3.Connection, campaign_id: int,
             if paid else "Nadstawiasz ucha przy sąsiednim stole.")
     prose = f"{lead} {_r['rumor_text']}{warn}"
     route = "tavern_rumor"
+    # AUDIT #1445: plotka faktycznie usłyszana → podbij dzienny licznik i zabierz czas.
+    _rum_bump_heard()
+    _rum_advance_clock()
     result = _commit_narration(text, prose, route)
     result["rumor"] = {"target_type": _r.get("target_type"), "suspected": bool(warn)}
     return result
@@ -3579,6 +3639,17 @@ def apply_grant_gold_to_character(
 ) -> int | None:
     if int(amount) <= 0:
         return None
+    amt = int(amount)
+    # AUDIT #1444: clamp narrative gold grants. [XP_GRANT] was already capped, but
+    # `Grant Gold N` parsed from LLM text was applied verbatim — a player could coax the
+    # narrator into "Grant Gold 999999". Only the narrative cue path is clamped; genuine
+    # plan rewards call this with an explicit non-narrative `source` and pass through.
+    if source == "narrative_gold_grant" and amt > MAX_NARRATIVE_GOLD_GRANT:
+        logger.warning(
+            "narrative_gold_grant_clamped",
+            character_id=character_id, requested=amt, capped=MAX_NARRATIVE_GOLD_GRANT,
+        )
+        amt = MAX_NARRATIVE_GOLD_GRANT
     row = conn.execute(
         """
         UPDATE characters
@@ -3586,14 +3657,14 @@ def apply_grant_gold_to_character(
         WHERE id = ?
         RETURNING gold_gp, campaign_id
         """,
-        (int(amount), int(character_id)),
+        (amt, int(character_id)),
     ).fetchone()
     if not row:
         return None
     try:
         from app.services.economy_service import journal_gold_delta
         journal_gold_delta(
-            conn, int(character_id), int(amount), source,
+            conn, int(character_id), amt, source,
             campaign_id=campaign_id if campaign_id is not None else row["campaign_id"],
         )
     except Exception:
@@ -5886,6 +5957,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         create_turn_log_fn=create_turn_log,
         log_narrative_fn=log_narrative_turn_structured,
     )
+    _pending_grants_this_turn = 0
     for _gil in grant_item_labels:
         _gil_desc = grant_item_descriptions.get(_gil)
         _resolved = _resolve_grant_catalog_item(conn, _gil)
@@ -5908,7 +5980,15 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             _grant_narrative_weapon(conn, campaign_id=campaign_id,
                                     character_id=payload.character_id, label=_gil, source="gm")
         else:
-            # D1 (#376) — unknown item → pending_review catalog entry + admin queue
+            # D1 (#376) — unknown item → pending_review catalog entry + admin queue.
+            # AUDIT #1444: rate-limit free-text pending grants per turn (the pending flow
+            # itself is accepted behaviour, but uncapped it let a player mint unlimited
+            # non-catalog loot by coaxing the narrator).
+            if _pending_grants_this_turn >= MAX_PENDING_ITEM_GRANTS_PER_TURN:
+                logger.warning("pending_item_grant_rate_limited",
+                               campaign_id=campaign_id, character_id=payload.character_id, label=_gil)
+                continue
+            _pending_grants_this_turn += 1
             _grant_pending_item(conn, campaign_id=campaign_id,
                                 character_id=payload.character_id,
                                 label=_gil, source="gm", description=_gil_desc)
@@ -7992,6 +8072,7 @@ def create_turn_stream(
                     except Exception as _u6s_err:
                         logger.warning("u6_stream_rejection_correction_error", error=str(_u6s_err))
                     # ──────────────────────────────────────────────────────────────
+                    _pending_grants_this_turn_s = 0
                     for _gil in grant_item_labels:
                         _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
@@ -8014,7 +8095,14 @@ def create_turn_stream(
                             _grant_narrative_weapon(save_conn, campaign_id=campaign_id_val,
                                                     character_id=character_id_val, label=_gil, source="gm")
                         else:
-                            # D1 (#376) — unknown item → pending_review catalog entry + admin queue
+                            # D1 (#376) — unknown item → pending_review catalog entry + admin queue.
+                            # AUDIT #1444: rate-limit free-text pending grants per turn (mirror of
+                            # the non-stream path).
+                            if _pending_grants_this_turn_s >= MAX_PENDING_ITEM_GRANTS_PER_TURN:
+                                logger.warning("pending_item_grant_rate_limited",
+                                               campaign_id=campaign_id_val, character_id=character_id_val, label=_gil)
+                                continue
+                            _pending_grants_this_turn_s += 1
                             _grant_pending_item(
                                 save_conn, campaign_id=campaign_id_val,
                                 character_id=character_id_val, label=_gil, source="gm",
