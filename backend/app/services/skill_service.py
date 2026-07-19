@@ -17,23 +17,29 @@ from typing import Optional
 from app.core.mechanics import proficiency_bonus
 from app.services.vitality_service import stat_modifier
 from app.services.dice import roll_d20
+from app.services.llm_tag_parser import clamp_dc_to_scale
 
 DB_PATH = "/data/ai_gm.db"
 
-# Fallback skill → governing stat (used when DB lookup unavailable)
-_SKILL_STAT_FALLBACK: dict[str, str] = {
-    "stealth": "DEX", "lockpick": "DEX", "acrobatics": "DEX", "dodge": "DEX",
-    "perception": "WIS", "insight": "WIS", "survival": "WIS",
-    "persuasion": "CHA", "deception": "CHA", "intimidation": "CHA",
-    "athletics": "STR", "arcana": "INT", "medicine": "INT", "lore": "INT",
-}
-
-# Fallback labels
-_SKILL_LABEL_FALLBACK: dict[str, str] = {
-    "stealth": "Skradanie", "lockpick": "Otwieranie zamków", "acrobatics": "Akrobatyka",
-    "perception": "Percepcja", "insight": "Wnikliwość", "survival": "Przetrwanie",
-    "persuasion": "Perswazja", "deception": "Oszustwo", "intimidation": "Zastraszenie",
-    "athletics": "Atletyka", "arcana": "Arkana", "medicine": "Medycyna", "lore": "Wiedza",
+# Single fallback map skill → (governing stat, label). Used only when the DB
+# lookup is unavailable — game_config_skills stays the source of truth (katalog=prawda).
+# G8 #1472: one dictionary instead of two divergent ones; medicine governs on WIS
+# (medycyna = mądrość/roztropność, nie intelekt).
+_SKILL_FALLBACK: dict[str, tuple[str, str]] = {
+    "stealth":      ("DEX", "Skradanie"),
+    "lockpick":     ("DEX", "Otwieranie zamków"),
+    "acrobatics":   ("DEX", "Akrobatyka"),
+    "dodge":        ("DEX", "Unik"),
+    "perception":   ("WIS", "Percepcja"),
+    "insight":      ("WIS", "Wnikliwość"),
+    "survival":     ("WIS", "Przetrwanie"),
+    "medicine":     ("WIS", "Medycyna"),
+    "persuasion":   ("CHA", "Perswazja"),
+    "deception":    ("CHA", "Oszustwo"),
+    "intimidation": ("CHA", "Zastraszenie"),
+    "athletics":    ("STR", "Atletyka"),
+    "arcana":       ("INT", "Arkana"),
+    "lore":         ("INT", "Wiedza"),
 }
 
 def _query_skill_from_db(skill_key: str) -> tuple[str, str] | None:
@@ -58,7 +64,8 @@ def _skill_stat(skill_key: str) -> str:
     result = _query_skill_from_db(skill_key)
     if result:
         return result[0]
-    return _SKILL_STAT_FALLBACK.get(skill_key, "INT")
+    fb = _SKILL_FALLBACK.get(skill_key)
+    return fb[0] if fb else "INT"
 
 
 def _skill_label(skill_key: str) -> str:
@@ -66,11 +73,12 @@ def _skill_label(skill_key: str) -> str:
     result = _query_skill_from_db(skill_key)
     if result:
         return result[1]
-    return _SKILL_LABEL_FALLBACK.get(skill_key, skill_key.title())
+    fb = _SKILL_FALLBACK.get(skill_key)
+    return fb[1] if fb else skill_key.title()
 
 
 # Keep SKILL_LABELS for backward compat (tag intercept code)
-SKILL_LABELS = _SKILL_LABEL_FALLBACK
+SKILL_LABELS = {k: v[1] for k, v in _SKILL_FALLBACK.items()}
 
 # The 7 locked ability stats (CLAUDE.md → Locked Game Mechanics).
 _STAT_NAMES = {"STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"}
@@ -514,7 +522,11 @@ def intercept_skill_test_tag(
 
     # Build counter
     if res_type == "DC":
-        counter = {"counter_type": "dc", "counter_key": None, "dc": int(value) if value.isdigit() else 12}
+        # G8 #1472: klamruj DC do skali Easy/Medium/Hard/Extreme/Legendary
+        # (8/12/16/20/24) — LLM bywa, że emituje wartości spoza skali (np. DC 14).
+        raw_dc = int(value) if value.isdigit() else 12
+        clamped_dc, _was_clamped = clamp_dc_to_scale(raw_dc)
+        counter = {"counter_type": "dc", "counter_key": None, "dc": clamped_dc}
     else:
         # S4: OPPOSED value is "<stat_or_skill>" or "<stat_or_skill>:<target_name>".
         parts = [p.strip() for p in value.split(":") if p.strip()]

@@ -222,7 +222,7 @@ def test_all_known_tags_match_their_own_format():
         "CAMPAIGN_END": "[CAMPAIGN_END: good_ending]",
         "DISCOVERY": "[DISCOVERY: secret_cave|Odkryłeś tajną grotę]",
         "DUNGEON_CLEAR": "[DUNGEON_CLEAR: dungeon_goblin_lair]",
-        "SKILL_TEST": "[SKILL_TEST: stealth:12]",
+        "SKILL_TEST": "[SKILL_TEST: stealth:DC:12]",
     }
 
     for tag_name, sample in samples.items():

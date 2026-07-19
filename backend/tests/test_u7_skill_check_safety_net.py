@@ -70,53 +70,10 @@ def test_clamp_dc_scale_roundtrip():
     assert clamp_dc_to_scale(24) == (24, False)   # exact
 
 
-# ─── (b) SKILL_CHECK tag: non-standard DC clamped + logged ───────────────────
-
-def test_skill_check_dc_clamped_and_logged(mem_db):
-    from app.services.llm_tag_parser import parse_skill_check_tag
-
-    result = parse_skill_check_tag("[SKILL_CHECK: stealth: 17]", mem_db, campaign_id=1, turn_number=5)
-
-    assert result is not None
-    assert result["dc"] == 16, f"Expected DC 16, got {result['dc']}"
-    assert result["skill_key"] == "stealth"
-    assert result.get("clamped") is True
-
-    # Error logged
-    row = mem_db.execute(
-        "SELECT * FROM llm_tag_errors WHERE campaign_id=1 AND error_type='dc_clamped'"
-    ).fetchone()
-    assert row is not None, "Expected dc_clamped log entry"
-    assert "17" in row["tag_raw"]
-
-
-# ─── (c) SKILL_CHECK tag: standard DC, no log ────────────────────────────────
-
-def test_skill_check_standard_dc_no_log(mem_db):
-    from app.services.llm_tag_parser import parse_skill_check_tag
-
-    result = parse_skill_check_tag("[SKILL_CHECK: athletics: 12]", mem_db, campaign_id=1, turn_number=3)
-
-    assert result is not None
-    assert result["dc"] == 12
-    assert result.get("clamped") is False or result.get("clamped") is None
-
-    row = mem_db.execute(
-        "SELECT * FROM llm_tag_errors WHERE campaign_id=1 AND error_type='dc_clamped'"
-    ).fetchone()
-    assert row is None, "No dc_clamped log expected for standard DC"
-
-
-# ─── (d) auto_success bypasses test ──────────────────────────────────────────
-
-def test_skill_check_auto_success(mem_db):
-    from app.services.llm_tag_parser import parse_skill_check_tag
-
-    result = parse_skill_check_tag("[SKILL_CHECK: auto_success]", mem_db, campaign_id=1, turn_number=1)
-
-    assert result is not None
-    assert result.get("auto_success") is True
-    assert "dc" not in result or result.get("dc") is None
+# NOTE (G8 #1472): the dead SKILL_CHECK parser tests (b/c/d) were removed with
+# parse_skill_check_tag — the narrator only emits [SKILL_TEST:], never [SKILL_CHECK:].
+# DC clamping now lives at the [SKILL_TEST] intercept (skill_service) and is covered
+# by test_skill_service_skill_test.py::test_skill_test_dc_clamped.
 
 
 # ─── (e) _detect_risky_intent: stealth match ────────────────────────────────
@@ -182,8 +139,8 @@ def test_safety_net_no_force_when_tag_present(mem_db):
     risky_match = _detect_risky_intent(mem_db, "skradam się obok strażnika")
     assert risky_match is not None
 
-    # LLM response WITH [SKILL_CHECK] tag
-    llm_response = "Próbujesz się przemknąć [SKILL_CHECK: stealth: 12] obok strażnika."
+    # LLM response WITH the real [SKILL_TEST] tag
+    llm_response = "Próbujesz się przemknąć [SKILL_TEST:stealth:DC:12] obok strażnika."
 
     result = skill_check_safety_net(
         llm_response=llm_response,
@@ -193,17 +150,20 @@ def test_safety_net_no_force_when_tag_present(mem_db):
         campaign_id=1,
     )
 
-    assert result is None, "No forced test expected when LLM already included SKILL_CHECK"
+    assert result is None, "No forced test expected when LLM already included SKILL_TEST"
 
 
-# ─── Backward compat: existing SKILL_TEST tag still works ───────────────────
+# ─── Backward compat: SKILL_TEST registry matches the real emitted format ────
 
 def test_existing_skill_test_tag_unaffected():
-    """The legacy [SKILL_TEST:] tag must still parse correctly."""
+    """TAG_REGISTRY['SKILL_TEST'] must match the real [SKILL_TEST:key:DC:n] format."""
     from app.services.llm_tag_parser import TAG_REGISTRY
 
     pattern = TAG_REGISTRY["SKILL_TEST"]
-    m = pattern.search("[SKILL_TEST: stealth: 12]")
-    assert m is not None, "SKILL_TEST pattern must still match"
+    m = pattern.search("[SKILL_TEST:stealth:DC:12]")
+    assert m is not None, "SKILL_TEST pattern must match the real 3-part format"
     assert m.group(1).strip() == "stealth"
-    assert m.group(2).strip() == "12"
+    assert m.group(2).strip().upper() == "DC"
+    assert m.group(3).strip() == "12"
+    # OPPOSED variant also matches
+    assert pattern.search("[SKILL_TEST:haggling:OPPOSED:CHA]") is not None

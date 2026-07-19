@@ -46,17 +46,13 @@ TAG_REGISTRY: dict[str, re.Pattern] = {
     "SPEND_GOLD": re.compile(
         r'\[SPEND_GOLD:\s*([a-zA-Z0-9_]+)\s*\]',
     ),
-    # Skill tests (B4 / U7)
+    # Skill tests (B4). G8 #1472: match the REAL emitted format
+    # [SKILL_TEST:key:DC:14] / [SKILL_TEST:key:OPPOSED:perception] — the
+    # authoritative regex lives in skill_service.SKILL_TEST_RE. The old pattern
+    # here expected key:number and never matched a live tag. The dead SKILL_CHECK
+    # tor (never emitted by system_prompt.txt) was removed alongside it.
     "SKILL_TEST": re.compile(
-        r'\[SKILL_TEST:\s*([^:\]]+?)\s*:\s*(\d+|OPPOSED:\d+)\s*\]',
-        re.IGNORECASE,
-    ),
-    "SKILL_CHECK": re.compile(
-        r'\[SKILL_CHECK:\s*([^:\]]+?)\s*:\s*(\d+|OPPOSED:\d+)\s*\]',
-        re.IGNORECASE,
-    ),
-    "SKILL_CHECK_AUTO_SUCCESS": re.compile(
-        r'\[SKILL_CHECK:\s*auto_success\s*\]',
+        r'\[SKILL_TEST:\s*([a-z_]+)\s*:\s*(DC|OPPOSED)\s*:\s*([^\]]+?)\s*\]',
         re.IGNORECASE,
     ),
     "TRAP": re.compile(
@@ -116,9 +112,11 @@ TAG_REGISTRY: dict[str, re.Pattern] = {
         r"\[SET_SAFE_FOR_REST:\s*([^\]\s:,]+)\s*:\s*(on|off|true|false|1|0)\s*\]",
         re.IGNORECASE,
     ),
-    # XP sources
+    # XP sources. G8 #1472: the authoritative XP consumer (xp_sources._DISC_RE)
+    # reads the bare [DISCOVERY:key] form. Accept it AND the optional
+    # [DISCOVERY:key|opis] variant so this registry matches every real tag.
     "DISCOVERY": re.compile(
-        r'\[DISCOVERY:\s*([^|\]]+?)\s*\|\s*([^\]]+?)\s*\]',
+        r'\[DISCOVERY:\s*([^|\]]+?)\s*(?:\|\s*([^\]]+?)\s*)?\]',
         re.IGNORECASE,
     ),
     "XP_GRANT": re.compile(
@@ -288,7 +286,7 @@ REJECTION_CORRECTIONS: dict[str, "str | None"] = {
     "GRANT_ITEM":  "*(Przedmiot wygląda na bezwartościowy — zwykły drobiazg.)*",
     "ITEM_CREATE": "*(Przedmiot wygląda na bezwartościowy — zwykły drobiazg.)*",
     "QUEST_SUGGEST": None,
-    "SKILL_CHECK": None,  # DC clamped in U7, no narration correction
+    "SKILL_TEST": None,  # DC clamped at intercept (skill_service), no narration correction
     "COMBAT_START": None,  # correction injected by _maybe_start_combat_from_gm_tag (HF-7)
     # S8 (#603): klucz kondycji spoza katalogu game_config_conditions → tag odrzucony.
     "APPLY_CONDITION": "*(Nic trwałego się nie dzieje.)*",
@@ -357,67 +355,22 @@ def clear_rejected_tags(conn: sqlite3.Connection, campaign_id: int) -> None:
         logger.warning("clear_rejected_tags_failed", exc=str(exc))
 
 
-# ── U7: DC lock + SKILL_CHECK parser + safety net ────────────────────────────
+# ── U7: DC lock + skill-test safety net ──────────────────────────────────────
+# G8 #1472: the dead SKILL_CHECK parser (parse_skill_check_tag + private
+# _SKILL_CHECK_* regexes) was removed — the narrator only ever emits [SKILL_TEST:]
+# (handled by skill_service), never [SKILL_CHECK:]. The safety net below stays
+# live (called from turn_intent.apply_u7_safety_net) and now detects the real tag.
 
 _DC_SCALE = [8, 12, 16, 20, 24]
 
-# Matches [SKILL_CHECK: auto_success] (checked before the key:dc variant)
-_SKILL_CHECK_AUTO_RE = re.compile(r'\[SKILL_CHECK:\s*auto_success\s*\]', re.IGNORECASE)
-# Matches [SKILL_CHECK: key: dc]
-_SKILL_CHECK_RE = re.compile(
-    r'\[SKILL_CHECK:\s*([^:\]]+?)\s*:\s*(\d+)\s*\]', re.IGNORECASE
-)
-# Presence check — is any [SKILL_CHECK...] in the LLM response?
-_SKILL_CHECK_ANY_RE = re.compile(r'\[SKILL_CHECK:', re.IGNORECASE)
+# Presence check — did the LLM already emit a skill-test tag this turn?
+_SKILL_TEST_ANY_RE = re.compile(r'\[SKILL_TEST:', re.IGNORECASE)
 
 
 def clamp_dc_to_scale(dc: int) -> tuple:
     """Clamp dc to nearest value in _DC_SCALE. Returns (clamped_dc, was_clamped)."""
     nearest = min(_DC_SCALE, key=lambda v: (abs(v - dc), v))
     return (nearest, nearest != dc)
-
-
-def parse_skill_check_tag(
-    tag_text: str,
-    conn: sqlite3.Connection,
-    campaign_id: int,
-    turn_number: int,
-) -> "dict | None":
-    """Parse a [SKILL_CHECK:...] tag string. Returns dict or None if no match.
-
-    Returns:
-        {"auto_success": True}  — for [SKILL_CHECK: auto_success]
-        {"skill_key": str, "dc": int, "clamped": bool}  — for [SKILL_CHECK: key: dc]
-        None  — if tag_text doesn't match any pattern
-    """
-    if _SKILL_CHECK_AUTO_RE.search(tag_text):
-        return {"auto_success": True}
-
-    m = _SKILL_CHECK_RE.search(tag_text)
-    if not m:
-        return None
-
-    skill_key = m.group(1).strip()
-    raw_dc = int(m.group(2))
-    clamped_dc, was_clamped = clamp_dc_to_scale(raw_dc)
-
-    if was_clamped:
-        log_tag_error(
-            conn=conn,
-            campaign_id=campaign_id,
-            turn_number=turn_number,
-            tag_raw=tag_text[:200],
-            error_type="dc_clamped",
-        )
-        logger.info(
-            "skill_check_dc_clamped",
-            campaign_id=campaign_id,
-            original_dc=raw_dc,
-            clamped_dc=clamped_dc,
-            skill=skill_key,
-        )
-
-    return {"skill_key": skill_key, "dc": clamped_dc, "clamped": was_clamped}
 
 
 def skill_check_safety_net(
@@ -427,7 +380,7 @@ def skill_check_safety_net(
     conn: sqlite3.Connection,
     campaign_id: int,
 ) -> "dict | None":
-    """Post-LLM safety net: if risky intent detected and LLM omitted [SKILL_CHECK] → force test.
+    """Post-LLM safety net: if risky intent detected and LLM omitted [SKILL_TEST] → force test.
 
     Returns pending_skill_test dict if test should be forced, None otherwise.
     """
@@ -435,7 +388,7 @@ def skill_check_safety_net(
         return None
     if existing_pending:
         return None
-    if _SKILL_CHECK_ANY_RE.search(llm_response or ""):
+    if _SKILL_TEST_ANY_RE.search(llm_response or ""):
         return None
 
     skill_key = risky_intent["skill_key"]

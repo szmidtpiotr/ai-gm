@@ -244,12 +244,16 @@ def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: st
     cur_hp = int(sheet.get("current_hp", 0) or 0)
     is_dwarf = str(race or "human").strip().lower() == "dwarf"
 
-    result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": True, "narrative": "", "rdzen_miscast": is_dwarf}
+    # G8 #1472 (#1432): stun is NOT universal. Per game_mechanics.md miscast ladder —
+    # stun only (L1-2), self-damage only (L3-4), damage+stun (L5-7), damage+stun+secondary
+    # (L8+). Default False, then each branch opts in where the Księga says so.
+    result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": False, "narrative": "", "rdzen_miscast": is_dwarf}
 
     if is_dwarf:
         # Rdzeń-magia: żyła wibruje — inny flavor
         if level <= 2:
             result["self_damage"] = 0
+            result["stun"] = True
             result["narrative"] = "Żyła wibruje — krew z uszu, kamień pęka pod stopami. Ogłuszenie."
         elif level <= 4:
             dmg = random.randint(1, 4)
@@ -258,10 +262,12 @@ def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: st
         elif level <= 7:
             dmg = random.randint(1, 6)
             result["self_damage"] = dmg
+            result["stun"] = True
             result["narrative"] = f"Surowa moc Rdzenia rani cię za {dmg} HP. Kamień pod stopami pęka i ogłusza."
         else:
             dmg = random.randint(1, 8)
             result["self_damage"] = dmg
+            result["stun"] = True
             secondary = random.randint(1, 4)
             secondary_text = {
                 1: "Skażenie Rdzenia rozprzestrzenia się — wróg też traci 1k4 HP.",
@@ -274,6 +280,7 @@ def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: st
     else:
         if level <= 2:
             result["self_damage"] = 0
+            result["stun"] = True
             result["narrative"] = "Czar wymknął się spod kontroli — czujesz oszołomienie."
         elif level <= 4:
             dmg = random.randint(1, 4)
@@ -282,10 +289,12 @@ def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: st
         elif level <= 7:
             dmg = random.randint(1, 6)
             result["self_damage"] = dmg
+            result["stun"] = True
             result["narrative"] = f"Niekontrolowana magia rani cię za {dmg} HP i ogłusza."
         else:
             dmg = random.randint(1, 8)
             result["self_damage"] = dmg
+            result["stun"] = True
             secondary = random.randint(1, 4)
             secondary_text = {
                 1: "Wróg odzyskuje 1k4 HP.",

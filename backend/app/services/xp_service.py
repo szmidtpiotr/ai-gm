@@ -19,12 +19,14 @@ from app.services.dice import DICE_TEST_TO_CONFIG_SKILL_KEY, parse_character_she
 
 DB_PATH = "/data/ai_gm.db"
 
+# G8 #1472: align fallback with the runtime DB truth (main.py seeds
+# game_config_meta.xp_skill_rank_costs = {"1":100,"2":75,"3":150} and caps every
+# skill at rank_ceiling=3). Max rank is 3, so no rank 4/5 cost — a missing key
+# falls through to the 999999 (unaffordable) guard at the call site.
 DEFAULT_RANK_UP_COSTS: dict[int, int] = {
-    1: 50,
-    2: 100,
-    3: 200,
-    4: 400,
-    5: 1200,
+    1: 100,
+    2: 75,
+    3: 150,
 }
 
 # New stat value (after +1) → XP cost per game_mechanics.md CZĘŚĆ 7.
@@ -245,12 +247,12 @@ def _rank_ceiling_for_skill(skill_key: str) -> int:
                     "SELECT rank_ceiling FROM game_config_skills WHERE key = ?", (lk,)
                 ).fetchone()
                 if row is not None:
-                    return int(row[0] or 5)
+                    return int(row[0] or 3)
         finally:
             conn.close()
     except Exception:
         pass
-    return 5
+    return 3  # G8 #1472: C7 migration caps every skill at rank 3 (game_mechanics.md)
 
 
 def _skill_known_in_catalog(skill_key: str) -> bool:

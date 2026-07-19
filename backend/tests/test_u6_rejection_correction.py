@@ -46,8 +46,9 @@ def test_rejection_corrections_dict_exists():
     assert "plecak" not in REJECTION_CORRECTIONS["GRANT_ITEM"]
     assert "QUEST_SUGGEST" in REJECTION_CORRECTIONS
     assert REJECTION_CORRECTIONS["QUEST_SUGGEST"] is None
-    assert "SKILL_CHECK" in REJECTION_CORRECTIONS
-    assert REJECTION_CORRECTIONS["SKILL_CHECK"] is None
+    # G8 #1472: dead SKILL_CHECK key renamed to the real SKILL_TEST tag.
+    assert "SKILL_TEST" in REJECTION_CORRECTIONS
+    assert REJECTION_CORRECTIONS["SKILL_TEST"] is None
 
 
 def test_item_create_has_same_correction_as_grant_item():

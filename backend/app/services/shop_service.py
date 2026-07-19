@@ -547,6 +547,11 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         haggle_discount = _peek_haggle_for_character(conn, character_id)
         cha_buy_mult = _cha_buy_multiplier(cha)
         eff_buy_mult = haggle_service.effective_buy_multiplier(cha_buy_mult, haggle_discount)
+        # G8 #1472: krasnolud (kowalskie oko, −15%) widzi cenę PO rabacie także w
+        # podglądzie — wcześniej okno sklepu pokazywało cenę wyższą niż faktycznie
+        # pobierana przy kupnie (combined_buy_multiplier). Klamer jak na torze kupna.
+        if _get_character_race(conn, character_id) == "dwarf":
+            eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT))), 4)
         ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         # #1127: night economy — reflect open state + black-market pricing in the UI.
         night_state = _shop_open_state(conn, npc, character_id)
