@@ -145,6 +145,66 @@ def _deep_merge_dicts(base: dict, incoming: dict) -> dict:
     return merged
 
 
+# ── #1434 — PATCH /characters/{id}/sheet field guard ─────────────────────────
+# The sheet patch endpoint is a cosmetic/identity editor, NOT a progression API.
+# Only the whitelisted top-level keys may be written from the client; every
+# authoritative field (progression, vitals, economy) is server-derived and must
+# never be settable from the request body — otherwise a single PATCH grants
+# arbitrary level/stats/XP/HP/gold (god-mode). `_strip_hidden_fields` only
+# scrubs the RESPONSE, so the guard has to run on the INBOUND payload here.
+SHEET_PATCH_WHITELIST = frozenset({
+    "notes",
+    "appearance",
+    "identity",
+    "background",
+    "narrative_items",
+    "journal",
+    "portrait",
+    "portrait_url",
+    "avatar",
+    "bio",
+    "personality",
+    "pronouns",
+})
+
+# Hard blacklist of authoritative fields — enumerated for defence-in-depth even
+# though the whitelist already excludes them (a future whitelist widening must
+# still never re-admit these). Keys here are always dropped.
+SHEET_PATCH_BLACKLIST = frozenset({
+    "level",
+    "stats",
+    "skills",
+    "xp_available",
+    "xp_lifetime_earned",
+    "pending_xp",
+    "max_hp",
+    "max_mana",
+    "current_hp",
+    "current_mana",
+    "arcane_points",
+    "gold_gp",
+})
+
+
+def _filter_sheet_patch(incoming: dict) -> tuple[dict, list[str]]:
+    """Return (allowed_patch, rejected_keys) for a client sheet PATCH body.
+
+    A key survives only when it is in the whitelist AND not in the blacklist.
+    Everything else is dropped (ignored), matching #1434's "ignore or 422"
+    contract — the caller decides whether to 422 when nothing survives.
+    """
+    if not isinstance(incoming, dict):
+        return {}, []
+    allowed: dict = {}
+    rejected: list[str] = []
+    for key, value in incoming.items():
+        if key in SHEET_PATCH_WHITELIST and key not in SHEET_PATCH_BLACKLIST:
+            allowed[key] = value
+        else:
+            rejected.append(key)
+    return allowed, rejected
+
+
 def _stat_modifier(value: int) -> int:
     from app.core.mechanics import stat_modifier as _core
     return _core(value)
@@ -1973,7 +2033,11 @@ def grant_character_xp_mg(
     """
     Owner kampanii postaci przyznaje XP z puli MG (**[S10b]**); wpis w `character_xp_grants` (**[S10d]**).
     """
-    user_id = resolve_authed_user_id(authorization, user_id)
+    # #1436 — strict JWT: identity comes from the signed token ONLY. The legacy
+    # `?user_id=` query param (spoofable, S1-C) is NEVER trusted here — this
+    # endpoint mints XP, so a spoofed owner id would be free progression.
+    _ = user_id  # legacy param accepted for URL-compat but ignored for auth
+    user_id = resolve_authed_user_id(authorization, None)
     from app.services import xp_service
 
     conn = sqlite3.connect(DB_PATH)
@@ -2352,13 +2416,17 @@ class SpellSpendRequest(BaseModel):
 @router.post("/characters/{character_id}/xp/spend-spell-learn")
 def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: str | None = Header(None)):
     """X8 — Scholar learns a new spell for 75 XP."""
-    assert_character_owner(character_id, authorization, req.user_id)
+    uid = assert_character_owner(character_id, authorization, req.user_id)
     from app.services.dice import parse_character_sheet
     from app.services.spell_service import learn_spell as _learn_spell
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        # #1436 — reserved lock + single connection: XP deduction, the spell
+        # INSERT (_learn_spell(conn=conn)) and the grant ledger all commit as one
+        # atomic unit. No second-writer lock, no free-spell partial commit (#1390).
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT sheet_json, campaign_id FROM characters WHERE id = ?",
                            (character_id,)).fetchone()
         if not row:
@@ -2373,17 +2441,22 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: 
         conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
                      (json.dumps(sheet, ensure_ascii=False), character_id))
         try:
-            _learn_spell(character_id, req.spell_key)
+            _learn_spell(character_id, req.spell_key, conn=conn)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         conn.execute(
-            "INSERT INTO character_xp_grants (character_id, campaign_id, amount, reason, source) "
-            "VALUES (?, ?, ?, ?, 'spell_learn')",
-            (character_id, row["campaign_id"], -SPELL_LEARN_COST, f"Nauka zaklęcia: {req.spell_key}"),
+            "INSERT INTO character_xp_grants "
+            "(character_id, campaign_id, amount, reason, source, granted_by_user_id) "
+            "VALUES (?, ?, ?, ?, 'spell_learn', ?)",
+            (character_id, row["campaign_id"] or 0, -SPELL_LEARN_COST,
+             f"Nauka zaklęcia: {req.spell_key}", uid),
         )
         conn.commit()
         return {"ok": True, "spell_key": req.spell_key, "xp_spent": SPELL_LEARN_COST,
                 "xp_available": sheet["xp_available"]}
+    except HTTPException:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -2391,13 +2464,15 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: 
 @router.post("/characters/{character_id}/xp/spend-spell-upgrade")
 def spend_spell_upgrade(character_id: int, req: SpellSpendRequest, authorization: str | None = Header(None)):
     """X8 — Scholar upgrades a known spell rank: R2=50 XP, R3=100 XP."""
-    assert_character_owner(character_id, authorization, req.user_id)
+    uid = assert_character_owner(character_id, authorization, req.user_id)
     from app.services.dice import parse_character_sheet
     from app.services.spell_service import upgrade_spell as _upgrade_spell
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        # #1436 — reserved lock + single connection (see spend_spell_learn).
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT sheet_json, campaign_id FROM characters WHERE id = ?",
                            (character_id,)).fetchone()
         if not row:
@@ -2423,17 +2498,22 @@ def spend_spell_upgrade(character_id: int, req: SpellSpendRequest, authorization
         conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
                      (json.dumps(sheet, ensure_ascii=False), character_id))
         try:
-            _upgrade_spell(character_id, req.spell_key)
+            _upgrade_spell(character_id, req.spell_key, conn=conn)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         conn.execute(
-            "INSERT INTO character_xp_grants (character_id, campaign_id, amount, reason, source) "
-            "VALUES (?, ?, ?, ?, 'spell_upgrade')",
-            (character_id, row["campaign_id"], -cost, f"Ulepszenie zaklęcia: {req.spell_key} → R{new_rank}"),
+            "INSERT INTO character_xp_grants "
+            "(character_id, campaign_id, amount, reason, source, granted_by_user_id) "
+            "VALUES (?, ?, ?, ?, 'spell_upgrade', ?)",
+            (character_id, row["campaign_id"] or 0, -cost,
+             f"Ulepszenie zaklęcia: {req.spell_key} → R{new_rank}", uid),
         )
         conn.commit()
         return {"ok": True, "spell_key": req.spell_key, "new_rank": new_rank,
                 "xp_spent": cost, "xp_available": sheet["xp_available"]}
+    except HTTPException:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -2577,6 +2657,18 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     except Exception:
         sheet = {}
 
+    # #1435 — finalize-sheet is a ONE-SHOT end-of-creation step. It sets
+    # current_hp = max_hp / current_mana = max_mana and allows stat/skill
+    # redistribution. Calling it again mid-campaign would be a free full-heal +
+    # respec. Gate on a persisted flag: second and later calls → 409.
+    if sheet.get("creation_finalized"):
+        conn.close()
+        raise HTTPException(
+            status_code=409,
+            detail="Character creation already finalized — cannot re-finalize "
+                   "(no free heal/respec).",
+        )
+
     archetype = str(sheet.get("archetype") or "warrior").strip().lower()
     if archetype not in ("warrior", "scholar", "rogue"):
         archetype = "warrior"
@@ -2605,6 +2697,9 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
 
     if req.identity_overrides is not None:
         _apply_identity_overrides(rebuilt, req.identity_overrides)
+
+    # #1435 — stamp the one-shot flag so any subsequent finalize call is a 409.
+    rebuilt["creation_finalized"] = True
 
     conn.execute(
         """
@@ -2822,7 +2917,24 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest, au
     except Exception:
         existing_sheet_json = {}
 
-    merged_sheet_json = _deep_merge_dicts(existing_sheet_json, req.sheet_json)
+    # #1434 — strip authoritative/non-whitelisted keys BEFORE merging so a
+    # client can never overwrite level/stats/XP/HP/gold via this endpoint.
+    safe_patch, rejected_keys = _filter_sheet_patch(req.sheet_json)
+    if rejected_keys:
+        logger.warning(
+            "[patch_sheet] character %s — dropped non-editable keys: %s",
+            character_id, ", ".join(sorted(rejected_keys)),
+        )
+    if not safe_patch and req.sheet_json:
+        # Payload contained ONLY forbidden keys → nothing to write; reject loudly.
+        conn.close()
+        raise HTTPException(
+            status_code=422,
+            detail="No editable fields in patch. Authoritative fields "
+                   "(level/stats/skills/xp/hp/mana/gold) are server-owned.",
+        )
+
+    merged_sheet_json = _deep_merge_dicts(existing_sheet_json, safe_patch)
     _ensure_narrative_items_block(merged_sheet_json)
 
     conn.execute(

@@ -428,6 +428,11 @@ def spend_skill_rank_up(
     if not _skill_known_in_catalog(sk):
         raise ValueError("unknown_skill")
 
+    # #1436 — acquire a reserved lock BEFORE the read so two concurrent spends
+    # cannot both read the same xp_available and each write (xp - cost) → two
+    # ranks for one payment (double-spend race). Mirrors spell_service:643.
+    conn.execute("BEGIN IMMEDIATE")
+
     row = conn.execute(
         "SELECT sheet_json FROM characters WHERE id = ?",
         (character_id,),
@@ -489,6 +494,9 @@ def spend_stat_point_up(
     if not _stat_known_in_catalog(conn, raw_key):
         raise ValueError("unknown_stat")
 
+    # #1436 — reserved lock before the read (double-spend race guard, as above).
+    conn.execute("BEGIN IMMEDIATE")
+
     row = conn.execute(
         "SELECT sheet_json FROM characters WHERE id = ?",
         (character_id,),
@@ -536,6 +544,19 @@ def spend_stat_point_up(
         if delta:
             old_max = int(sheet.get("max_hp") or 0)
             sheet["max_hp"] = old_max + delta * level
+
+    # #1436 — INT change → recalculate max_mana for scholars: mana = 8 + INT_mod × level.
+    # Twin of the CON block; without it a scholar buying INT gets no extra mana.
+    if sk.upper() == "INT":
+        archetype = str(sheet.get("archetype") or "").strip().lower()
+        if archetype == "scholar":
+            level = int(sheet.get("level") or 1)
+            old_mod = (current - 10) // 2
+            new_mod = (new_value - 10) // 2
+            delta = new_mod - old_mod
+            if delta:
+                old_max = int(sheet.get("max_mana") or 0)
+                sheet["max_mana"] = max(1, old_max + delta * level)
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",

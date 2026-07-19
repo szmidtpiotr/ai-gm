@@ -532,11 +532,18 @@ def resolve_combat_effect_spell(
             "save_stat": save_stat, "mana_refund": mana_refund_on_resist(mana_cost), "save": save}
 
 
-def learn_spell(character_id: int, spell_key: str) -> dict:
+def learn_spell(character_id: int, spell_key: str, conn=None) -> dict:
     """Add a spell at rank 1 to character_spells. B7 (#652): bramkuje tier wg poziomu.
     #975 R6: bramkuje race_lock — krasnolud nie może nauczyć się ludzkiego czaru i vice versa.
+
+    #1436 — accepts an optional `conn` (managed pattern, cf. `record_spell_use`).
+    When the caller passes its own connection, the spell INSERT and the caller's
+    XP deduction commit atomically on ONE connection — no second-writer lock and
+    no partial commit (spell kept but XP rolled back = free spell, the #1390 bug).
     """
-    conn = _get_db()
+    managed = conn is None
+    if managed:
+        conn = _get_db()
     try:
         # Verify spell exists
         spell = conn.execute(
@@ -599,15 +606,22 @@ def learn_spell(character_id: int, spell_key: str) -> dict:
             "INSERT INTO character_spells (character_id, spell_key, rank, learned_at_level) VALUES (?, ?, 1, ?)",
             (character_id, spell_key, char_level),
         )
-        conn.commit()
+        if managed:
+            conn.commit()
         return {"spell_key": spell_key, "label": spell["label"], "rank": 1}
     finally:
-        conn.close()
+        if managed:
+            conn.close()
 
 
-def upgrade_spell(character_id: int, spell_key: str) -> dict:
-    """Upgrade a known spell to the next rank (max 3)."""
-    conn = _get_db()
+def upgrade_spell(character_id: int, spell_key: str, conn=None) -> dict:
+    """Upgrade a known spell to the next rank (max 3).
+
+    #1436 — optional `conn` (managed pattern); see `learn_spell` for the why.
+    """
+    managed = conn is None
+    if managed:
+        conn = _get_db()
     try:
         existing = conn.execute(
             "SELECT rank FROM character_spells WHERE character_id = ? AND spell_key = ?",
@@ -623,10 +637,12 @@ def upgrade_spell(character_id: int, spell_key: str) -> dict:
             "UPDATE character_spells SET rank = ? WHERE character_id = ? AND spell_key = ?",
             (new_rank, character_id, spell_key),
         )
-        conn.commit()
+        if managed:
+            conn.commit()
         return {"spell_key": spell_key, "rank": new_rank}
     finally:
-        conn.close()
+        if managed:
+            conn.close()
 
 
 def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
