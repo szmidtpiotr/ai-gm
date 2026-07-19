@@ -2467,7 +2467,9 @@ Ukończenie lub śmierć = cooldown startuje.
 
 **Inicjatywa:** raz na walkę dla wszystkich uczestników (`d20 + DEX_mod`), sortowanie malejące, remis → gracz wygrywa. Kolejność trzymana w `turn_order`. Runda bumpuje gdy pierwszy aktor dostaje kolejną turę. **Zgodne z założeniem:** jeden rzut inicjatywy na walkę, potem rundy wg modyfikatorów.
 
-**Skalowanie wrogów:** `hp_base × (1 + 0.1 × (poziom_gracza − 1))`. Lvl 5 = 1.4×, lvl 10 = 1.9×. Już działa, nie ruszać.
+**Skalowanie wrogów:** `hp_base × (1 + 0.1 × (poziom_gracza − 1))`. Lvl 5 = 1.4×, lvl 10 = 1.9×.
+
+> ⚠️ **ZASTĄPIONE (2026-07-19, #1471).** Ta prosta formuła per-wróg jest już nieaktualna jako główny mechanizm skalowania trudności. Trudność starć w podróży steruje **budżet spotkań BL-A7** (#1423 — composer = f(Power, suwak trudności)), a siłę i łup pojedynczego wroga — **power-curve wrogów** (#1376, per-tier statblocki + tabele łupów). Formuła HP powyżej zostaje jako fallback/mnożnik bazowy, ale NIE jest już źródłem prawdy o trudności. Nie budować nowej logiki na niej.
 
 ### System stref (engaged / ranged) — POTWIERDZONE OK
 
@@ -2604,7 +2606,7 @@ Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, pl
 |---------|--------|
 | Rozwiązanie ataku (d20 + modyfikatory, Nat 20/1) | ✅ działa, 🔒 zablokowane mechaniką |
 | Inicjatywa raz na walkę + rundy | ✅ działa zgodnie z założeniem |
-| Skalowanie HP wrogów do poziomu gracza | ✅ działa |
+| Skalowanie HP wrogów do poziomu gracza | ⚠️ ZASTĄPIONE (#1471) — trudność steruje budżet spotkań BL-A7 (#1423) + power-curve (#1376); formuła `hp_base × …` już tylko fallback |
 | Strefy engaged/ranged — zmiana strefy kosztuje turę | ✅ działa |
 | UI stref (kolumny DYSTANS/ZWARCIE + glify) | ✅ działa |
 | Efekty broni `on_hit_save` | ✅ działa, czeka na Unified Effects |

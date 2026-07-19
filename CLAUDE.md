@@ -163,8 +163,8 @@ Playwright + Express on port 4000 used by admin Test Runner. `BASE_URL=http://fr
 
 Scholar archetype has `current_mana` / `max_mana` tracked in sheet JSON. Mana deducted on every `spell_attack` combat action.
 
-- `game_config_spells` — 9 spells (tiers 1–5): magic_bolt, mend_wounds, arcane_shield, sleep, burning_arc, drain_life, chain_lightning, stone_skin, fireball
-- `character_spells` — spells known per character + rank (1/2/3). Scholar starts with magic_bolt + mend_wounds R1
+- `game_config_spells` — full spell catalog (tiers 1–5): fire_bolt, magic_bolt, minor_heal, mend_wounds, arcane_shield, ward_of_iron, spark_burst, detect_magic, sleep, burning_arc, drain_life, chain_lightning, stone_skin, fireball, … (+ dwarf race-locked: vein_tremor, rdzen_shield, rdzen_pulse, vein_bleed, deep_quake, black_vein)
+- `character_spells` — spells known per character + rank (1/2/3). Starting spells (`spell_service.py`): **human** Scholar = fire_bolt / minor_heal / ward_of_iron / detect_magic / spark_burst R1; **dwarf** Scholar = vein_tremor / rdzen_shield R1
 - `arcane_points` in `sheet_json` — earn 1/level, spend: 1pt = learn new spell, 1pt = R2, 2pt = R3
 - Miscast (Nat 1): stun only (L1-2), 1d4 self-dmg (L3-4), 1d6+stun (L5-7), 1d8+stun+secondary (L8+)
 - Nat 20 secondary (d6): double dmg / +stun / zone-change / burning condition
