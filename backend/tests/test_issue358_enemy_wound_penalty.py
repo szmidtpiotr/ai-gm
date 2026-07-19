@@ -156,42 +156,11 @@ def test_enemy_attack_result_has_wound_penalty_key():
         os.unlink(db)
 
 
-# ─── Test 2: critically wounded enemy (<25% HP) → -4 penalty ─────────────────
+# ─── Test 2: near-death enemy (≤10% HP) → -2 penalty (wariant A) ──────────────
 
-def test_critically_wounded_enemy_penalty_minus4():
-    """Wróg z <25% HP → wound_penalty == -4."""
-    db = _make_combat_db(enemy_hp_current=20, enemy_hp_max=100)  # 20% HP
-    try:
-        result = _run_enemy_attack(db)
-        assert result["wound_penalty"] == -4, (
-            f"Oczekiwano -4, dostaliśmy {result.get('wound_penalty')}"
-        )
-    finally:
-        os.unlink(db)
-
-
-# ─── Test 3: penalty actually reduces attack_roll ─────────────────────────────
-
-def test_critically_wounded_enemy_attack_roll_reduced():
-    """Wróg z <25% HP: attack_roll == raw + bonus + (-4)."""
-    attack_bonus = 2
-    raw = 10
-    db = _make_combat_db(enemy_hp_current=20, enemy_hp_max=100, attack_bonus=attack_bonus)
-    try:
-        result = _run_enemy_attack(db, raw_d20=raw)
-        expected = raw + attack_bonus + (-4)   # 10 + 2 - 4 = 8
-        assert result["attack_roll"] == expected, (
-            f"Oczekiwano attack_roll={expected}, dostaliśmy {result.get('attack_roll')}"
-        )
-    finally:
-        os.unlink(db)
-
-
-# ─── Test 4: lightly wounded enemy (26-50% HP) → -2 penalty ─────────────────
-
-def test_lightly_wounded_enemy_penalty_minus2():
-    """Wróg z 26-50% HP → wound_penalty == -2."""
-    db = _make_combat_db(enemy_hp_current=40, enemy_hp_max=100)  # 40% HP
+def test_near_death_enemy_penalty_minus2():
+    """Wróg z ≤10% HP → wound_penalty == -2 (wariant A łagodny)."""
+    db = _make_combat_db(enemy_hp_current=8, enemy_hp_max=100)  # 8% HP
     try:
         result = _run_enemy_attack(db)
         assert result["wound_penalty"] == -2, (
@@ -201,15 +170,46 @@ def test_lightly_wounded_enemy_penalty_minus2():
         os.unlink(db)
 
 
-# ─── Test 5: moderately wounded enemy (51-75% HP) → -1 penalty ───────────────
+# ─── Test 3: penalty actually reduces attack_roll ─────────────────────────────
 
-def test_moderately_wounded_enemy_penalty_minus1():
-    """Wróg z 51-75% HP → wound_penalty == -1."""
-    db = _make_combat_db(enemy_hp_current=60, enemy_hp_max=100)  # 60% HP
+def test_near_death_enemy_attack_roll_reduced():
+    """Wróg z ≤10% HP: attack_roll == raw + bonus + (-2)."""
+    attack_bonus = 2
+    raw = 10
+    db = _make_combat_db(enemy_hp_current=8, enemy_hp_max=100, attack_bonus=attack_bonus)
+    try:
+        result = _run_enemy_attack(db, raw_d20=raw)
+        expected = raw + attack_bonus + (-2)   # 10 + 2 - 2 = 10
+        assert result["attack_roll"] == expected, (
+            f"Oczekiwano attack_roll={expected}, dostaliśmy {result.get('attack_roll')}"
+        )
+    finally:
+        os.unlink(db)
+
+
+# ─── Test 4: seriously wounded enemy (11–25% HP) → -1 penalty ────────────────
+
+def test_seriously_wounded_enemy_penalty_minus1():
+    """Wróg z 11–25% HP → wound_penalty == -1 (wariant A)."""
+    db = _make_combat_db(enemy_hp_current=20, enemy_hp_max=100)  # 20% HP
     try:
         result = _run_enemy_attack(db)
         assert result["wound_penalty"] == -1, (
             f"Oczekiwano -1, dostaliśmy {result.get('wound_penalty')}"
+        )
+    finally:
+        os.unlink(db)
+
+
+# ─── Test 5: lightly wounded enemy (26–50% HP) → 0 (Ranny, tylko klimat) ──────
+
+def test_lightly_wounded_enemy_no_penalty():
+    """Wróg z 26–50% HP → wound_penalty == 0 (kara startuje dopiero ≤25%)."""
+    db = _make_combat_db(enemy_hp_current=40, enemy_hp_max=100)  # 40% HP
+    try:
+        result = _run_enemy_attack(db)
+        assert result["wound_penalty"] == 0, (
+            f"Oczekiwano 0, dostaliśmy {result.get('wound_penalty')}"
         )
     finally:
         os.unlink(db)

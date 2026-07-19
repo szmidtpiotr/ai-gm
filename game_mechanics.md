@@ -2507,16 +2507,22 @@ Gracz widzi kto gdzie stoi. **Do rozważenia (niski priorytet):** wizualne "lini
 > **Co się zepsuje, jeśli odwrócić tę decyzję?**
 > Jeśli usuniemy karę wrogom, znika taktyka skupiania ognia — gracz równie dobrze może rozkładać ataki na wszystkich. Walka staje się mniej ciekawa, a permadeath bardziej frustrujący (gracz karany, wróg nie).
 
-**Docelowe progi ran (po unifikacji, do walidacji w playteście):**
+**Progi ran — WARIANT A (łagodny), WDROŻONE G1 #1459/#1458 (2026-07-19, decyzja Piotra):**
+
+Jedno źródło prawdy = `backend/app/services/wound_utils.py::WOUND_TIERS`. Ta tabela,
+`WOUND_TIERS` i Księga Zasad (`frontend/rules/index.html`, § Stopnie ran) są identyczne.
+Kara `wound_penalty()` doliczana do: rzutu ataku gracza (`weapon_rules.resolve_attack_roll_for_weapon`),
+testów umiejętności (`skill_service.calc_skill_modifier_info`) oraz — symetrycznie — do ataku
+wroga (`combat_service._resolve_enemy_attack_turn`). Liczby to wartość startowa — do dostrojenia po playteście.
 
 | HP % | Etykieta | Kara mechaniczna |
 |---|---|---|
 | > 50% | (brak) | — |
 | 26–50% | Ranny | 0 — tylko klimat/narracja |
-| 11–25% | Poważnie ranny | −1 do trafienia |
-| 1–10% | Na skraju śmierci | −2 do trafienia, −1 DEX |
+| 11–25% | Poważnie ranny | −1 do trafienia i testów |
+| 1–10% | Na skraju śmierci | −2 do trafienia i testów, −1 DEX (dane w źródle; wiring silnika DEX = follow-up) |
 
-> **Dlaczego łagodniej niż obecny frontend?**
+> **Dlaczego łagodniej niż stary frontend (wariant B ostry: −1 już od <75% HP)?**
 > Obecny frontend pokazuje karę już od 51% HP. Przy permadeach to grozi "spiralą śmierci": jesteś ranny → bijesz słabiej → dostajesz więcej → bijesz jeszcze słabiej → giniesz bez szansy na odwrót. Przesunięcie pierwszej realnej kary na ≤25% HP daje graczowi okno na ucieczkę lub leczenie. Liczby to wartość startowa — do dostrojenia po testach.
 
 **Stan obecny — DWA problemy:**

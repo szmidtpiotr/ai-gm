@@ -345,7 +345,18 @@ def resolve_attack_roll_for_weapon(
         fatigue_penalty = _fat_pen(sheet.get("conditions") or [], sheet.get("race"))
     except Exception:
         fatigue_penalty = 0
-    modifier = stat_mod + skill_rank + proficiency + weapon_bonus + fatigue_penalty
+    # G1 #1458: kara za rany (wariant A łagodny) obowiązuje też atak gracza — symetria
+    # z torem wroga (combat_service _resolve_enemy_attack_turn dolicza wound_penalty).
+    # Ranny bohater trafia rzadziej; malus ze STARTEM od ≤25% HP (wound_utils = źródło).
+    try:
+        from app.services.wound_utils import wound_penalty as _wound_pen
+        wound_penalty = _wound_pen(
+            int(sheet.get("current_hp", 0) or 0),
+            int(sheet.get("max_hp", 0) or 0),
+        )
+    except Exception:
+        wound_penalty = 0
+    modifier = stat_mod + skill_rank + proficiency + weapon_bonus + fatigue_penalty + wound_penalty
     total = raw + modifier
     return {
         "test": test,
@@ -356,6 +367,7 @@ def resolve_attack_roll_for_weapon(
         "proficiency": proficiency,
         "weapon_bonus": weapon_bonus,
         "fatigue_penalty": fatigue_penalty,
+        "wound_penalty": wound_penalty,
         "modifier": modifier,
         "total": total,
         "roll_type": "attack",

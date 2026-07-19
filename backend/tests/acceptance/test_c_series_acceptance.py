@@ -59,13 +59,14 @@ def env():
 # ── C4 / C5 — wound penalty thresholds (pure unit) ──────────────────────────
 
 def test_c04_wound_penalty_four_thresholds():
-    """C4 — wound_penalty(hp_current, hp_max) maps HP% to 0/-1/-2/-4."""
+    """C4 — wound_penalty(hp_current, hp_max) maps HP% to 0/0/-1/-2 (wariant A, G1 #1459)."""
     from app.services.wound_utils import wound_penalty
 
     assert wound_penalty(100, 100) == 0      # healthy
-    assert wound_penalty(60, 100) == -1      # moderate
-    assert wound_penalty(30, 100) == -2      # serious
-    assert wound_penalty(10, 100) == -4      # critical
+    assert wound_penalty(60, 100) == 0       # >50% → brak kary
+    assert wound_penalty(30, 100) == 0       # 26-50% → Ranny, klimat
+    assert wound_penalty(20, 100) == -1      # 11-25% → serious
+    assert wound_penalty(8, 100) == -2       # <=10% → near_death
     assert wound_penalty(50, 0) == 0         # guard: no max → no penalty
 
 
@@ -75,8 +76,8 @@ def test_c05_wound_penalty_symmetric_for_enemies():
     import app.services.combat_service as cs
     import inspect
 
-    # An enemy at 20% HP must incur the critical penalty exactly like a player.
-    assert wound_penalty(20, 100) == -4
+    # An enemy at 8% HP must incur the near-death penalty exactly like a player.
+    assert wound_penalty(8, 100) == -2
     # And the combat resolver must actually reference wound_penalty (symmetry).
     src = inspect.getsource(cs)
     assert "wound_penalty" in src, "combat_service nie używa wound_penalty (C5 symetria)"

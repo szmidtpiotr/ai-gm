@@ -152,7 +152,18 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str, conn=None, character_i
         disease_penalty = compute_disease_penalty(sheet.get("conditions") or [])
     except Exception:
         disease_penalty = 0
-    total = skill_rank + stat_mod + proficiency + fatigue_penalty + disease_penalty
+    # G1 #1458: kara za rany (wariant A łagodny) obniża KAŻDY test umiejętności,
+    # obok zmęczenia i choroby. Osobny prymityw (wound_utils = jedno źródło), start
+    # od ≤25% HP. Symetria z atakiem (weapon_rules) i torem wroga (combat_service).
+    try:
+        from app.services.wound_utils import wound_penalty as _wound_pen
+        wound_penalty = _wound_pen(
+            int(sheet.get("current_hp", 0) or 0),
+            int(sheet.get("max_hp", 0) or 0),
+        )
+    except Exception:
+        wound_penalty = 0
+    total = skill_rank + stat_mod + proficiency + fatigue_penalty + disease_penalty + wound_penalty
     return {
         "governing_stat": governing_stat,
         "skill_rank": skill_rank,
@@ -160,6 +171,7 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str, conn=None, character_i
         "proficiency": proficiency,
         "fatigue_penalty": fatigue_penalty,
         "disease_penalty": disease_penalty,
+        "wound_penalty": wound_penalty,
         "equipment_bonus": equipment_bonus,
         "total": total,
     }
