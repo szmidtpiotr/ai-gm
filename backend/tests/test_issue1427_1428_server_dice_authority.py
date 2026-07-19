@@ -112,6 +112,23 @@ def _setup_combat_db(tmp: Path):
     conn.close()
 
 
+def _force_player_turn(tmp: Path):
+    """Po initiate_combat inicjatywa może dać pierwszą turę wrogowi. Ten test bada wyłącznie
+    autorytet kości (#1427), więc wymuszamy turę gracza, by ominąć bramkę tury z #1429
+    (Krok 3) — inaczej resolve_attack słusznie rzuca not_player_turn."""
+    conn = sqlite3.connect(str(tmp))
+    row = conn.execute("SELECT combatants FROM active_combat WHERE campaign_id=1").fetchone()
+    pid = "player"
+    if row and row[0]:
+        for c in json.loads(row[0]):
+            if str(c.get("id", "")).startswith("player"):
+                pid = c["id"]
+                break
+    conn.execute("UPDATE active_combat SET current_turn=? WHERE campaign_id=1", (pid,))
+    conn.commit()
+    conn.close()
+
+
 @patch("app.services.loot_service.roll_loot", return_value=[])
 @patch("app.services.combat_service.roll_damage_dice", return_value=5)
 def test_player_attack_ignores_client_dice(_dmg, _loot):
@@ -124,6 +141,7 @@ def test_player_attack_ignores_client_dice(_dmg, _loot):
          patch.object(admin_config, "DB_PATH", str(tmp)), \
          patch("app.services.combat_service._create_pending_combat_enemy", return_value=None):
         cs.initiate_combat(1, 1, ["bandit"])
+        _force_player_turn(tmp)
         with patch("app.services.combat_service.roll_d20", return_value=20):
             res = cs.resolve_attack(
                 1,
@@ -154,6 +172,7 @@ def test_non_authoritative_default_still_trusts_caller(_dmg, _loot):
          patch.object(admin_config, "DB_PATH", str(tmp)), \
          patch("app.services.combat_service._create_pending_combat_enemy", return_value=None):
         cs.initiate_combat(1, 1, ["bandit"])
+        _force_player_turn(tmp)
         res = cs.resolve_attack(1, roll_result=None, attacker="player", raw_d20=1)
     assert res["player_raw_d20"] == 1  # podany raw uszanowany w trybie nie-autorytatywnym
 
