@@ -163,6 +163,9 @@ def _get_character_level(conn: sqlite3.Connection, character_id: int) -> int:
 def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(LOOT_DB_PATH)
     conn.row_factory = sqlite3.Row
+    # AUDIT #1438: block on a concurrent writer rather than raising immediately, so
+    # the CAS decrement in sell_item resolves to rowcount 0 instead of a lock error.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -629,6 +632,92 @@ def _reputation_buy_multiplier(conn, character_id: int, npc_id: int | None = Non
         return 1.0
 
 
+def combined_buy_multiplier(
+    conn: sqlite3.Connection,
+    character_id: int,
+    npc_id: int | None,
+    item_type: str,
+    *,
+    is_black_market: bool = False,
+    haggle_discount: float = 0.0,
+) -> float:
+    """AUDIT #1439 — assemble EVERY buy-price multiplier into one product and clamp
+    ONCE at the end to [0.4, 2.0].
+
+    The old buy path clamped CHA×haggle early (`effective_buy_multiplier`) and THEN
+    multiplied dwarf ×0.85, reputation, black-market and regional event on top, so
+    the true floor silently sank to ~0.27 — well under the intended 0.40 — opening a
+    buy-cheap / sell-dear arbitrage. Building the raw product and clamping a single
+    time closes that. Also the single source of truth for the sell-side arbitrage
+    cap, so buy and sell always agree on the item's fair market multiplier.
+    """
+    cha = _get_character_cha(conn, character_id)
+    raw = _cha_buy_multiplier(cha) * (1.0 - float(haggle_discount or 0.0))
+    if _get_character_race(conn, character_id) == "dwarf":
+        raw *= (1.0 - DWARF_SHOP_DISCOUNT)
+    rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
+    if rep_mult != 1.0:
+        raw *= rep_mult
+    if is_black_market:
+        raw *= night_econ.BLACK_MARKET_BUY_MULT
+    ev_mult = _event_price_multiplier(conn, character_id, item_type)
+    if ev_mult != 1.0:
+        raw *= ev_mult
+    return round(max(0.4, min(2.0, raw)), 4)
+
+
+def _current_location_key_for_character(conn: sqlite3.Connection, character_id: int) -> str | None:
+    """AUDIT #1439 — the character's current world-location key, or None when it
+    cannot be resolved (no campaign / lightweight test fixture)."""
+    try:
+        cid = _campaign_id_for_character(conn, character_id)
+        if not cid:
+            return None
+        from app.services.location_state_service import get_current_location_key
+        return get_current_location_key(conn, int(cid)) or None
+    except Exception:
+        return None
+
+
+def _npc_serves_location(conn: sqlite3.Connection, npc: sqlite3.Row, location_key: str | None) -> bool:
+    """AUDIT #1439 — True if this shop NPC is present at ``location_key``.
+
+    An NPC with NO location assignments at all is treated as global (present
+    everywhere) so seed/test merchants are never falsely rejected; one WITH
+    assignments must list the player's current location, otherwise the buyer is
+    trying to shop at a merchant in another region by raw id → npc_not_here.
+    """
+    if not location_key:
+        return True
+    loc = str(location_key).strip().lower()
+    npc_id = int(npc["id"])
+    npc_key = str(npc["key"] or "")
+    assigned: list[str] = []
+    try:
+        assigned += [
+            str(r[0]).strip().lower()
+            for r in conn.execute(
+                "SELECT location_key FROM npc_locations WHERE npc_id = ?", (npc_id,)
+            ).fetchall()
+        ]
+    except sqlite3.OperationalError:
+        pass
+    try:
+        assigned += [
+            str(r[0]).strip().lower()
+            for r in conn.execute(
+                "SELECT location_key FROM location_npc_assignments "
+                "WHERE npc_key = ? AND COALESCE(is_active, 1) = 1",
+                (npc_key,),
+            ).fetchall()
+        ]
+    except sqlite3.OperationalError:
+        pass
+    if not assigned:
+        return True
+    return loc in assigned
+
+
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
@@ -665,33 +754,46 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
             base_price = int(cat["value_gp"] or 0)
             if base_price <= 0:
                 raise ValueError("price_or_catalog_missing")
+        # AUDIT #1439 (P1): a direct POST /buy bypassed the availability filters the
+        # shop VIEW enforces (`_item_passes_filters`) — a level-1 hero could buy a
+        # min_level-10 item, and any NPC id from another region was buyable remotely.
+        # Enforce both here. min_level is always checked; the location-tag filter and
+        # NPC-presence check apply only when we can resolve the player's location
+        # (campaignless test characters keep working). BM fragment is synthetic (no
+        # catalog row) and skips the item filter.
+        char_level = _get_character_level(conn, character_id)
+        server_location = _current_location_key_for_character(conn, character_id)
+        if not _is_bm_frag:
+            if char_level < int(cat.get("min_level") or 1):
+                raise ValueError("item_not_available")
+            if server_location and not _item_passes_filters(cat, char_level, server_location):
+                raise ValueError("item_not_available")
+        if server_location and not _npc_serves_location(conn, npc, server_location):
+            raise ValueError("npc_not_here")
         # F10 (#470): CHA modifies actual buy price (discount/markup, symmetric to sell).
         # S6 (#586): jednorazowy rabat z targowania stackuje multiplikatywnie z CHA.
+        # AUDIT #1439: PEEK the haggle discount for pricing; it is CONSUMED only after
+        # the gold check succeeds (a failed purchase must not burn the discount), and
+        # ALL multipliers are assembled + clamped ONCE inside combined_buy_multiplier
+        # (no more early-clamp-then-multiply arbitrage below the 0.40 floor).
         cha = _get_character_cha(conn, character_id)
-        haggle_discount = _consume_haggle_for_character(conn, character_id)
-        eff_buy_mult = haggle_service.effective_buy_multiplier(_cha_buy_multiplier(cha), haggle_discount)
-        # #973 R4: Kowalskie oko — krasnolud płaci mniej u kowala (15% startowo)
-        race = _get_character_race(conn, character_id)
-        if race == "dwarf":
-            eff_buy_mult = round(eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT), 4)
-        # #1099/#1103: reputation shifts prices — region + faction (best deal).
-        rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
-        if rep_mult != 1.0:
-            eff_buy_mult = round(eff_buy_mult * rep_mult, 4)
-        # #1127: black-market surcharge stacks on top of everything else.
-        if night_state["is_black_market"]:
-            eff_buy_mult = round(eff_buy_mult * night_econ.BLACK_MARKET_BUY_MULT, 4)
-        # #1193: aktywne wydarzenie regionalne modyfikuje cenę per kategoria
-        # (musi zgadzać się z podglądem w get_shop_inventory).
-        ev_mult = _event_price_multiplier(conn, character_id, item_type)
-        if ev_mult != 1.0:
-            eff_buy_mult = round(eff_buy_mult * ev_mult, 4)
+        haggle_discount = _peek_haggle_for_character(conn, character_id)
+        eff_buy_mult = combined_buy_multiplier(
+            conn, character_id, npc_id, item_type,
+            is_black_market=bool(night_state["is_black_market"]),
+            haggle_discount=haggle_discount,
+        )
         price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price
 
     # Validate gold first for cleaner error mapping.
     cur_gold = int(get_character_gold(character_id))
     if cur_gold < price:
         raise ValueError("insufficient_gold")
+
+    # AUDIT #1439: gold check passed → NOW consume the one-shot haggle discount.
+    with _conn() as _c2:
+        _consume_haggle_for_character(_c2, character_id)
+        _c2.commit()
 
     # Use existing economy and loot services.
     new_gold = apply_character_gold_delta(character_id, -price, "shop_purchase")
@@ -812,14 +914,38 @@ def sell_item(character_id: int, inventory_id: int, npc_id: int | None = None) -
             af_mult = 1.0
             earned = cha_sell_price
 
+        # AUDIT #1439 (P1): kill buy-low / sell-high arbitrage. Cap the payout
+        # strictly BELOW what it would cost to buy the SAME item back from this NPC
+        # right now, so a round-trip can never net gold no matter how CHA / dwarf /
+        # reputation / event multipliers drift apart between the two sides.
+        buy_mult = combined_buy_multiplier(
+            conn, character_id, npc_id, item_type,
+            is_black_market=bool(night_state.get("is_black_market")),
+        )
+        buy_price_back = max(1, int(math.floor(base_price * buy_mult))) if base_price > 0 else 0
+        if buy_price_back > 0:
+            earned = max(0, min(int(earned), buy_price_back - 1))
+
+        # AUDIT #1438 (P1): double-sell race. The old SELECT → unconditional
+        # DELETE → credit let two concurrent requests on the same inventory_id both
+        # pass the SELECT, both credit gold, while the second DELETE was a silent
+        # no-op → double payout for one physical item. Compare-and-swap on the read
+        # quantity: only one racer's decrement lands; the loser sees rowcount 0 and
+        # is rejected BEFORE any gold is credited.
         qty = int(row["quantity"] or 1)
         if qty > 1:
-            conn.execute(
-                "UPDATE character_inventory SET quantity = ? WHERE id = ?",
-                (qty - 1, int(row["id"])),
+            mut = conn.execute(
+                "UPDATE character_inventory SET quantity = quantity - 1 "
+                "WHERE id = ? AND quantity = ?",
+                (int(row["id"]), qty),
             )
         else:
-            conn.execute("DELETE FROM character_inventory WHERE id = ?", (int(row["id"]),))
+            mut = conn.execute(
+                "DELETE FROM character_inventory WHERE id = ? AND quantity = ?",
+                (int(row["id"]), qty),
+            )
+        if mut.rowcount == 0:
+            raise ValueError("inventory_not_found")
         # #1158: kredyt złota + tag anti-farm w TEJ SAMEJ transakcji co usunięcie
         # przedmiotu — jedno połączenie, jeden commit. Wcześniej DELETE commitował się
         # (linia 729), a wypłata szła osobnym połączeniem: awaria między nimi niszczyła

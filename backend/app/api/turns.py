@@ -185,6 +185,12 @@ def _maybe_clear_surprise_on_location_change(
             if "intimidated_enemies" in _sf_lc:
                 _sf_lc.pop("intimidated_enemies")
                 _changed_lc = True
+            # AUDIT #1439: targowanie jest per-scena — zmiana lokacji zeruje licznik
+            # prób i zdejmuje blokadę obrażonego kupca (nowy kupiec, świeży limit).
+            for _hk in ("haggle_attempts", "haggle_blocked"):
+                if _hk in _sf_lc:
+                    _sf_lc.pop(_hk)
+                    _changed_lc = True
             if not _prev_had_enemies:
                 for _k_lc in ("pending_zaskoczony", "pending_zaskoczony_quality"):
                     if _k_lc in _sf_lc:
@@ -8719,10 +8725,14 @@ def resolve_skill_test_endpoint(
         # Mechanika decyduje (stopień testu → mnożnik), LLM tylko narruje (CZĘŚĆ 10).
         if str(pending.get("skill_key", "")).lower() == "haggling":
             try:
-                from app.services.haggle_service import apply_haggle_outcome
+                from app.services.haggle_service import apply_haggle_outcome, increment_haggle_attempts
                 _hg = apply_haggle_outcome(session_flags, result.get("outcome", "FAILURE"))
+                # AUDIT #1439: count this attempt toward the per-scene cap so the
+                # player cannot re-roll haggling every turn until they land a success.
+                _hg_attempts = increment_haggle_attempts(session_flags)
                 logger.info("haggle_outcome_applied", campaign_id=campaign_id,
-                            discount=_hg.get("discount"), blocked=_hg.get("blocked"))
+                            discount=_hg.get("discount"), blocked=_hg.get("blocked"),
+                            attempts=_hg_attempts)
             except Exception as _hg_err:
                 logger.warning("haggle_outcome_error", error=str(_hg_err))
 

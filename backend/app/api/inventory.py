@@ -161,7 +161,17 @@ def get_character_gold(character_id: int):
 
 @router.post("/characters/{character_id}/gold")
 def post_character_gold_delta(character_id: int, body: GoldDeltaRequest, authorization: str | None = Header(None)):
+    # AUDIT #1437 (P0): this endpoint is SPEND-ONLY. Ownership alone does NOT close
+    # the hole — a player owns their own character, so a positive `delta` here was a
+    # master self-cheat (unlimited gold on your own hero). Gold GRANTS must originate
+    # server-side only, through the economy chokepoint (economy_service.change_gold:
+    # loot / quest / shop-sell / treasure). Client requests may only DEBIT gold.
     assert_character_owner(character_id, authorization)
+    if int(body.delta) > 0:
+        raise HTTPException(
+            status_code=403,
+            detail="gold grant forbidden: positive delta rejected — grants are server-authoritative only",
+        )
     try:
         if int(body.delta) == 0:
             raise HTTPException(status_code=400, detail="delta must be non-zero")

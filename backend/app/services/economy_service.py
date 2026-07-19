@@ -266,18 +266,38 @@ def change_gold(
     """
     cid = int(character_id)
     d = int(delta)
-    row = conn.execute(
-        "SELECT gold_gp FROM characters WHERE id = ?", (cid,)
-    ).fetchone()
-    if not row:
-        raise ValueError("character not found")
-    cur = int(row["gold_gp"] or 0)
+    # AUDIT #1438 (P1): mutate atomically. The old read-modify-write
+    # (SELECT gold_gp → compute in Python → UPDATE gold_gp = <value>) was a
+    # lost-update race: two concurrent debits both read 100 and both wrote 0,
+    # letting a player buy two items for the price of one. A single conditional
+    # UPDATE (`gold_gp = gold_gp + ?` guarded by `... + ? >= 0`) is serialized by
+    # SQLite's write lock, so at most one of the concurrent debits can succeed.
     if d == 0:
-        return cur
-    new_g = cur + d
-    if new_g < 0 and not allow_negative:
-        raise ValueError("gold_gp would be negative")
-    conn.execute("UPDATE characters SET gold_gp = ? WHERE id = ?", (new_g, cid))
+        row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            raise ValueError("character not found")
+        return int(row["gold_gp"] or 0)
+    if allow_negative:
+        upd = conn.execute(
+            "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
+            (d, cid),
+        )
+        if upd.rowcount == 0:
+            raise ValueError("character not found")
+    else:
+        upd = conn.execute(
+            "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? "
+            "WHERE id = ? AND COALESCE(gold_gp, 0) + ? >= 0",
+            (d, cid, d),
+        )
+        if upd.rowcount == 0:
+            # Disambiguate: missing character vs. insufficient funds.
+            exists = conn.execute("SELECT 1 FROM characters WHERE id = ?", (cid,)).fetchone()
+            if not exists:
+                raise ValueError("character not found")
+            raise ValueError("gold_gp would be negative")
+    row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+    new_g = int(row["gold_gp"] or 0)
     # Resolve campaign for the journal: explicit arg wins, else fall back to the
     # character's own campaign_id (column may be absent in minimal test fixtures).
     cid_for_clock = campaign_id

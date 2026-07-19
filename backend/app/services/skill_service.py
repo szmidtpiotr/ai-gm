@@ -485,13 +485,16 @@ def intercept_skill_test_tag(
     # ale narracja pozostaje. Blokada gaśnie przy zmianie sceny/lokacji.
     if skill_key == "haggling":
         try:
-            from app.services.haggle_service import is_haggle_blocked
+            from app.services.haggle_service import is_haggle_blocked, is_haggle_capped
             gs = conn.execute(
                 "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
                 (campaign_id,),
             ).fetchone()
             flags = json.loads((gs[0] if gs else None) or "{}")
-            if is_haggle_blocked(flags):
+            # AUDIT #1439: block a re-roll when the merchant is offended (crit-fail)
+            # OR the per-scene attempt cap is exhausted — the tag is stripped so the
+            # player gets no dice card, but the narration survives.
+            if is_haggle_blocked(flags) or is_haggle_capped(flags):
                 cleaned = (prose[:m.start()].rstrip() + prose[m.end():]).strip()
                 return cleaned, None
         except Exception:

@@ -237,6 +237,10 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
 def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(LOOT_DB_PATH)
     conn.row_factory = sqlite3.Row
+    # AUDIT #1438: wait out a concurrent writer's lock instead of raising
+    # "database is locked" immediately — the CAS decrements above need the second
+    # racer to reach its UPDATE/DELETE (and see rowcount 0), not die on the lock.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -2502,11 +2506,25 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         sheet["max_mana"] = max_mana
         sheet["conditions"] = conditions
 
-        next_qty = int(row["quantity"] or 1) - 1
+        # AUDIT #1438 (P1): double-heal race. Two concurrent uses of the LAST
+        # potion both read quantity=1, both apply the heal to the sheet, both DELETE
+        # (second is a silent no-op) → the sheet is written twice = double heal for
+        # one consumable. Compare-and-swap on the read quantity so only one racer's
+        # decrement lands; the loser raises BEFORE the sheet_json write is committed.
+        cur_qty = int(row["quantity"] or 1)
+        next_qty = cur_qty - 1
         if next_qty > 0:
-            conn.execute("UPDATE character_inventory SET quantity = ? WHERE id = ?", (next_qty, iid))
+            mut = conn.execute(
+                "UPDATE character_inventory SET quantity = quantity - 1 WHERE id = ? AND quantity = ?",
+                (iid, cur_qty),
+            )
         else:
-            conn.execute("DELETE FROM character_inventory WHERE id = ?", (iid,))
+            mut = conn.execute(
+                "DELETE FROM character_inventory WHERE id = ? AND quantity = ?",
+                (iid, cur_qty),
+            )
+        if mut.rowcount == 0:
+            raise ValueError("inventory entry not found")
 
         conn.execute(
             "UPDATE characters SET sheet_json = ? WHERE id = ?",

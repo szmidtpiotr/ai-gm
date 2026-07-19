@@ -16,6 +16,12 @@ from typing import Any
 # session_flags keys
 _FLAG_DISCOUNT = "haggle_discount"   # float: player advantage (+ = taniej/lepiej)
 _FLAG_BLOCKED = "haggle_blocked"     # bool: kupiec obrażony (blokada do końca sceny)
+_FLAG_ATTEMPTS = "haggle_attempts"   # int: liczba prób targowania w tej scenie/lokacji
+
+# AUDIT #1439 (P1): per-scene cap on haggle attempts (mirror gamble=3). Without it,
+# a normal FAILURE just let the player re-roll haggling every turn until they hit a
+# SUCCESS/CRITICAL — an unbounded free discount grinder. Reset on location change.
+MAX_HAGGLE_ATTEMPTS_PER_SCENE = 3
 
 # Stopień testu (S1) → przewaga gracza (ułamek). Design doc: sukces −10–25%,
 # crit −30–50%, crit-fail +10%. Bierzemy środek widełek jako wartość startową.
@@ -75,6 +81,32 @@ def is_haggle_blocked(session_flags: dict) -> bool:
 
 def clear_haggle_block(session_flags: dict) -> None:
     """Zdejmij blokadę (np. przy zmianie lokacji/sceny)."""
+    session_flags.pop(_FLAG_BLOCKED, None)
+
+
+def haggle_attempts(session_flags: dict) -> int:
+    """AUDIT #1439 — liczba prób targowania odbytych w tej scenie/lokacji."""
+    try:
+        return int(session_flags.get(_FLAG_ATTEMPTS) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def increment_haggle_attempts(session_flags: dict) -> int:
+    """AUDIT #1439 — policz kolejną próbę targowania (mutacja in-place)."""
+    n = haggle_attempts(session_flags) + 1
+    session_flags[_FLAG_ATTEMPTS] = n
+    return n
+
+
+def is_haggle_capped(session_flags: dict) -> bool:
+    """AUDIT #1439 — czy wyczerpano limit prób targowania w tej scenie."""
+    return haggle_attempts(session_flags) >= MAX_HAGGLE_ATTEMPTS_PER_SCENE
+
+
+def reset_haggle_scene(session_flags: dict) -> None:
+    """AUDIT #1439 — wyzeruj licznik prób i zdejmij blokadę (zmiana lokacji/sceny)."""
+    session_flags.pop(_FLAG_ATTEMPTS, None)
     session_flags.pop(_FLAG_BLOCKED, None)
 
 

@@ -836,13 +836,20 @@ def _payout(conn: sqlite3.Connection, campaign_id: int, character_id: int,
         except Exception as e:
             logger.warning("treasure_payout_grant_failed", error=str(e))
     if gold > 0:
+        # AUDIT #1440 (P2): route the payout through the authoritative economy
+        # chokepoint. The old code wrote `gold` (COALESCE(gold,0)+?), but the real
+        # column is `gold_gp` — the write hit a non-authoritative/absent column,
+        # swallowed by `except OperationalError`, so treasure gold was SILENTLY LOST
+        # and never journaled. change_gold credits `gold_gp` and records the entry;
+        # it operates on this conn without committing (the conn.commit() below owns it).
         try:
-            conn.execute(
-                "UPDATE characters SET gold = COALESCE(gold, 0) + ? WHERE id = ?",
-                (gold, character_id),
+            from app.services.economy_service import change_gold
+            change_gold(
+                conn, int(character_id), int(gold), "treasure",
+                campaign_id=int(campaign_id) if campaign_id else None,
             )
-        except sqlite3.OperationalError:
-            pass
+        except Exception as e:
+            logger.warning("treasure_payout_gold_failed", error=str(e))
 
     conn.execute(
         "UPDATE world_treasures SET state = 'found', found_at = ?, "

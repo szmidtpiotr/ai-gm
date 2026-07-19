@@ -290,12 +290,35 @@ def sell_component(character_id: int, npc_id: int, inventory_id: int) -> dict[st
         haggle_discount = shop_service._consume_haggle_for_character(conn, character_id)
         sell_ratio = haggle_service.effective_sell_ratio(GUILD_SELL_RATIO, haggle_discount)
         earned = max(1, int(math.floor(base * sell_ratio))) if base > 0 else 0
+        # AUDIT #1439 (P1): count guild sales in the anti-farm decay window too —
+        # otherwise guild fencing was a decay-free farm loop parallel to shop_sell.
+        try:
+            from app.services.anti_farm_service import get_anti_farm_multiplier, apply_anti_farm
+            earned = apply_anti_farm(earned, get_anti_farm_multiplier(conn, character_id, item_key))
+        except Exception:
+            pass
+        # AUDIT #1439: never pay more for a component than it would cost to buy it
+        # back here (kill the guild buy-low/sell-high round-trip).
+        buy_mult = shop_service.combined_buy_multiplier(conn, character_id, npc_id, "item", is_black_market=False)
+        buy_price = max(1, int(math.floor(base * buy_mult))) if base > 0 else 0
+        if buy_price > 0:
+            earned = max(0, min(earned, buy_price - 1))
 
+        # AUDIT #1438 (P1): compare-and-swap decrement (see sell_item) — reject the
+        # racing duplicate before crediting gold instead of a silent no-op DELETE.
         qty = int(row["quantity"] or 1)
         if qty > 1:
-            conn.execute("UPDATE character_inventory SET quantity = ? WHERE id = ?", (qty - 1, int(row["id"])))
+            mut = conn.execute(
+                "UPDATE character_inventory SET quantity = quantity - 1 WHERE id = ? AND quantity = ?",
+                (int(row["id"]), qty),
+            )
         else:
-            conn.execute("DELETE FROM character_inventory WHERE id = ?", (int(row["id"]),))
+            mut = conn.execute(
+                "DELETE FROM character_inventory WHERE id = ? AND quantity = ?",
+                (int(row["id"]), qty),
+            )
+        if mut.rowcount == 0:
+            raise ValueError("inventory_not_found")
         from app.services.economy_service import change_gold
         new_gold = change_gold(conn, int(character_id), int(earned), "guild_sell", meta={"item_key": item_key})
         conn.commit()

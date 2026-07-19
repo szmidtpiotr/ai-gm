@@ -41,7 +41,12 @@ def _make_db() -> sqlite3.Connection:
         """ + table_sql("game_config_loot_entries") + """
         """ + table_sql("game_config_enemies") + """
         CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT);
-        CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, gold INTEGER DEFAULT 0);
+        CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, gold INTEGER DEFAULT 0, gold_gp INTEGER DEFAULT 0);
+        CREATE TABLE character_gold_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, delta INTEGER,
+            source TEXT, campaign_id INTEGER, meta_json TEXT, game_clock_day INTEGER DEFAULT 1,
+            wall_clock_at TEXT NOT NULL DEFAULT (datetime('now')), reverted_at TEXT
+        );
         """
     )
     # player stands on (5,5); free overworld hexes elsewhere for burying treasure
@@ -160,8 +165,9 @@ def test_payout_no_guardian(monkeypatch):
     t = conn.execute("SELECT state, found_by_character_id FROM world_treasures WHERE id = ?", (tid,)).fetchone()
     assert t["state"] == "found"
     assert t["found_by_character_id"] == 900
-    # gold credited to the hero
-    g = conn.execute("SELECT gold FROM characters WHERE id = 900").fetchone()["gold"]
+    # AUDIT #1440: gold credited to the hero via economy_service.change_gold →
+    # the authoritative gold_gp column (was the dead `gold` column before the fix).
+    g = conn.execute("SELECT gold_gp FROM characters WHERE id = 900").fetchone()["gold_gp"]
     assert g == ts.TREASURE_GOLD_FLOOR
     # one-time: second payout attempt finds nothing
     res2 = ts.resolve_dig_success(conn, 7, 900, tid)
