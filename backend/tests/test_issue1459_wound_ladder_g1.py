@@ -97,3 +97,23 @@ def test_wound_penalty_applies_to_skill_test():
     assert d["wound_penalty"] == -2
     assert w["total"] == base["total"] - 1, "suma testu musi spaść o karę za rany"
     assert d["total"] == base["total"] - 2
+
+
+# ── #1458 — DEX -1 na skraju śmierci → -1 do obrony gracza (odrębny efekt) ─────
+
+def test_wound_dex_penalty_wired_to_player_defense():
+    """DEX -1 (≤10% HP) obniża obronę gracza w torze ataku wroga — odrębnie od
+    kary -2 do ataku/testów. Wróg (ac_base bez DEX) nie dostaje tej kary."""
+    import inspect
+    import app.services.combat_service as cs
+
+    # Drabina DEX: 0 powyżej skraju, -1 na skraju śmierci.
+    assert wound_dex_penalty(100, 100) == 0
+    assert wound_dex_penalty(20, 100) == 0
+    assert wound_dex_penalty(8, 100) == -1
+    assert wound_dex_penalty(0, 0) == 0  # guard
+
+    # Tor ataku wroga faktycznie dolicza wound_dex_penalty do obrony gracza (pac).
+    src = inspect.getsource(cs)
+    assert "wound_dex_penalty" in src, "combat_service nie stosuje wound_dex_penalty"
+    assert "pac += _wdex" in src, "kara DEX nie schodzi z obrony gracza (pac)"

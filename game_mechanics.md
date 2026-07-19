@@ -2520,7 +2520,7 @@ wroga (`combat_service._resolve_enemy_attack_turn`). Liczby to wartość startow
 | > 50% | (brak) | — |
 | 26–50% | Ranny | 0 — tylko klimat/narracja |
 | 11–25% | Poważnie ranny | −1 do trafienia i testów |
-| 1–10% | Na skraju śmierci | −2 do trafienia i testów, −1 DEX (dane w źródle; wiring silnika DEX = follow-up) |
+| 1–10% | Na skraju śmierci | −2 do trafienia i testów, −1 DEX → −1 do obrony gracza (`combat_service`, `wound_dex_penalty`) |
 
 > **Dlaczego łagodniej niż stary frontend (wariant B ostry: −1 już od <75% HP)?**
 > Obecny frontend pokazuje karę już od 51% HP. Przy permadeach to grozi "spiralą śmierci": jesteś ranny → bijesz słabiej → dostajesz więcej → bijesz jeszcze słabiej → giniesz bez szansy na odwrót. Przesunięcie pierwszej realnej kary na ≤25% HP daje graczowi okno na ucieczkę lub leczenie. Liczby to wartość startowa — do dostrojenia po testach.

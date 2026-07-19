@@ -27,7 +27,7 @@ from app.services.weapon_rules import (
     resolve_sheet_weapon,
     stat_modifier,
 )
-from app.services.wound_utils import wound_penalty
+from app.services.wound_utils import wound_dex_penalty, wound_penalty
 from app.services.world_state_service import set_world_state_flags
 
 # Tests may monkeypatch this to a temp file path.
@@ -8431,6 +8431,14 @@ def _resolve_enemy_attack_turn(
             _ov_cs(conn, campaign_id, ch_id, sheet)
     pac = int(p.get("defense", _player_ac_from_sheet(sheet)))
     p["defense"] = pac  # przechowujemy BAZOWĄ obronę (bez parowania)
+    # G1 #1458 (wariant A): −1 DEX na skraju śmierci (≤10% HP) → −1 do obrony gracza.
+    # Efekt ODRĘBNY od kary −2 do ataku/testów (ta już wpięta w weapon_rules/skill_service);
+    # DEX rusza obronę, której tamta kara nie dotyka. Wróg używa ac_base (bez DEX) → asymetria
+    # naturalna, zgodna z uproszczonym modelem wroga. Nie zapisywane na combatancie (per-cios).
+    _wdex = wound_dex_penalty(*_player_hp_pair(sheet))
+    if _wdex:
+        pac += _wdex  # _wdex ujemny → obrona spada
+        out["wound_dex_penalty"] = int(_wdex)
     # #598: parowanie (cięższa main + druga broń w off) → +obrona dla TEGO ciosu,
     # czyli redukcja obrażeń wg #826. Nie zapisywane na combatancie (brak stackowania).
     try:
