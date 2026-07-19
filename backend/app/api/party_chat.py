@@ -20,6 +20,50 @@ def _db() -> sqlite3.Connection:
     return conn
 
 
+# #1447 — chat rate-limit (per user, per campaign): max N posts in a sliding window.
+_CHAT_RATE_MAX = 5
+_CHAT_RATE_WINDOW_SECONDS = 10
+
+
+def _derive_poster_name(conn: sqlite3.Connection, campaign_id: int, uid: int, is_spectator: bool) -> str:
+    """#1447 — resolve the display name SERVER-SIDE from the caller's assigned character
+    (players) or account name (spectators). The client-supplied ``character_name`` is
+    ignored so nobody can post as an arbitrary character.
+    """
+    if not is_spectator:
+        # 1. Most recent submitted action (most reliable in-game name)
+        row = conn.execute(
+            "SELECT character_name FROM campaign_round_actions "
+            "WHERE campaign_id=? AND user_id=? ORDER BY submitted_at DESC LIMIT 1",
+            (campaign_id, uid),
+        ).fetchone()
+        if row and row["character_name"]:
+            return str(row["character_name"])
+        # 2. Character assigned to this user for this campaign
+        row = conn.execute(
+            "SELECT c.name FROM characters c "
+            "JOIN campaign_members cm ON cm.character_id = c.id "
+            "WHERE cm.campaign_id=? AND cm.user_id=? AND cm.status='accepted' LIMIT 1",
+            (campaign_id, uid),
+        ).fetchone()
+        if row and row["name"]:
+            return str(row["name"])
+        # 3. Any character owned by this user active in this campaign
+        row = conn.execute(
+            "SELECT name FROM characters WHERE user_id=? AND campaign_id=? LIMIT 1",
+            (uid, campaign_id),
+        ).fetchone()
+        if row and row["name"]:
+            return str(row["name"])
+    # Spectators, or players with no character yet → fall back to account name.
+    u = conn.execute(
+        "SELECT display_name, username FROM users WHERE id=?", (uid,)
+    ).fetchone()
+    if u:
+        return str(u["display_name"] or u["username"] or f"user{uid}")
+    return f"user{uid}"
+
+
 class ChatMessageReq(BaseModel):
     message: str
     character_name: str
@@ -132,8 +176,6 @@ def post_party_chat(
         raise HTTPException(status_code=400, detail="Empty message")
     if len(req.message) > 500:
         raise HTTPException(status_code=400, detail="Message too long (max 500 chars)")
-    if len(req.character_name) > 100:
-        raise HTTPException(status_code=400, detail="character_name too long (max 100 chars)")
 
     conn = _db()
     try:
@@ -143,6 +185,19 @@ def post_party_chat(
         ).fetchone()
         if not member:
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
+
+        # #1447 — per-user/per-campaign rate-limit against spam + push flooding.
+        recent = int(conn.execute(
+            "SELECT COUNT(*) FROM party_messages "
+            "WHERE campaign_id=? AND user_id=? "
+            "AND created_at >= datetime('now', ?)",
+            (campaign_id, uid, f"-{_CHAT_RATE_WINDOW_SECONDS} seconds"),
+        ).fetchone()[0])
+        if recent >= _CHAT_RATE_MAX:
+            raise HTTPException(status_code=429, detail="Zwolnij — za dużo wiadomości. Poczekaj chwilę.")
+
+        # #1447 — derive the posted name SERVER-SIDE; ignore client character_name.
+        poster_name = _derive_poster_name(conn, campaign_id, uid, member["role"] == "spectator")
 
         # #963 — normalize whisper_to: accept username OR char name, store as char name
         normalized_whisper_to = req.whisper_to
@@ -215,7 +270,7 @@ def post_party_chat(
         row = conn.execute(
             "INSERT INTO party_messages (campaign_id, user_id, character_name, message, whisper_to, created_at) "
             "VALUES (?, ?, ?, ?, ?, datetime('now')) RETURNING id, created_at",
-            (campaign_id, uid, req.character_name, req.message.strip(), normalized_whisper_to),
+            (campaign_id, uid, poster_name, req.message.strip(), normalized_whisper_to),
         ).fetchone()
         conn.commit()
         msg_id = int(row["id"])
@@ -249,14 +304,14 @@ def post_party_chat(
                         (campaign_id, _whisper_target),
                     ).fetchone()
                 if target:
-                    send_push(int(target["user_id"]), f"🤫 Szept od {req.character_name}", req.message.strip()[:80], url="/")
+                    send_push(int(target["user_id"]), f"🤫 Szept od {poster_name}", req.message.strip()[:80], url="/")
             finally:
                 conn2.close()
         threading.Thread(target=_push_whisper, daemon=True).start()
     else:
         threading.Thread(
             target=send_push_to_campaign_players,
-            args=(campaign_id, f"{req.character_name} 💬", req.message.strip()[:80]),
+            args=(campaign_id, f"{poster_name} 💬", req.message.strip()[:80]),
             kwargs={"url": "/", "exclude_user_id": uid},
             daemon=True,
         ).start()

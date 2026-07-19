@@ -388,6 +388,10 @@ def accept_invite(
         ).fetchone()
         if not member:
             raise HTTPException(status_code=404, detail="Not invited to this lobby")
+        # #1447 — a kicked player's row lingers (status='kicked'); without this guard
+        # POST /accept silently flips it back to 'accepted'. Refuse the rejoin.
+        if member["status"] == "kicked":
+            raise HTTPException(status_code=403, detail="You were removed from this campaign and cannot rejoin")
 
         # G19 #800 — spectator path: role='spectator', no character required
         if body.as_spectator:
@@ -398,6 +402,19 @@ def accept_invite(
             )
             conn.commit()
             return {"status": "accepted", "role": "spectator"}
+
+        # #1447 — re-check capacity on (re)accept as a player. Kicked/left rows still
+        # exist, so the original invite-time count is stale; a rejoin could overfill.
+        seated = int(conn.execute(
+            "SELECT COUNT(*) FROM campaign_members "
+            "WHERE campaign_id=? AND status='accepted' AND role!='spectator' AND user_id!=?",
+            (campaign_id, uid),
+        ).fetchone()[0])
+        cap_row = conn.execute(
+            "SELECT max_players FROM campaigns WHERE id=?", (campaign_id,)
+        ).fetchone()
+        if cap_row and seated >= int(cap_row["max_players"]):
+            raise HTTPException(status_code=409, detail="Lobby is full")
 
         character_id = body.character_id
         if character_id is not None:

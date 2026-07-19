@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from fastapi import HTTPException
+
 from app.core.db_runtime import resolve_db_path
 from app.core.logging import get_logger
 from app.services import llm_service
@@ -308,6 +310,62 @@ def _get_campaign_member_count(campaign_id: int, conn: sqlite3.Connection) -> in
     return int(row["cnt"]) if row else 0
 
 
+def _get_submitted_member_count(campaign_id: int, round_id: int, conn: sqlite3.Connection) -> int:
+    """#1446 — count only actions authored by currently-accepted members.
+
+    A raw ``COUNT(*)`` over ``campaign_round_actions`` trusts whatever rows exist; if a
+    non-member (or a since-kicked player) ever slipped an action in, that inflated the
+    ``submitted`` tally and could force an early round transition. JOIN-gate to
+    ``status='accepted'`` so only legitimate party members count toward closing.
+    """
+    row = conn.execute(
+        "SELECT COUNT(*) as cnt FROM campaign_round_actions a "
+        "JOIN campaign_members m ON m.campaign_id = a.campaign_id AND m.user_id = a.user_id "
+        "WHERE a.round_id = ? AND m.status = 'accepted'",
+        (round_id,),
+    ).fetchone()
+    return int(row["cnt"]) if row else 0
+
+
+def _assert_member_owns_character(
+    campaign_id: int, user_id: int, character_id: int, conn: sqlite3.Connection
+) -> None:
+    """#1446 — authorize a gameplay action: caller must be an accepted, non-spectator
+    member of this campaign AND the submitted ``character_id`` must be the character
+    assigned to them (and genuinely owned by them). Raises 403 otherwise.
+    """
+    member = conn.execute(
+        "SELECT character_id FROM campaign_members "
+        "WHERE campaign_id=? AND user_id=? AND status='accepted' AND role!='spectator'",
+        (campaign_id, user_id),
+    ).fetchone()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not an active player in this campaign")
+    # When the member has a formally assigned character (accept_invite sets it), the
+    # submitted character_id MUST match it. If not yet assigned (NULL), fall through to
+    # the ownership check below — which still blocks acting as someone ELSE's character.
+    assigned = member["character_id"]
+    if assigned is not None and int(assigned) != int(character_id):
+        raise HTTPException(status_code=403, detail="character_id is not your assigned character")
+    owner = conn.execute(
+        "SELECT user_id FROM characters WHERE id=?", (int(character_id),)
+    ).fetchone()
+    if not owner or int(owner["user_id"]) != int(user_id):
+        raise HTTPException(status_code=403, detail="character is not owned by caller")
+
+
+def _assert_member(campaign_id: int, user_id: int, conn: sqlite3.Connection) -> None:
+    """#1447 — read-endpoint gate: only accepted members (players or spectators) may
+    read a campaign's rounds/narration/history/catchup. Blocks cross-campaign snooping.
+    """
+    m = conn.execute(
+        "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+        (campaign_id, user_id),
+    ).fetchone()
+    if not m:
+        raise HTTPException(status_code=403, detail="Not a member of this campaign")
+
+
 def _get_round_timer_minutes(campaign_id: int, conn: sqlite3.Connection) -> int:
     row = conn.execute(
         "SELECT COALESCE(round_timer_minutes, round_timer_hours*60, 1440) as t FROM campaigns WHERE id=?",
@@ -362,6 +420,11 @@ def submit_action(
 ) -> dict:
     conn = _db()
     try:
+        # #1446 — authorize: caller must be an accepted non-spectator member and the
+        # character must be theirs. Blocks outsiders injecting into party narration /
+        # impersonating characters / griefing the round-close count.
+        _assert_member_owns_character(campaign_id, user_id, character_id, conn)
+
         # G24 (#805): only 'collecting' rounds accept edits; narrating/done → block
         round_row = conn.execute(
             "SELECT * FROM campaign_rounds WHERE campaign_id = ? "
@@ -372,10 +435,7 @@ def submit_action(
         just_transitioned = False
         if round_row and round_row["status"] == "narrating":
             # G24 (#805): narrating = LLM busy, truly blocked
-            submitted = int(conn.execute(
-                "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id=?",
-                (int(round_row["id"]),),
-            ).fetchone()["cnt"])
+            submitted = _get_submitted_member_count(campaign_id, int(round_row["id"]), conn)
             total = _get_campaign_member_count(campaign_id, conn)
             return {
                 "round_id": int(round_row["id"]),
@@ -431,10 +491,7 @@ def submit_action(
                 (client_action_id,),
             ).fetchone()
             if existing:
-                submitted = int(conn.execute(
-                    "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id=?",
-                    (round_id,),
-                ).fetchone()["cnt"])
+                submitted = _get_submitted_member_count(campaign_id, round_id, conn)
                 total = _get_campaign_member_count(campaign_id, conn)
                 return {
                     "round_id": round_id,
@@ -467,10 +524,7 @@ def submit_action(
         )
         conn.commit()
 
-        submitted = int(conn.execute(
-            "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id = ?",
-            (round_id,),
-        ).fetchone()["cnt"])
+        submitted = _get_submitted_member_count(campaign_id, round_id, conn)
         total = _get_campaign_member_count(campaign_id, conn)
 
         status = prev_status  # preserve narrating if already set
@@ -1015,6 +1069,7 @@ def _trigger_narration_impl(round_id: int) -> None:
 def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
     conn = _db()
     try:
+        _assert_member(campaign_id, user_id, conn)  # #1447
         row = conn.execute(
             "SELECT * FROM campaign_rounds WHERE campaign_id = ? ORDER BY round_number DESC LIMIT 1",
             (campaign_id,),
@@ -1028,10 +1083,7 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             (campaign_id, user_id),
         )
         conn.commit()
-        submitted = int(conn.execute(
-            "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id = ?",
-            (round_id,),
-        ).fetchone()["cnt"])
+        submitted = _get_submitted_member_count(campaign_id, round_id, conn)
         total = _get_campaign_member_count(campaign_id, conn)
         my_action = conn.execute(
             "SELECT action_text FROM campaign_round_actions WHERE round_id = ? AND user_id = ?",
@@ -1190,6 +1242,7 @@ def leave_campaign(campaign_id: int, user_id: int) -> dict:
 def get_round_narration(campaign_id: int, user_id: int) -> Optional[dict]:
     conn = _db()
     try:
+        _assert_member(campaign_id, user_id, conn)  # #1447
         row = conn.execute(
             "SELECT r.*, c.character_name FROM campaign_rounds r "
             "LEFT JOIN campaign_round_actions c ON c.round_id=r.id AND c.user_id=? "
@@ -1651,6 +1704,7 @@ def get_catchup(campaign_id: int, user_id: int) -> dict:
     """
     conn = _db()
     try:
+        _assert_member(campaign_id, user_id, conn)  # #1447
         rounds = conn.execute(
             "SELECT id, round_number, narrative_json FROM campaign_rounds "
             "WHERE campaign_id=? AND status='done' ORDER BY round_number",
@@ -1737,6 +1791,7 @@ def get_rounds_history(campaign_id: int, user_id: int) -> list:
     """Return all completed rounds with actions + narration for full chat restore."""
     conn = _db()
     try:
+        _assert_member(campaign_id, user_id, conn)  # #1447
         rounds = conn.execute(
             "SELECT * FROM campaign_rounds WHERE campaign_id=? AND status='done' ORDER BY round_number",
             (campaign_id,),
@@ -2031,6 +2086,43 @@ def submit_mp_combat_action(
     roll_result: int | None = None,
 ) -> dict:
     """G7 (#791) — Player submits a combat action in MP sequential combat.
+
+    #1446 — authorize the caller: must be an accepted non-spectator member and the
+    character must be the one assigned to them. Otherwise any authenticated user could
+    drive whoever's turn it currently is (pick attack/target/spell, burn mana, flee).
+
+    #1447 — the whole action runs under a per-(campaign, character) ``turn_lock`` so two
+    concurrent requests for the same actor can't both pass the ``current_turn`` check
+    before ``advance_turn`` (TOCTOU → double attack / double loot).
+    """
+    _gate_conn = _db()
+    try:
+        _assert_member_owns_character(campaign_id, user_id, character_id, _gate_conn)
+    finally:
+        _gate_conn.close()
+
+    _lk = turn_lock.acquire_or_409(campaign_id, character_id)
+    try:
+        return _submit_mp_combat_action_locked(
+            campaign_id, user_id, character_id, action_type,
+            target_id=target_id, spell_key=spell_key,
+            raw_d20=raw_d20, roll_result=roll_result,
+        )
+    finally:
+        turn_lock.release(_lk)
+
+
+def _submit_mp_combat_action_locked(
+    campaign_id: int,
+    user_id: int,
+    character_id: int,
+    action_type: str,
+    target_id: str | None = None,
+    spell_key: str | None = None,
+    raw_d20: int | None = None,
+    roll_result: int | None = None,
+) -> dict:
+    """Serialized body of :func:`submit_mp_combat_action` (auth + lock done by caller).
 
     After the player's action, enemy actors in turn_order are auto-resolved immediately
     until the next human player slot is reached.

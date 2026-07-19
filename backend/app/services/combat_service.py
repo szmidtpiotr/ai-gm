@@ -2300,7 +2300,7 @@ def _resolve_effect_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _new_mana = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -2312,14 +2312,14 @@ def _resolve_effect_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
         conn.commit()
 
     player_raw = int(raw_d20) if raw_d20 is not None else None
     target_stats = enemy.get("stats") if isinstance(enemy.get("stats"), dict) else {}
     # #1432: przekaż rasę → is_miscast (krasnolud pudłuje kontrolę też na Nat 2).
     try:
-        _cr_eff = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _cr_eff = conn.execute("SELECT race FROM characters WHERE id=?", (ch_id,)).fetchone()
         _race_eff = str((_cr_eff["race"] if _cr_eff else None) or "human")
     except sqlite3.OperationalError:
         _race_eff = "human"
@@ -2331,12 +2331,12 @@ def _resolve_effect_spell_in_combat(
     out["player_nat1"] = (player_raw == 1)
 
     if resolution["outcome"] == "miscast":
-        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (ch_id,)).fetchone()
         _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
         _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
         conn.commit()
         out["hit"] = False
         out["condition_applied"] = False
@@ -2358,7 +2358,7 @@ def _resolve_effect_spell_in_combat(
             cur = int(sheet.get("current_mana", 0) or 0)
             mx = int(sheet.get("max_mana", 0) or 0)
             sheet["current_mana"] = min(mx, cur + refund) if mx > 0 else cur + refund
-            _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+            _save_char_sheet(conn, campaign_id, ch_id, sheet)
             conn.commit()
         out["mana_refund"] = refund
         out["condition_applied"] = False
@@ -2368,7 +2368,7 @@ def _resolve_effect_spell_in_combat(
 
     # Progresja rangi czaru — udane rzucenie liczy się jak użycie (jak czary atakujące).
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
 
@@ -2439,7 +2439,7 @@ def _resolve_aoe_effect_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _new_mana = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -2453,7 +2453,7 @@ def _resolve_aoe_effect_spell_in_combat(
             return out
         out["mana_spent"] = mana_cost
         out["mana_after"] = _new_mana
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
         conn.commit()
 
     player_raw = int(raw_d20) if raw_d20 is not None else None
@@ -2462,7 +2462,7 @@ def _resolve_aoe_effect_spell_in_combat(
 
     # Miscast (pełna mana, brak kondycji na nikim) — #1432: is_miscast (dwarf Nat 1-2).
     try:
-        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (ch_id,)).fetchone()
         _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
     except sqlite3.OperationalError:
         _char_race = "human"
@@ -2470,7 +2470,7 @@ def _resolve_aoe_effect_spell_in_combat(
         _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
         conn.commit()
         out["hit"] = False
         out["condition_applied"] = False
@@ -2526,7 +2526,7 @@ def _resolve_aoe_effect_spell_in_combat(
 
     # Progresja rangi czaru — udane rzucenie liczy się jak użycie (jak czary effect/attack).
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
 
@@ -2602,7 +2602,7 @@ def _resolve_defense_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _ = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -2614,7 +2614,7 @@ def _resolve_defense_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
     # effect_json (pula absorpcji) — osobny fetch, by detekcja nie selektowała kolumny,
     # której mogą nie mieć izolowane fikstury testowe (real schema zawsze ją ma).
@@ -2691,7 +2691,7 @@ def _resolve_defense_spell_in_combat(
         )
 
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
 
@@ -2750,7 +2750,7 @@ def _resolve_reaction_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _ = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -2762,7 +2762,7 @@ def _resolve_reaction_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
     p = _find_combatant(combatants, caster_comb_id) or _find_combatant(combatants, "player")
     if not p:
@@ -2803,7 +2803,7 @@ def _resolve_reaction_spell_in_combat(
     )
 
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
 
@@ -2903,7 +2903,7 @@ def _resolve_heal_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _ = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -2915,7 +2915,7 @@ def _resolve_heal_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
     # #1432: heal_die ZMERGOWANE wg rangi (spell_row przychodzi z get_spell_stats_at_rank);
     # fallback do świeżego fetchu dla wywołań podających wąski wiersz.
@@ -2972,7 +2972,7 @@ def _resolve_heal_spell_in_combat(
         )
 
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
 
@@ -3218,7 +3218,7 @@ def _resolve_aoe_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _new_mana = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -3232,7 +3232,7 @@ def _resolve_aoe_spell_in_combat(
             return out
         out["mana_spent"] = mana_cost
         out["mana_after"] = _new_mana
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
     player_raw = int(raw_d20) if raw_d20 is not None else None
     player_nat1 = player_raw == 1
@@ -3244,7 +3244,7 @@ def _resolve_aoe_spell_in_combat(
     # 2. Miscast (pełna mana stracona) — #1432: is_miscast(raw, race): człowiek Nat 1,
     #    krasnolud Nat 1-2 (Rdzeń-magia). Wcześniej twardo player_nat1 (dwarf Nat 2 martwy).
     try:
-        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (ch_id,)).fetchone()
         _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
     except sqlite3.OperationalError:  # izolowane fikstury bez kolumny race
         _char_race = "human"
@@ -3255,7 +3255,7 @@ def _resolve_aoe_spell_in_combat(
         out["hit"] = False
         out["damage"] = 0
         out["aoe_hits"] = []
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
         _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
         conn.commit()
         cid = int(row["id"])
@@ -3355,7 +3355,7 @@ def _resolve_aoe_spell_in_combat(
 
     # Progresja rangi czaru
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
 
@@ -5421,7 +5421,7 @@ def _resolve_summon_spell_in_combat(
     if mana_cost > 0:
         _mana_ok, _ = spell_service.check_and_deduct_mana(
             sheet, mana_cost, campaign_id=campaign_id,
-            character_id=row["character_id"], combat_id=int(row["id"]))
+            character_id=ch_id, combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -5433,7 +5433,7 @@ def _resolve_summon_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
     prof = _b15_parse_summon_profile(spell_row)
     order: list[str] = json.loads(row["turn_order"] or "[]")
@@ -5487,7 +5487,7 @@ def _resolve_summon_spell_in_combat(
         ),
     )
     try:
-        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+        spell_service.record_spell_use(ch_id, spell_k, conn)
     except Exception:
         pass
     conn.commit()
@@ -7251,6 +7251,7 @@ def _attack_apply_effects(
 
 def _attack_spell_secondary(
     is_spell: bool,
+    ch_id: int,
     player_nat20: bool,
     player_nat1: bool,
     hit: bool,
@@ -7284,12 +7285,12 @@ def _attack_spell_secondary(
                     enemy["conditions"].append(_entry)
     if is_spell and player_nat1:
         from app.services.spell_service import resolve_miscast
-        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (ch_id,)).fetchone()
         _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
         _miscast = resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
 
 def _load_player_spell_gate(
@@ -7970,7 +7971,7 @@ def _resolve_player_attack_turn(
         )
         if not _mana_ok:
             _persist_combatants(conn, row, combatants)
-            _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+            _save_char_sheet(conn, campaign_id, ch_id, sheet)
             conn.commit()
             return {
                 "attacker": attacker,
@@ -7987,7 +7988,7 @@ def _resolve_player_attack_turn(
         out["mana_spent"] = _spell_mana_cost
         out["mana_after"] = _new_mana
         # Persist mana deduction immediately
-        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
     # ─────────────────────────────────────────────────────────────────
 
     if hit:
@@ -8017,7 +8018,7 @@ def _resolve_player_attack_turn(
                     sheet["current_hp"] = _new_hp
                     out["lifesteal_healed"] = _new_hp - _cur_hp
                     out["hp_after"] = _new_hp
-                    _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+                    _save_char_sheet(conn, campaign_id, ch_id, sheet)
         # ─────────────────────────────────────────────────────────────
 
         dead = int(enemy.get("hp_current", 0) or 0) <= 0
@@ -8031,7 +8032,7 @@ def _resolve_player_attack_turn(
                 try:
                     from app.services.spell_service import record_spell_use
                     _use_result = record_spell_use(
-                        int(row["character_id"]), _spell_key, conn
+                        ch_id, _spell_key, conn
                     )
                     if _use_result.get("ranked_up"):
                         out["spell_rank_up"] = {
@@ -8172,7 +8173,7 @@ def _resolve_player_attack_turn(
 
     # #1432: krasnoludzki miscast na Nat 2 wchodzi tą samą ścieżką co Nat 1 (backfire).
     _attack_spell_secondary(
-        _is_spell, player_nat20, (player_nat1 or _spell_backfire), hit, enemy, dmg, out, sheet,
+        _is_spell, ch_id, player_nat20, (player_nat1 or _spell_backfire), hit, enemy, dmg, out, sheet,
         conn, campaign_id, row,
     )
 
