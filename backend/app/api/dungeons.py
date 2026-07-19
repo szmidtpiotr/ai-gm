@@ -169,6 +169,29 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq, authorization: str | N
             detail={"error": "dungeon_disabled", "message": "Lochy są obecnie wyłączone przez administratora."},
         )
 
+    # AUDIT #1443: entering a dungeon mutates position/session_flags like travel does,
+    # so it must honour the same gates — a dead hero can't dive, and you can't leave an
+    # active fight by entering a dungeon.
+    _dconn = _get_db()
+    try:
+        _dchar = _dconn.execute(
+            "SELECT status, sheet_json FROM characters WHERE id = ?", (req.character_id,)
+        ).fetchone()
+    finally:
+        _dconn.close()
+    if _dchar is not None:
+        _dsheet = json.loads(_dchar["sheet_json"] or "{}")
+        _dhp = _dsheet.get("current_hp")
+        if (
+            ("status" in _dchar.keys() and _dchar["status"] == "dead")
+            or _dsheet.get("status") == "dead"
+            or (isinstance(_dhp, (int, float)) and _dhp <= 0)
+        ):
+            raise HTTPException(status_code=409, detail={"error": "hero_dead", "message": "Bohater nie żyje — nie może wejść do lochu."})
+    from app.services.combat_service import get_active_combat as _dget_combat
+    if _dget_combat(req.campaign_id):
+        raise HTTPException(status_code=409, detail={"error": "in_combat", "message": "Nie można wejść do lochu w trakcie walki."})
+
     from app.services.dungeon_service import get_dungeon
     from app.services.dungeon_tile_service import enter_dungeon_tiles
 

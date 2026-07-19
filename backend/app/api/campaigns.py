@@ -1218,6 +1218,19 @@ def build_camp(campaign_id: int):
             raise HTTPException(status_code=404, detail="Brak aktywnej sesji dla kampanii.")
 
         flags = json.loads(session_row["session_flags"] or "{}")
+
+        # AUDIT #1455: a pending (undefeated) ambush spawns no active_combat row yet, so
+        # the get_active_combat check above passes — but building a camp then flips the
+        # hex to safe and the next GET /suggested-actions self-heal used to clear the
+        # interrupt, letting the player skip the fight. Block camping mid-ambush.
+        _bc_tp = flags.get("travel_plan")
+        if (
+            isinstance(_bc_tp, dict)
+            and str(_bc_tp.get("interrupt_reason") or "").replace("_prompted", "") == "encounter"
+            and not _bc_tp.get("combat_seen")
+        ):
+            raise HTTPException(status_code=409, detail="Zasadzka zagradza drogę — nie rozbijesz obozu w trakcie spotkania.")
+
         current_hex = flags.get("current_hex") or {}
         q = current_hex.get("q")
         r = current_hex.get("r")
@@ -1421,6 +1434,16 @@ def travel_resume(campaign_id: int):
         if reason.replace("_prompted", "") == "encounter":
             _enemy_key = tp.get("enemy_key")
             if _enemy_key and not tp.get("combat_seen"):
+                # AUDIT #1455: start the fight FIRST, stamp combat_seen only AFTER it
+                # succeeds. Previously combat_seen was committed before initiate_combat —
+                # if initiate raised (e.g. enemy_key outside the catalog / BL-A7 composer
+                # error → 400) the plan was already flagged "walka odbyta", so the next
+                # resume marched straight past the ambush without a fight.
+                from app.services.combat_service import initiate_combat
+                try:
+                    initiate_combat(campaign_id, int(char["id"]), [str(_enemy_key)], allow_pending=True)  # #1449: LLM-driven auto-combat
+                except ValueError as _ce:
+                    raise HTTPException(status_code=400, detail=str(_ce)) from None
                 tp["combat_seen"] = True
                 flags["travel_plan"] = tp
                 conn.execute(
@@ -1428,11 +1451,6 @@ def travel_resume(campaign_id: int):
                     (json.dumps(flags, ensure_ascii=False), gs["id"]),
                 )
                 conn.commit()
-                from app.services.combat_service import initiate_combat
-                try:
-                    initiate_combat(campaign_id, int(char["id"]), [str(_enemy_key)], allow_pending=True)  # #1449: LLM-driven auto-combat
-                except ValueError as _ce:
-                    raise HTTPException(status_code=400, detail=str(_ce)) from None
                 return {
                     "ok": True,
                     "message": "Spotkanie zagradza ci drogę — dochodzi do walki!",
@@ -1453,6 +1471,15 @@ def travel_resume(campaign_id: int):
         )
         if not tr.get("ok"):
             raise HTTPException(status_code=400, detail=tr.get("error") or "Nie udało się wznowić podróży.")
+
+        # AUDIT #1455: maybe_ford_hazard only ran inside execute_travel; travel_resume
+        # calls resolve_chain_travel directly, so `brod` (ford) hexes crossed on a resume
+        # skipped the STR check entirely (regression of #1412). Apply it here too.
+        try:
+            from app.services.hex_travel_service import maybe_ford_hazard
+            maybe_ford_hazard(conn, campaign_id, int(char["id"]), tr)
+        except Exception as _ford_e:
+            logger.warning("resume_ford_hazard_failed", error=str(_ford_e))
 
         hrs = float(tr.get("total_hours") or 0.0)
         clock = advance_clock(campaign_id, hrs, reason="travel") if hrs > 0 else None

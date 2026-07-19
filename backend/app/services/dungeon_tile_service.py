@@ -31,6 +31,7 @@ from app.services.dungeon_service import (
     check_cooldown,
     complete_dungeon,
     get_dungeon,
+    start_dungeon_cooldown,
 )
 
 # ── Spatial constants ─────────────────────────────────────────────────────────
@@ -671,6 +672,24 @@ def enter_dungeon_tiles(
     L3: replaces the linear tile sequence with draw_tile_graph(). The API endpoint
     /enter now calls this instead of legacy dungeon_service.enter_dungeon().
     """
+    # AUDIT #1441: guard against cooldown bypass by re-entering without /exit.
+    # If an unfinished dungeon_run is still parked in session_flags, burn it with a
+    # reduced (abandonment) cooldown BEFORE it is overwritten below. If that abandoned
+    # run is the SAME dungeon we're re-entering, the check_cooldown below will now
+    # trip and reject the re-entry (forcing a real cooldown wait).
+    _conn0, _flags0 = _load_flags(campaign_id)
+    try:
+        _existing_run = _flags0.get("dungeon_run")
+    finally:
+        _conn0.close()
+    if isinstance(_existing_run, dict) and not _existing_run.get("completed") and not _existing_run.get("failed"):
+        _prev_key = _existing_run.get("dungeon_key")
+        if _prev_key:
+            try:
+                start_dungeon_cooldown(character_id, _prev_key, fraction=0.5)
+            except Exception:
+                pass
+
     cd = check_cooldown(character_id, dungeon_key)
     if cd.get("on_cooldown"):
         raise PermissionError(
@@ -1373,6 +1392,18 @@ def _action_open_chest(
             "loot": [],
             "trap": None,
             "narrative": "Skrzynia jest na zawsze zablokowana.",
+        }
+    # AUDIT #1441: a chest may only be looted once. Without this guard a player on a
+    # chest tile could POST /resolve-tile {action:"open_chest"} repeatedly and re-roll
+    # loot on every roll above DC (unbounded loot farming).
+    if chest_state.get("opened"):
+        return {
+            "ok": True,
+            "action": "open_chest",
+            "chest_already_opened": True,
+            "loot": [],
+            "trap": None,
+            "narrative": "Skrzynia jest już otwarta.",
         }
 
     attempts = int(chest_state.get("attempts", 0))

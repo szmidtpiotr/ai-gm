@@ -9243,6 +9243,26 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             if not parent:
                 return {"hexes": [], "teleport_connections": [], "current_hex": None, "hex_types": {}, "local_mode": True, "parent_label": None}
             parent_id = parent["id"]
+
+            # AUDIT #1454: gate the local submap behind fog of war. This used to return
+            # every sub-hex of ANY hub with a hardcoded status "discovered" — a player
+            # could enumerate the interior (labels/types/sub-locations) of every city and
+            # castle in the world without ever visiting. Require the parent overworld hex
+            # to be discovered by THIS campaign, or be the party's current hex.
+            _disc = conn.execute(
+                "SELECT 1 FROM campaign_hex_data WHERE campaign_id=? AND hex_q=? AND hex_r=? AND discovered=1 LIMIT 1",
+                (campaign_id, parent_q, parent_r),
+            ).fetchone()
+            _is_current = False
+            _gs_wm = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_wm:
+                _ch_wm = _j.loads(_gs_wm["session_flags"] or "{}").get("current_hex") or {}
+                _is_current = _ch_wm.get("q") == parent_q and _ch_wm.get("r") == parent_r
+            if not _disc and not _is_current:
+                raise HTTPException(status_code=403, detail="Ten rejon nie został jeszcze odkryty.")
+
             local_hexes_rows = conn.execute(
                 "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
                 (parent_id,),
@@ -9574,6 +9594,18 @@ class HexTravelPayload(BaseModel):
 
 # ── U30: Unified travel endpoint ──────────────────────────────────────────────
 
+# AUDIT #1443/#1455: TravelError.code → HTTP status. 409 for the new "you can't travel
+# right now" gates (dead / in combat / pending ambush / collapsed from the march cap).
+_TRAVEL_ERROR_STATUS: dict[str, int] = {
+    "character_not_found": 404,
+    "location_not_placed": 400,
+    "dead": 409,
+    "in_combat": 409,
+    "pending_encounter": 409,
+    "forced_camp": 409,
+}
+
+
 class TravelPayload(BaseModel):
     character_id: int
     target_hex: dict | None = None           # {"q": int, "r": int}
@@ -9599,14 +9631,19 @@ def player_travel(campaign_id: int, payload: TravelPayload, authorization: str |
     else:
         raise HTTPException(status_code=422, detail="Provide target_hex or target_location_key")
 
+    # AUDIT #1443: serialize travel with the in-flight turn lock so a /travel racing a
+    # /turns (or a second /travel) can't mutate position/clock concurrently — the lock
+    # #1186 was meant to cover "all entry points" but travel bypassed it.
+    _lock_key = turn_lock.acquire_or_409(campaign_id)
     conn = open_conn()
     try:
         return execute_travel(conn, campaign_id, target, actor=payload.character_id, narrate_arrival=True)
     except TravelError as e:
-        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        _status = _TRAVEL_ERROR_STATUS.get(e.code, 422)
         raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()
+        turn_lock.release(_lock_key)
 
 
 # ── U30: Helper to expose current_hex in [DONE] SSE payload ──────────────────
@@ -9895,7 +9932,16 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
         #    by dało się wznowić („Kontynuuj podróż"). Wcześniej kasowaliśmy cały plan
         #    przy każdym safe miejscu → po Rozbij obóz gubił się cel = brak powrotu.
         tp = sf.get("travel_plan")
-        if isinstance(tp, dict) and tp.get("interrupt_reason") and gs_row and gs_row["current_location_id"]:
+        # AUDIT #1455: never self-heal (clear) an unresolved ambush. This GET endpoint
+        # mutates session_flags; if the interrupt is an encounter the player hasn't
+        # fought yet (combat_seen falsy), clearing it here would silently cancel the
+        # fight (esp. after build_camp flips the hex to safe_for_rest).
+        _pending_ambush = (
+            isinstance(tp, dict)
+            and str(tp.get("interrupt_reason") or "").replace("_prompted", "") == "encounter"
+            and not tp.get("combat_seen")
+        )
+        if not _pending_ambush and isinstance(tp, dict) and tp.get("interrupt_reason") and gs_row and gs_row["current_location_id"]:
             loc_safe = conn.execute(
                 "SELECT safe_for_rest FROM game_locations WHERE id=?",
                 (gs_row["current_location_id"],),
@@ -9975,11 +10021,14 @@ def player_hex_travel(campaign_id: int, payload: HexTravelPayload, authorization
     from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
     target = {"hex": {"q": payload.destination_q, "r": payload.destination_r}}
+    # AUDIT #1443: same in-flight turn-lock serialization as /travel.
+    _lock_key = turn_lock.acquire_or_409(campaign_id)
     conn = open_conn()
     try:
         return execute_travel(conn, campaign_id, target, actor=payload.character_id, narrate_arrival=True)
     except TravelError as e:
-        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        _status = _TRAVEL_ERROR_STATUS.get(e.code, 422)
         raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()
+        turn_lock.release(_lock_key)

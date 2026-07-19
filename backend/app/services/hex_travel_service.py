@@ -1117,24 +1117,11 @@ def resolve_chain_travel(
     _budget_interrupt = _outcome.interrupt_reason in ("dusk", "forced_camp")
     _budget_reason = _outcome.interrupt_reason if _budget_interrupt else None
 
-    # #1390 Fix 2 — spotkanie wypadło → ostemplеj dzień gry, by kolejne rzuty tego
-    # dnia były wyciszone (aż do nowego dnia / odpoczynku). Persist do session_flags.
-    if encounter_result:
-        try:
-            _sf_stamp_row = conn.execute(
-                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                (campaign_id,),
-            ).fetchone()
-            if _sf_stamp_row:
-                _sf_stamp = json.loads(_sf_stamp_row["session_flags"] or "{}")
-                _sf_stamp["last_encounter_day"] = int(_cur_day)
-                conn.execute(
-                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                    (json.dumps(_sf_stamp, ensure_ascii=False), _sf_stamp_row["id"]),
-                )
-                conn.commit()
-        except Exception as _enc_stamp_err:
-            logger.warning("encounter_cooldown_stamp_failed", error=str(_enc_stamp_err))
+    # #1390 Fix 2 / AUDIT #1455 — the day-cooldown stamp used to fire HERE, the moment
+    # an encounter was DRAWN. That let a player dodge the ambush (click a new travel
+    # target → encounter discarded) yet still enjoy guaranteed no-encounters for the
+    # rest of the day. The stamp now lives in combat_service._persist_combatants_and_maybe_end
+    # (victory hook) so the cooldown only applies once the fight is actually resolved.
 
     # Stage 2B R4: deactivate any temp_camp_* on the hex the player just left.
     if arrived_hex != from_hex:
@@ -2639,6 +2626,25 @@ def execute_travel(
         raise TravelError("character_not_found", "Character not found")
     sheet = json.loads(char["sheet_json"] or "{}")
 
+    # AUDIT #1443: travel is the single pipeline every travel endpoint delegates to,
+    # so it must honour the same gates create_turn does. Without these guards a dead
+    # hero could keep wandering the map and a hero could stroll away from an active
+    # fight via /travel (neither passes through create_turn's dead/combat checks).
+    _status_row = conn.execute(
+        "SELECT status FROM characters WHERE id = ?", (character_id,)
+    ).fetchone()
+    _char_status = str((_status_row["status"] if _status_row else "") or "")
+    _hp = sheet.get("current_hp")
+    if (
+        _char_status == "dead"
+        or sheet.get("status") == "dead"
+        or (isinstance(_hp, (int, float)) and _hp <= 0)
+    ):
+        raise TravelError("dead", "Bohater nie żyje — nie może podróżować.")
+    from app.services.combat_service import get_active_combat as _get_active_combat
+    if _get_active_combat(campaign_id):
+        raise TravelError("in_combat", "Nie można podróżować w trakcie walki.")
+
     # (2) resolve destination hex
     dest: "tuple[int, int] | None" = None
     _th = target.get("hex")
@@ -2664,6 +2670,40 @@ def execute_travel(
         (campaign_id,),
     ).fetchone()
     flags = json.loads((gs["session_flags"] if gs else None) or "{}")
+
+    # AUDIT #1455: a fresh /travel must not be able to discard a pending ambush.
+    # resolve_chain_travel pops travel_plan, so starting a new trip while an unresolved
+    # encounter is parked would erase it (and, combined with the day-cooldown, guarantee
+    # no further encounters). Force the fight to be resolved first.
+    _tp_pre = flags.get("travel_plan")
+    if (
+        isinstance(_tp_pre, dict)
+        and str(_tp_pre.get("interrupt_reason") or "").replace("_prompted", "") == "encounter"
+        and not _tp_pre.get("combat_seen")
+    ):
+        raise TravelError("pending_encounter", "Zasadzka zagradza drogę — najpierw stocz walkę lub uciekaj.")
+
+    # AUDIT #1455: 12h daily march hard-cap must gate BEFORE any step is taken.
+    # run_step_sequence walks one hex then interrupts with forced_camp, so a fresh
+    # /travel could crawl 1 hex per request forever past the cap (travel-resume already
+    # 409s). Pre-check the persisted budget here (only when it's for the current day —
+    # a new day resets it inside resolve_chain_travel).
+    try:
+        from app.services.clock_service import get_clock_state as _gcs_pre
+        _cur_day_pre = int(_gcs_pre(campaign_id, conn=conn).get("day", 1))
+    except Exception:
+        _cur_day_pre = None
+    _march_day_pre = flags.get("march_day")
+    if _cur_day_pre is not None and _march_day_pre is not None and int(_march_day_pre) == _cur_day_pre:
+        _march_hrs_pre = float(flags.get("hours_marched_today", 0.0) or 0.0)
+        try:
+            from app.services import companion_service as _cmp_pre
+            _cap_bonus_pre = float(_cmp_pre.get_daily_cap_bonus(conn, character_id) or 0.0)
+        except Exception:
+            _cap_bonus_pre = 0.0
+        if not flags.get("night_march") and _march_hrs_pre >= DAILY_HARD_CAP + _cap_bonus_pre:
+            raise TravelError("forced_camp", "Bohater padł ze zmęczenia — najpierw rozbij obóz i odpocznij.")
+
     ch = flags.get("current_hex")
     if ch:
         from_hex = (int(ch["q"]), int(ch["r"]))

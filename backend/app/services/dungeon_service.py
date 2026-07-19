@@ -164,6 +164,35 @@ def complete_dungeon(character_id: int, dungeon_key: str) -> dict:
         conn.close()
 
 
+def start_dungeon_cooldown(character_id: int, dungeon_key: str, fraction: float = 1.0) -> dict:
+    """Write a (possibly partial) cooldown row for a run that is being abandoned.
+
+    AUDIT #1441: when a player re-POSTs /enter while an unfinished dungeon_run is
+    still in session_flags, we burn the abandoned run with a reduced cooldown
+    (fraction<1.0) BEFORE overwriting it, so re-entry can't bypass the cooldown.
+    """
+    dungeon = get_dungeon(dungeon_key)
+    if not dungeon:
+        return {"dungeon_key": dungeon_key, "cooldown_hours": 0}
+    cooldown_hours = _resolve_cooldown_hours(dungeon) * max(0.0, float(fraction))
+    now = _now_utc()
+    cooldown_until = now + timedelta(hours=cooldown_hours)
+    conn = _get_db()
+    try:
+        conn.execute(
+            """INSERT INTO character_dungeon_runs (character_id, location_key, cleared_at, cooldown_until, run_count)
+               VALUES (?, ?, ?, ?, 1)
+               ON CONFLICT(character_id, location_key) DO UPDATE SET
+                   cleared_at=excluded.cleared_at, cooldown_until=excluded.cooldown_until, run_count=run_count+1""",
+            (character_id, dungeon_key, now.isoformat(), cooldown_until.isoformat()),
+        )
+        conn.commit()
+        return {"dungeon_key": dungeon_key, "cooldown_until": cooldown_until.isoformat(),
+                "cooldown_hours": cooldown_hours}
+    finally:
+        conn.close()
+
+
 def get_run_history(character_id: int) -> list[dict]:
     conn = _get_db()
     try:

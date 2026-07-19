@@ -9642,6 +9642,30 @@ def _persist_combatants_and_maybe_end(
     if str(status) == "ended":
         _log_combat_end_event(conn, row, str(ended_reason or "ended"))
         _sync_companions_to_db(conn, row, combatants)
+        # AUDIT #1455: stamp the travel-encounter day-cooldown ONLY once the fight is
+        # actually WON. Previously hex_travel_service stamped last_encounter_day the
+        # moment an encounter was DRAWN — a player could pop the ambush modal, click a
+        # new travel target (encounter discarded) and enjoy guaranteed no-encounters
+        # for the rest of the game day. Stamping at victory ties the cooldown to a
+        # resolved fight, not a dodged one.
+        if str(ended_reason) == "victory":
+            try:
+                from app.services.clock_service import get_clock_state as _gcs
+                _vday = int(_gcs(int(row["campaign_id"]), conn=conn).get("day", 1))
+                _vrow = conn.execute(
+                    "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                    (row["campaign_id"],),
+                ).fetchone()
+                if _vrow:
+                    _vsf = json.loads(_vrow["session_flags"] or "{}")
+                    _vsf["last_encounter_day"] = _vday
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_vsf, ensure_ascii=False), _vrow["id"]),
+                    )
+                    conn.commit()
+            except Exception as _stamp_err:
+                logger.warning("victory_encounter_stamp_failed", error=str(_stamp_err))
 
 
 def _sync_companions_to_db(conn: sqlite3.Connection, row: sqlite3.Row, combatants: list[dict]) -> None:

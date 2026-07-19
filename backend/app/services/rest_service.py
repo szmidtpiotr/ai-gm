@@ -179,6 +179,31 @@ def perform_long_rest(
     if not _is_safe_for_character(character_id, campaign_id, conn):
         return {"ok": False, "error": "not_safe_for_rest"}
 
+    # AUDIT #1442: one long rest per game day. Without a daily cap a player could spam
+    # long rest in any safe spot for free full HP/mana (Scholar between every fight),
+    # fast-forward the clock +8h to a favourable time, and re-roll disease/camp rolls.
+    # `fatigue_last_rest_day` was written but never read as a gate — and was stamped
+    # with a non-existent clock key ('day_number' → always 1). Gate on the day the rest
+    # STARTS; a second long rest that same game day is refused (short rest still allowed).
+    try:
+        from app.services.clock_service import get_clock_state as _gcs_rest_gate
+        _rest_day = int(_gcs_rest_gate(campaign_id, conn=conn).get("day", 1))
+    except Exception:
+        _rest_day = None
+    if _rest_day is not None:
+        _last_rest_day = None
+        try:
+            _gs_cap = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _gs_cap:
+                _last_rest_day = json.loads(_gs_cap["session_flags"] or "{}").get("fatigue_last_rest_day")
+        except Exception:
+            _last_rest_day = None
+        if _last_rest_day is not None and int(_last_rest_day) == _rest_day:
+            return {"ok": False, "error": "already_rested_today", "rest_day": _rest_day}
+
     row = conn.execute(
         "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
     ).fetchone()
@@ -307,16 +332,42 @@ def perform_long_rest(
                     night_march=_night_march,
                     enemy_key=_enemy_key,
                 )
+                # AUDIT #1455: a triggered camp encounter used to be cosmetic (just a toast)
+                # — nobody ever called initiate_combat, so a camp on a swamp was as safe as
+                # an inn. Now the interrupted sleep starts a real fight and only grants HALF
+                # the HP/mana heal (you were woken before fully resting).
+                if _triggered and _enemy_key:
+                    _hp_half = min(new_max_hp, hp_before + max(0, hp_healed) // 2)
+                    _mana_half = min(new_max_mana, mana_before + max(0, mana_healed) // 2)
+                    sheet["current_hp"] = _hp_half
+                    sheet["current_mana"] = _mana_half
+                    conn.execute(
+                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                        (json.dumps(sheet, ensure_ascii=False), character_id),
+                    )
+                    try:
+                        from app.services.combat_service import initiate_combat
+                        initiate_combat(campaign_id, character_id, [str(_enemy_key)], allow_pending=True)
+                        camp_encounter["combat_started"] = True
+                        camp_encounter["half_heal"] = True
+                    except Exception as _cce:
+                        logger.warning("camp_encounter_combat_failed", error=str(_cce))
             _sf_rest["hours_marched_today"] = 0.0
             _sf_rest["night_march"] = False
             _sf_rest.pop("camp_encounter_boost", None)
             # PT-D1 (#1124): pełny nocleg = reset dziennych liczników zmęczenia.
             _sf_rest["fatigue_march_charged"] = False
-            try:
-                from app.services.clock_service import get_clock_state
-                _sf_rest["fatigue_last_rest_day"] = int(get_clock_state(campaign_id, conn=conn).get("day_number", 1))
-            except Exception:
-                pass
+            # AUDIT #1442: stamp the daily-rest gate with the day the rest STARTED (get_clock_state
+            # returns key 'day', not 'day_number' — the old key always resolved to 1, so the gate
+            # never engaged). This is the value read by the once-per-day check at the top.
+            if _rest_day is not None:
+                _sf_rest["fatigue_last_rest_day"] = _rest_day
+            else:
+                try:
+                    from app.services.clock_service import get_clock_state
+                    _sf_rest["fatigue_last_rest_day"] = int(get_clock_state(campaign_id, conn=conn).get("day", 1))
+                except Exception:
+                    pass
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
                 (json.dumps(_sf_rest, ensure_ascii=False), _gs_rest["id"]),

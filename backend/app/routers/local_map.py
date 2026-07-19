@@ -525,11 +525,27 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
         loc = _get_location(conn, current_loc_id) if current_loc_id else None
         hub_key = _hub_key_for_location(loc) if loc else None
 
-        # Verify target hex belongs to this hub
-        if hub_key:
-            hub_hex_id = get_hub_hex_id(conn, hub_key)
-            if hub_hex_id and target.get("parent_hex_id") != hub_hex_id:
-                raise HTTPException(status_code=400, detail="Hex does not belong to current hub")
+        # AUDIT #1454: resolve the hub the party is CURRENTLY in, then ALWAYS require the
+        # target to belong to it. The old `if hub_key:` guard was skipped whenever hub_key
+        # was None (wilderness / non-hub sub-location) → the endpoint accepted ANY
+        # map_level=1 hex in the whole world = teleport between settlements + rest-anywhere
+        # (jump straight into an inn's safe_for_rest sub-hex). Fall back to the parent hub
+        # of the local_hex in session_flags; if the hub still can't be resolved, reject.
+        hub_hex_id = get_hub_hex_id(conn, hub_key) if hub_key else None
+        if hub_hex_id is None:
+            _cur_local = (json.loads(session.get("session_flags") or "{}").get("local_hex") or {})
+            _cur_hex_id = _cur_local.get("hex_id")
+            if _cur_hex_id:
+                _cur_hex_row = conn.execute(
+                    "SELECT parent_hex_id FROM world_hexes WHERE id = ? AND map_level = 1",
+                    (_cur_hex_id,),
+                ).fetchone()
+                if _cur_hex_row and _cur_hex_row["parent_hex_id"] is not None:
+                    hub_hex_id = int(_cur_hex_row["parent_hex_id"])
+        if hub_hex_id is None:
+            raise HTTPException(status_code=400, detail="Nie można ustalić huba lokalnego — wróć na mapę świata.")
+        if target.get("parent_hex_id") != hub_hex_id:
+            raise HTTPException(status_code=400, detail="Hex does not belong to current hub")
 
         # Resolve sub-location id if hex has a location_key
         loc_key = target.get("location_key")
@@ -571,7 +587,11 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
         if body.hex_id != current_hex_id:
             try:
                 from app.services.clock_service import advance_clock
-                clock_state = advance_clock(campaign_id, minutes=LOCAL_TRAVEL_MINUTES, reason="local_travel")
+                # AUDIT #1454 (#1390 nested-conn): pass conn=conn. set_position wrote on
+                # `conn` but hasn't committed yet (commit is below); advance_clock without
+                # conn= opened a SECOND connection to the same DB file → 'database is
+                # locked', swallowed here → local move happened for FREE (no +15 min).
+                clock_state = advance_clock(campaign_id, minutes=LOCAL_TRAVEL_MINUTES, reason="local_travel", conn=conn)
             except Exception as _clk_err:
                 pass  # clock must never break movement
 
