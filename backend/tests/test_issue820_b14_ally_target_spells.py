@@ -89,7 +89,7 @@ def _mp_combat_db(tmp_path, *, caster_hp=5, ally_hp=3, max_hp=10, mana=5, max_ma
           (key,label,spell_type,effect_type,mana_cost,tier,damage_die,heal_die,effect_json,is_active) VALUES
           ('minor_heal','Leczniczy Dotyk','heal',NULL,1,1,NULL,'1d6',NULL,1),
           ('group_heal','Leczenie Grupowe','heal',NULL,2,3,NULL,'1d6',NULL,1),
-          ('divine_shield_ally','Tarcza Bostwa','defense',NULL,2,3,NULL,NULL,'{{"absorb":6}}',1);
+          ('divine_shield_ally','Tarcza Bostwa','defense',NULL,2,3,NULL,NULL,'{"absorb":6}',1);
         """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies
           (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,tier,xp_award)

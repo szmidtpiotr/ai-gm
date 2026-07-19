@@ -149,9 +149,9 @@ def _combat_db(tmp_path, *, mana=10, max_mana=10, round_n=1,
         """ + table_sql("game_config_conditions") + """
         """ + table_sql("game_config_spells") + """
         INSERT INTO game_config_spells (key,label,spell_type,mana_cost,tier,target_zone,effect_json) VALUES
-          ('mirror_image','Lustrzane Odbicie','reaction',3,2,'self','{{"reaction":"mirror_image","charges":3}}'),
-          ('blink','Migotanie','reaction',4,3,'self','{{"reaction":"blink","miss_chance":50,"rounds":3}}'),
-          ('globe_invulnerability','Kula Niewrażliwości','reaction',6,5,'self','{{"reaction":"globe_invulnerability","rounds":2}}');
+          ('mirror_image','Lustrzane Odbicie','reaction',3,2,'self','{"reaction":"mirror_image","charges":3}'),
+          ('blink','Migotanie','reaction',4,3,'self','{"reaction":"blink","miss_chance":50,"rounds":3}'),
+          ('globe_invulnerability','Kula Niewrażliwości','reaction',6,5,'self','{"reaction":"globe_invulnerability","rounds":2}');
         INSERT INTO game_config_spells (key,label,spell_type,mana_cost,tier,damage_die) VALUES
           ('fire_bolt','Ognisty Pocisk','attack',2,1,'1d8');
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER DEFAULT 1,
