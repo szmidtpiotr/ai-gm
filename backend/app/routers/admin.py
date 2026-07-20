@@ -4459,13 +4459,19 @@ def admin_set_region_status(
     jest respektowana przez migrację startową (R1 #1241 + #1039).
     `status=null` w payloadzie = zdejmij override, wróć pod kanon pliku.
     """
+    from app.services.showcase_region_mirror import sync_region_mirror
     from app.services.world_region_service import reset_region_status, set_region_status
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
         if payload.status is None:
-            return {"ok": True, **reset_region_status(conn, key)}
-        return {"ok": True, **set_region_status(conn, key, payload.status)}
+            out = reset_region_status(conn, key)
+        else:
+            out = set_region_status(conn, key, payload.status)
+        # #1484 — odśwież lustro wizytówki, żeby badge „grywalne/wkrótce" nie
+        # rozjechał się ze stanem gry (fallback, gdy strona nie doczyta backendu).
+        out["showcase_synced"] = sync_region_mirror(conn)
+        return {"ok": True, **out}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except LookupError as e:

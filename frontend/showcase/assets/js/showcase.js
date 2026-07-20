@@ -104,14 +104,29 @@
   // --- data-driven świat (W4 → data/swiat.json) ---
   const krainyRoot = document.getElementById('krainy-list');
   if (krainyRoot) {
-    fetch('data/swiat.json', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => {
+    // #1484 — badge „grywalne/wkrótce" idzie za stanem gry (world_regions).
+    // Kolejność decyzji: available_override (ręczna) → API → available (lustro w JSON,
+    // fallback gdy backend nie odpowie). Statyczna strona nie może paść przez API.
+    Promise.all([
+      fetch('data/swiat.json', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status)),
+      fetch('/api/showcase/regions', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+    ])
+      .then(([data, live]) => {
+        const liveByKey = new Map(
+          (live && Array.isArray(live.regions) ? live.regions : []).map(r => [r.key, r.available]),
+        );
         const intro = document.getElementById('swiat-intro');
         if (intro && data.intro) intro.textContent = data.intro;
         if (Array.isArray(data.krainy) && data.krainy.length) {
           krainyRoot.innerHTML = data.krainy.map(k => {
-            const locked = k.available === false;
+            const fromGame = liveByKey.has(k.key) ? liveByKey.get(k.key) : undefined;
+            const available = typeof k.available_override === 'boolean'
+              ? k.available_override
+              : (fromGame !== undefined ? fromGame : k.available !== false);
+            const locked = available === false;
             const href = k.anchor ? `swiat.html#${k.anchor}` : 'swiat.html';
             return `
             <a class="kraina reveal${locked ? ' locked' : ''}" href="${escapeHtml(href)}">

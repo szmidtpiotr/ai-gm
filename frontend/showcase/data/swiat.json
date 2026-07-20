@@ -7,7 +7,8 @@
    "img": "assets/img/kraina-kresy.webp",
    "desc": "Twierdza Strażyn strzeże traktu od dwustu lat. Tu zaczyna się większość historii — zwykli ludzie na granicy mroku, drobne zlecenia, które urastają do czegoś większego. Gospoda „Pod Złamanym Rogiem” to pierwsze schronienie bohatera.",
    "anchor": "kraina-kresy",
-   "available": true
+   "available": true,
+   "key": "kresy"
   },
   {
    "name": "Koronne Niziny",
@@ -15,7 +16,8 @@
    "img": "assets/img/kraina-koronne-niziny.webp",
    "desc": "Serce królestwa: stolica Vilnograd, gildie kupieckie, świątynia Światła. Najbezpieczniej w świecie — i najwięcej noży w plecach. Jawnie rządzi Korona, w cieniu Rada Czterech.",
    "anchor": "kraina-niziny",
-   "available": false
+   "available": false,
+   "key": "koronne_niziny"
   },
   {
    "name": "Czarnobór",
@@ -23,7 +25,8 @@
    "img": "assets/img/kraina-czarnobor.webp",
    "desc": "Dzicz, w której znika się bez śladu. Bór Zmarłych, Bagienna Knieja, Trzęsawiska Mgieł — cienie wstają po zmroku, a Rdzeń jest tu blisko powierzchni. W głębi żyją skryte leśne elfy.",
    "anchor": "kraina-czarnobor",
-   "available": false
+   "available": false,
+   "key": "czarnobor"
   },
   {
    "name": "Siwe Granie",
@@ -31,7 +34,8 @@
    "img": "assets/img/kraina-siwe-granie.webp",
    "desc": "Surowa północ: lód, siarka, wymarłe kopalnie. Krasnoludy odeszły z Kopalni Czarnego Hutmana — dowierciły się do żyły Rdzenia i obudziły coś, co stuka do dziś. Przed czym uciekły?",
    "anchor": "kraina-granie",
-   "available": false
+   "available": true,
+   "key": "siwe_granie"
   },
   {
    "name": "Wybrzeże Łez",
@@ -39,7 +43,8 @@
    "img": "assets/img/kraina-wybrzeze-lez.webp",
    "desc": "Morze jako żywioł i grób. Piraci, przemytnicy, Zatoka Topielców bez prawa. Sztormy łamią statki, a coś dużego porusza się pod falami — może Pradawny, nim morze go pochłonęło.",
    "anchor": "kraina-wybrzeze",
-   "available": false
+   "available": false,
+   "key": "wybrzeze_lez"
   },
   {
    "name": "Martwe Pustkowia",
@@ -47,7 +52,8 @@
    "img": "assets/img/kraina-martwe-pustkowia.webp",
    "desc": "Serce metafizyki świata. Tu Rdzeń jest najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi. Świątynia Pradawnych — „wnętrze martwego boga” — to pęknięcie nad samym Rdzeniem. Główne pole dla lochów.",
    "anchor": "kraina-pustkowia",
-   "available": false
+   "available": false,
+   "key": "martwe_pustkowia"
   }
  ],
  "rdzen": {

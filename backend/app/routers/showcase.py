@@ -52,6 +52,22 @@ def subscribe_email(req: SubscribeRequest):
     return {"ok": True}
 
 
+@router.get("/api/showcase/regions")
+def showcase_regions():
+    """#1484 — publiczna prawda o tym, które krainy są grywalne.
+
+    Wizytówka woła to zamiast ufać ręcznemu polu w `swiat.json`; plik zostaje
+    fallbackiem (lustrem), gdy backend nie odpowie.
+    """
+    from app.services.showcase_region_mirror import public_region_states
+    conn = sqlite3.connect(resolve_db_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"regions": public_region_states(conn)}
+    finally:
+        conn.close()
+
+
 @router.get("/api/showcase/bestiary")
 def showcase_bestiary(user=Depends(current_user_optional)):
     """#1191 / #915 — public bestiary gallery. Anonymous: portrait + name +

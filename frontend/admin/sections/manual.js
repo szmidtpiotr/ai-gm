@@ -321,7 +321,14 @@ taką krainę, karta tej rasy w kreatorze bohatera <b>wyszarza się</b> z powode
 Człowiek nie ma kotwicy i jest dostępny zawsze. Istniejący bohaterowie grają dalej
 bez zmian.</p>
 <p><b>Flagę Tester</b> nadajesz w <b>Gracze</b> → konto → „Tester (może zgłaszać błędy)".
-Tester dostaje też rasy krain w stanie <b>coming</b> — skoro może tam wejść, może nimi grać.</p>`,
+Tester dostaje też rasy krain w stanie <b>coming</b> — skoro może tam wejść, może nimi grać.</p>
+<h4>Wizytówka nadąża sama</h4>
+<p>Karty krain na stronie-wizytówce mają odznaki <b>grywalne</b> / <b>wkrótce</b>. Idą one
+za stanem gry — przełączysz krainę w panelu, odznaka zmienia się bez ruszania plików.</p>
+<p>Gdybyś potrzebował rozjazdu celowo (np. kraina już grywalna, ale jeszcze niezapowiedziana),
+w <code>swiat.json</code> jest pole <code>available_override</code>: <code>true</code> lub
+<code>false</code> wygrywa ze stanem gry. Pole <code>available</code> to lustro utrzymywane
+automatycznie — nie edytuj go ręcznie.</p>`,
       },
       {
         id: 'budowniczy',
