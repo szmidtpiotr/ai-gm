@@ -29,15 +29,23 @@ def _existing_region_meta(region_key: str) -> dict:
     if p.exists():
         try:
             d = json.load(open(p, encoding="utf-8"))
-            return {
+            meta = {
                 "label":  d.get("label", region_key),
                 "status": d.get("status", "coming"),
                 "w":      d.get("w", 50),
                 "h":      d.get("h", 50),
             }
+            # SG-9 (#1481): klucze, których snapshot nie generuje (np. terrain_plan_seed
+            # zapisany przez generator terenu) muszą przetrwać round-trip — inaczej
+            # pierwszy snapshot po seedzie cicho kasuje wejście generatora.
+            meta["_extra"] = {
+                k: v for k, v in d.items()
+                if k not in ("region", "label", "status", "w", "h", "note", "hexes")
+            }
+            return meta
         except (OSError, ValueError):
             pass
-    return {"label": region_key, "status": "coming", "w": 50, "h": 50}
+    return {"label": region_key, "status": "coming", "w": 50, "h": 50, "_extra": {}}
 
 
 # Kolumny o wartości domyślnej pomijamy w pliku (mniejszy plik, czytelny diff).
@@ -84,6 +92,7 @@ def _save_region(hexes: list[dict], region_key: str) -> Path:
         ),
         "hexes": stripped,
     }
+    data.update(meta.get("_extra") or {})
     REGIONS_DIR.mkdir(parents=True, exist_ok=True)
     out = REGIONS_DIR / f"region_{region_key}.json"
     tmp = out.with_suffix(".json.tmp")

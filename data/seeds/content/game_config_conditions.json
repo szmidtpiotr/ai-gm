@@ -96,6 +96,18 @@
     "auto_remove": null
   },
   {
+    "key": "chory",
+    "label": "Chory",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"flat_test_penalty\",\"value\":-2}],\"cure\":{\"skill\":\"medicine\",\"dc\":12}}",
+    "description": "Postać złapała zarazę — -2 do wszystkich testów umiejętności. Nie mija sama ani po odpoczynku; zdjęcie: leczenie u zielarza/uzdrowiciela (test medicine DC 12) lub mikstura lecznicza z odtrutką.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-19 09:08:30",
+    "updated_at": "2026-07-19 09:08:30",
+    "stackable": 0,
+    "auto_remove": null
+  },
+  {
     "key": "confused",
     "label": "Zdezorientowany",
     "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"INT\",\"value\":-3},{\"type\":\"static_stat_modifier\",\"stat\":\"WIS\",\"value\":-3},{\"type\":\"behavior_override\",\"behavior\":\"random_table_k4\"},{\"type\":\"periodic_save\",\"stat\":\"WIS\",\"value\":14,\"tick\":\"start_turn\",\"expires\":\"save_success\"}]}",
@@ -336,6 +348,30 @@
     "auto_remove": null
   },
   {
+    "key": "prone",
+    "label": "Powalony",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"grants_attacker_bonus\":{\"atk_bonus\":2},\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"DEX\",\"value\":-2,\"expires\":\"duration_rounds:1\"}]}",
+    "description": "Cel powalony na ziemię — DEX −2, a atakujący zyskuje +2 do trafienia. Wstaje po 1 rundzie.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-19 09:08:29",
+    "updated_at": "2026-07-19 09:08:29",
+    "stackable": 0,
+    "auto_remove": null
+  },
+  {
+    "key": "przemoczony",
+    "label": "Przemoczony",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"stacking_levels\",\"max_level\":1,\"per_level_effects\":[{\"type\":\"test_penalty\",\"value\":-1}]}]}",
+    "description": "Przemoczony do suchej nitki — nurt rzeki zmoczył cię przy przeprawie przez bród. Kara -1 do testów fizycznych, dopóki nie wyschniesz. Mokrą ręką nie rozpalisz ognia. Znika po pełnym odpoczynku lub rozbiciu obozu (wysuszenie przy ognisku).",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-19 09:08:29",
+    "updated_at": "2026-07-19 09:08:29",
+    "stackable": 0,
+    "auto_remove": null
+  },
+  {
     "key": "rage",
     "label": "Furia",
     "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":2},{\"type\":\"static_stat_modifier\",\"stat\":\"damage_bonus\",\"value\":3},{\"type\":\"condition_immunity\",\"immune_to\":[\"slowed\",\"weakened\"],\"expires\":\"duration_rounds:6\"},{\"type\":\"on_expire_apply\",\"condition_key\":\"exhausted\",\"value\":1}],\"broken_by\":[\"stunned\",\"confused\"]}",
@@ -344,6 +380,18 @@
     "locked_at": null,
     "created_at": "2026-06-14 14:16:09",
     "updated_at": "2026-06-14 14:16:09",
+    "stackable": 0,
+    "auto_remove": null
+  },
+  {
+    "key": "rdzen_poison",
+    "label": "Zatrucie Rdzenia",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"dot\",\"value\":2,\"damage_type\":\"poison\",\"tick\":\"start_turn\",\"expires\":\"duration_rounds:3\"}]}",
+    "description": "Krew zatruta magią Rdzenia — −2 PŻ na początku każdej tury przez 3 tury (ignoruje odporności).",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-19 09:08:29",
+    "updated_at": "2026-07-19 09:08:29",
     "stackable": 0,
     "auto_remove": null
   },
@@ -358,6 +406,42 @@
     "updated_at": "2026-06-18 16:50:59",
     "stackable": 0,
     "auto_remove": null
+  },
+  {
+    "key": "salt_circle",
+    "label": "Krąg soli",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"clear_on\": \"combat_end\", \"on_apply\": \"push_core_beings\", \"effects\": [{\"type\": \"salt_ward\", \"blocks\": \"zone_change_to_engaged\", \"target_creature_types\": [\"undead\", \"demon\", \"rdzen\"], \"expires\": \"duration_rounds:3\"}]}",
+    "description": "Wokół ciebie zamknięty krąg grubej soli kopalnianej. Istoty Rdzenia — nieumarli, demony, twory żyły — nie przekroczą go przez 3 rundy. Żywym wrogom sól nie robi nic.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 19:02:47",
+    "updated_at": "2026-07-20 19:02:47",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:3"
+  },
+  {
+    "key": "salt_pinch",
+    "label": "Szczypta soli",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"clear_on\": \"combat_end\", \"effects\": [{\"type\": \"salt_miscast_softening\", \"steps\": 1, \"uses\": 1}, {\"type\": \"salt_spell_damping\", \"spell_damage_penalty\": 1}]}",
+    "description": "Sól na dłoniach i języku. Najbliższe odbicie czaru będzie o stopień łagodniejsze — ale sól tłumi też twój własny kanał: −1 do obrażeń czarów do końca walki.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 19:02:47",
+    "updated_at": "2026-07-20 19:02:47",
+    "stackable": 0,
+    "auto_remove": "combat_end"
+  },
+  {
+    "key": "salted_blade",
+    "label": "Solona klinga",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"clear_on\": \"combat_end\", \"effects\": [{\"type\": \"salt_edge\", \"bonus_dice\": \"1d4\", \"target_creature_types\": [\"undead\", \"demon\", \"rdzen\"]}]}",
+    "description": "Ostrze natarte solą. Cięcie w istotę Rdzenia dokłada 1k4 obrażeń — sól rozrywa to, co żyłę trzyma w kupie. Trzyma się broni przez jedną walkę.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 19:02:47",
+    "updated_at": "2026-07-20 19:02:47",
+    "stackable": 0,
+    "auto_remove": "combat_end"
   },
   {
     "key": "schwytany",
@@ -382,6 +466,18 @@
     "updated_at": "2026-06-18 16:50:59",
     "stackable": 0,
     "auto_remove": null
+  },
+  {
+    "key": "sleeping",
+    "label": "Uśpiony",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"skip_turn\", \"duration_rounds\": 2}], \"clear_on\": \"damage_taken\"}",
+    "description": "Postać pogrążona w magicznym śnie — traci turę (nie działa), dopóki nie zostanie zbudzona. Otrzymanie obrażeń natychmiast przerywa sen. Wygasa po 2 rundach.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-18 00:00:00",
+    "updated_at": "2026-07-18 00:00:00",
+    "stackable": 0,
+    "auto_remove": "on_damage"
   },
   {
     "key": "slowed",
@@ -454,17 +550,5 @@
     "updated_at": "2026-07-03 11:51:11",
     "stackable": 1,
     "auto_remove": null
-  },
-  {
-    "key": "sleeping",
-    "label": "Uśpiony",
-    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"skip_turn\", \"duration_rounds\": 2}], \"clear_on\": \"damage_taken\"}",
-    "description": "Postać pogrążona w magicznym śnie — traci turę (nie działa), dopóki nie zostanie zbudzona. Otrzymanie obrażeń natychmiast przerywa sen. Wygasa po 2 rundach.",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-18 00:00:00",
-    "updated_at": "2026-07-18 00:00:00",
-    "stackable": 0,
-    "auto_remove": "on_damage"
   }
 ]

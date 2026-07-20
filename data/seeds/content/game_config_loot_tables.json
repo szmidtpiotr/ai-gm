@@ -110,6 +110,17 @@
     "gold_max": 40
   },
   {
+    "key": "loot_brat_ciernia",
+    "label": "Łupy: Brat Ciernia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-14 18:31:21",
+    "updated_at": "2026-07-14 18:31:21",
+    "gold_min": 5,
+    "gold_max": 15
+  },
+  {
     "key": "loot_brat_gerwazy",
     "label": "Łupy: Brat Gerwazy",
     "description": "",
@@ -119,6 +130,17 @@
     "updated_at": "2026-07-10 07:38:40",
     "gold_min": 15,
     "gold_max": 40
+  },
+  {
+    "key": "loot_brat_lorik",
+    "label": "Łupy: Brat Lorik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-14 18:31:21",
+    "updated_at": "2026-07-14 18:31:21",
+    "gold_min": 40,
+    "gold_max": 100
   },
   {
     "key": "loot_brokk_zelazny_slad",
@@ -174,6 +196,17 @@
     "updated_at": "2026-06-11 12:19:44",
     "gold_min": 1,
     "gold_max": 8
+  },
+  {
+    "key": "loot_gerrit_sroka",
+    "label": "Łupy: Gerrit Sroka",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 12:18:21",
+    "updated_at": "2026-07-20 12:18:21",
+    "gold_min": 15,
+    "gold_max": 40
   },
   {
     "key": "loot_giant_rat",
@@ -251,6 +284,17 @@
     "updated_at": "2026-07-02 09:58:03",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_harpia_granicka",
+    "label": "Łupy: Harpia Graniowa",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 2,
+    "gold_max": 14
   },
   {
     "key": "loot_herszt_wyrostkow",
@@ -506,6 +550,17 @@
     "gold_max": 20
   },
   {
+    "key": "loot_ognik_siarkowy",
+    "label": "Łupy: Ognik Siarkowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 0,
+    "gold_max": 3
+  },
+  {
     "key": "loot_ogr",
     "label": "Łupy: Ogr",
     "description": "",
@@ -682,6 +737,17 @@
     "gold_max": 20
   },
   {
+    "key": "loot_ryk_krwawy",
+    "label": "Łupy: Ryk Krwawy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-14 18:31:21",
+    "updated_at": "2026-07-14 18:31:21",
+    "gold_min": 15,
+    "gold_max": 40
+  },
+  {
     "key": "loot_rykar_wilkowy",
     "label": "Łupy: Rykar Wilkowy",
     "description": "",
@@ -781,6 +847,17 @@
     "gold_max": 15
   },
   {
+    "key": "loot_salamandra_siarkowa",
+    "label": "Łupy: Salamandra Siarkowa",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 3,
+    "gold_max": 18
+  },
+  {
     "key": "loot_serce_rezonatora",
     "label": "Łupy: Serce Rezonatora",
     "description": "",
@@ -801,6 +878,17 @@
     "updated_at": "2026-07-13 16:57:02",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_sniezny_wilk",
+    "label": "Łupy: Śnieżny Wilk",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 0,
+    "gold_max": 4
   },
   {
     "key": "loot_spaczony_prorok",
@@ -834,6 +922,17 @@
     "updated_at": "2026-07-13 16:39:43",
     "gold_min": 3,
     "gold_max": 20
+  },
+  {
+    "key": "loot_straznik_rdzenia",
+    "label": "Łupy: Strażnik Rdzenia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 12:18:21",
+    "updated_at": "2026-07-20 16:45:45",
+    "gold_min": 40,
+    "gold_max": 100
   },
   {
     "key": "loot_szczury_grobowe",
@@ -946,6 +1045,17 @@
     "gold_max": 20
   },
   {
+    "key": "loot_troll_gorski",
+    "label": "Łupy: Troll Górski",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 10,
+    "gold_max": 45
+  },
+  {
     "key": "loot_trupiarz_bezimienny",
     "label": "Łupy: Trupiarz Bezimienny",
     "description": "",
@@ -965,6 +1075,17 @@
     "created_at": "2026-06-11 12:19:44",
     "updated_at": "2026-06-11 12:19:44",
     "gold_min": 1,
+    "gold_max": 10
+  },
+  {
+    "key": "loot_widmo_lodowe",
+    "label": "Łupy: Widmo Lodowe",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 0,
     "gold_max": 10
   },
   {
@@ -1164,6 +1285,17 @@
     "updated_at": "2026-07-02 09:58:03",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_zamarzniety_pielgrzym",
+    "label": "Łupy: Zamarznięty Pielgrzym",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 18:28:31",
+    "gold_min": 1,
+    "gold_max": 8
   },
   {
     "key": "loot_zbieg",

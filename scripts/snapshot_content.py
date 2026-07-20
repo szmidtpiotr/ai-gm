@@ -27,13 +27,20 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=DEFAULT_DB)
     ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument(
+        "--tables", default=None,
+        help="comma list — snapshot ONLY these tables. Use when the DB is known to be "
+             "behind git on some tables (SG-9 #1481: DEV had 30 weapons vs 49 in git, "
+             "so a full snapshot would have deleted canon).",
+    )
     args = ap.parse_args()
 
     if not os.path.exists(args.db):
         print(f"ABORT: DB not found: {args.db}", file=sys.stderr)
         sys.exit(2)
 
-    report = snapshot_all(args.db, args.out)
+    only = [t.strip() for t in args.tables.split(",")] if args.tables else None
+    report = snapshot_all(args.db, args.out, tables=only)
     total = 0
     missing = []
     for t, n in report.items():

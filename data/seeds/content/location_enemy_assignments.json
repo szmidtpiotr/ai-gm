@@ -277,5 +277,221 @@
     "max_count": 1,
     "notes": null,
     "is_active": 1
+  },
+  {
+    "id": 58,
+    "location_key": "cmentarz_mlotow",
+    "enemy_key": "bladzacy_upior",
+    "spawn_chance": 0.4,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 59,
+    "location_key": "cmentarz_mlotow",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.5,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 60,
+    "location_key": "cmentarz_mlotow",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.4,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 61,
+    "location_key": "sztolnia_umarlego_rodu",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.5,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 62,
+    "location_key": "sztolnia_umarlego_rodu",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 63,
+    "location_key": "sztolnia_umarlego_rodu",
+    "enemy_key": "giant_spider",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 64,
+    "location_key": "echo_wieza",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 65,
+    "location_key": "echo_wieza",
+    "enemy_key": "wraith",
+    "spawn_chance": 0.3,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 66,
+    "location_key": "grauhold",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.5,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 67,
+    "location_key": "grauhold",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 68,
+    "location_key": "silberhold",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.5,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 69,
+    "location_key": "silberhold",
+    "enemy_key": "kamienny_wojownik",
+    "spawn_chance": 0.3,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 71,
+    "location_key": "kohlgrund",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 72,
+    "location_key": "frosthold",
+    "enemy_key": "mrozny_wilkolak",
+    "spawn_chance": 0.4,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 73,
+    "location_key": "frosthold",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 74,
+    "location_key": "kaplica_zapomnianego_rodu",
+    "enemy_key": "wraith",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 75,
+    "location_key": "kaplica_zapomnianego_rodu",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 76,
+    "location_key": "stacja_pradawnych",
+    "enemy_key": "kamienny_wojownik",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 77,
+    "location_key": "stacja_pradawnych",
+    "enemy_key": "golem_stone",
+    "spawn_chance": 0.3,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 78,
+    "location_key": "sanktuarium_zamarznietej_pielgrzymki",
+    "enemy_key": "wraith",
+    "spawn_chance": 0.3,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 79,
+    "location_key": "zamarznieta_karawana",
+    "enemy_key": "mrozny_wilkolak",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 80,
+    "location_key": "zamarznieta_karawana",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 81,
+    "location_key": "kohlgrund",
+    "enemy_key": "wynaturzona_bestia",
+    "spawn_chance": 0.3,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 82,
+    "location_key": "kohlgrund",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.5,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
   }
 ]

@@ -38,7 +38,9 @@
     "lore_text": "Pradawny Troll to nie tyle bestia, co żywa narośl dawnego świata — przez stulecia obrastał mięsem, blizną i kamienną twardością, aż stał się czymś na poły z ciała, na poły z urwiska. Powiadają, że rana zadana takiemu potworowi zarasta, nim krew dobrze spłynie po ziemi, a odrąbane kawałki drgają jeszcze długo, jakby nie chciały uznać śmierci. Im starszy troll, tym mniej jest zwierzęciem, a bardziej upartą klątwą, której nie ima się ani żelazo, ani litość.",
     "terrain_tags": "swamp,mountain,cave",
     "max_level": null,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "assassin",
@@ -79,7 +81,9 @@
     "lore_text": "Skrytobójca nie szuka chwały ni pojedynku — żyje z cudzego ostatniego tchu i zleceń szeptanych po karczmach, dworach i cerkwiskach. Uderza pierwszy, nim ofiara zdąży pojąć, że już została osądzona, a ostrze prowadzi zawsze tam, gdzie ciało jest najmiększe, a śmierć najpewniejsza. Po jego robocie zostaje jeno cisza, ciemna plama i trwoga, że ktoś obcy znał twoje słabości lepiej niż ty sam.",
     "terrain_tags": "city,ruins",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "bagienna_jedza",
@@ -94,7 +98,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:44",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:25:14",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -111,16 +115,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453114_aigm_01114_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "ancient swamp witch, elite creature, root-like fingers, toad-like eyes, hunched crone, rotting robes, bog charms, bone talismans, curse cauldron, toxic vapors, marsh mist, fetid swamp, eerie glow, sinister presence, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 8,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "river,swamp,forest",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "bagienny_topielec",
@@ -135,7 +141,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:43",
-    "updated_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-19 09:25:32",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -152,16 +158,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453132_aigm_01115_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "bloated drowned corpse, swollen pallid flesh, waterlogged cadaver, milky dead eyes, tangled river weeds, dripping decay, grasping skeletal hands, murky current, dragging pose, submerged horror, swamp gloom, cold mist, eerie ripples, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "river,swamp",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "bandit",
@@ -202,7 +210,9 @@
     "lore_text": "Bandyta nie zawsze wygląda jak potwór — czasem ma ludzką twarz, zziębnięte dłonie i głód, który dawno zagłuszył sumienie. Czai się przy trakcie, w jarach i na skraju boru, gdzie najpierw słychać fałszywe wołanie o pomoc, a dopiero potem świst noża. Mówią, że najgorsi z nich rabują nie tylko dobytek, lecz i odwagę, bo kto raz spojrzy w oczy człeka, co z biedy przeszedł w okrucieństwo, temu długo śnią się ciemne drogi.",
     "terrain_tags": "road,forest,plains",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "bandit_chief",
@@ -243,7 +253,9 @@
     "lore_text": "Herszt Bandy to nie zwykły zbój, jeno wilk, co nauczył się chodzić na dwóch nogach i mówić ludzkim głosem. Gdzie on stanie, tam za plecami zaraz wyrastają noże jego ludzi, a litość gaśnie jak świeca na wietrze. Powiadają, że prędzej dogadasz się z burzą w stepie niż z nim, bo jego słowo warte jest tyle, co życie ofiary pod butem.",
     "terrain_tags": "road,forest,ruins",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "bandit_thug",
@@ -284,7 +296,9 @@
     "lore_text": "Bandyta Oprych to tępy osiłek, którego herszt pcha przodem tam, gdzie trzeba krwi, wrzasku i połamanych kości. Nie zna podstępu ni litości — idzie jak taran, ślepy na własną zgubę, byle dopaść człeka i roztrzaskać go pięścią, pałką albo toporem. Powiadają, że w ciemnym borze łatwiej usłyszeć jego ochrypły śmiech niż modlitwę ofiary.",
     "terrain_tags": "road,forest",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "bandyta_uliczny",
@@ -325,7 +339,9 @@
     "lore_text": "Bandyta uliczny rodzi się z brudu zaułków i zgiełku targowisk, gdzie cuchnąca bieda miesza się z chciwością i strachem. W łachmanach, z tanim nożem lub pałką w garści, nie szuka męstwa, jeno gardła odsłoniętego w półmroku i sakwy, której nikt nie dopilnował. Gdy czuje przewagę albo dopadnie ofiarę znienacka, rzuca się jak szczur do spiżarni — prędki, tchórzliwy i bez litości dla tych, których uznał za słabszych.",
     "terrain_tags": "city",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "bezimienny_trup",
@@ -366,7 +382,9 @@
     "lore_text": "Bezimienny Trup wygląda jak zwłoki wyrzucone z mokradeł: rozmiękłe, oblepione błotem ciało bez twarzy, bez imienia i bez śladu po modlitwie nad grobem. Idzie szarpanie, jakby niewidzialne dłonie ciągnęły je spod ziemi, a choć porusza się ociężale, potrafi naraz rzucić się z rozpaczliwą, nieludzką siłą. Mówią, że najdłużej błąkają się te, których nikt nie chciał rozpoznać.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "bezimienny_trup_2",
@@ -407,7 +425,9 @@
     "lore_text": "Bezimienny Trup wypełza z mokradeł jak wyrzut sumienia samej ziemi: rozmokły, oblepiony błotem, z pustymi oczodołami i palcami połamanymi tak, jakby śmierć łamała je po raz drugi. Nie gna za żywym z głodu, lecz z urazy, uparcie i bez słowa, znacząc swą drogę jedynie chlupotem ziemi i suchym trzaskiem kości. Mówią, że nie spocznie, póki nie dotknie ciepła tych, którzy jeszcze mają imię.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "bezimienny_trupiarz",
@@ -448,7 +468,9 @@
     "lore_text": "Bezimienny trupiarz wygląda jak topielec wygrzebany z mogiły: napęczniałe błotem zwłoki, obleczone w strzępy pogrzebowych szat, suną szarpanym krokiem bez pośpiechu, jakby znały kres każdej ucieczki. Nie woła ani nie ryczy — słychać tylko chrzęst zębów i mokry bulgot w rozmiękłej piersi, od którego stygnie krew nawet starym grabarzom.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "beznamienny_straznik",
@@ -489,7 +511,9 @@
     "lore_text": "Beznamienny Strażnik błąka się po rozmokłych mogiłach jak napęczniały błotem trup grabarza albo pielgrzyma, z twarzą zapadniętą w siebie niczym przemokła maska. W palcach nosi czarną ziemię, jakby wciąż czegoś szukał pod darnią, a jego obecność zdradza jedynie chrzęst kości i krótkie, mokre sapnięcia. Mówią, że staje nad tymi, którym nie dane było spocząć z imieniem, i zabiera każdego, kto odważy się naruszyć ich ciszę.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "bladzacy_upior",
@@ -504,7 +528,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:44",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:25:51",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -521,16 +545,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453151_aigm_01116_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "tormented wandering spirit, restless soul, spectral humanoid, ethereal tattered form, hollow glowing eyes, mournful expression, icy mist aura, deathly pallor, ghostly wisps, cursed presence, aura of dread, elite undead creature, shadowed gloom, cold blue glow, haunting atmosphere, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 7,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "borik_zelazny_zapis",
@@ -545,7 +571,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 07:24:38",
-    "updated_at": "2026-07-13 07:24:38",
+    "updated_at": "2026-07-19 09:26:09",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -562,16 +588,61 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453169_aigm_01117_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "old burly dwarf, travel-worn chainmail, heavy warhammer, round shield, disciplined stance, stoic guardian, defensive fighter, scarred face, braided beard, rugged features, grim resolve, muted steel, weathered leather, cold atmosphere, moody shadows, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "llm_plan",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "brat_ciernia",
+    "label": "Brat Ciernia",
+    "hp_base": 20,
+    "ac_base": 12,
+    "attack_bonus": 0,
+    "dex_modifier": 0,
+    "damage_die": "1d6",
+    "skills_json": null,
+    "description": "Wychudzony fanatyk w skórzanym fartuchu i kapturze, uzbrojony w sierp, hak lub krótki nóż. Walczy nerwowo, wykorzystuje dymne proszki i atakuje z bliska nagłymi zrywami.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-14 18:31:21",
+    "updated_at": "2026-07-19 09:26:28",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 25,
+    "conditions_immune": null,
+    "loot_table_key": "loot_brat_ciernia",
+    "note": "Może raz na starcie walki rozpylić pył ziołowy, utrudniając widzenie i testy opanowania.",
+    "review_status": "pending_review",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784453188_aigm_01118_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "gaunt fanatic, emaciated humanoid, leather apron, dark hood, scarred skin, sickle weapon, iron hook, short knife, twitching stance, smoke powder pouches, ambush predator, close combat, grimy rags, unsettling presence, murky shadows, ominous atmosphere, gritty realism, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 1,
+    "created_by": "llm_plan",
+    "template_id": null,
+    "lore_text": null,
+    "terrain_tags": null,
+    "max_level": null,
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "brat_gerwazy",
@@ -612,7 +683,52 @@
     "lore_text": "Brat Gerwazy kroczy w zniszczonej półpłycie jak widmo dawnej przysięgi, a jego poorana bliznami twarz nie zdradza już ni litości, ni żalu. Ci, którzy stanęli naprzeciw jego ciężkiego miecza, powiadają, że nie walczy jak człowiek, lecz jak wyrok — metodyczny, cichy i nieuchronny. Gdzie się pojawia, tam nawet najdziksi zbrojni milkną, jakby przeczuwali, że oto nadchodzi kat, który od dawna nie służy już żadnemu panu prócz śmierci.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "brat_lorik",
+    "label": "Brat Lorik",
+    "hp_base": 48,
+    "ac_base": 15,
+    "attack_bonus": 0,
+    "dex_modifier": 0,
+    "damage_die": "1d10",
+    "skills_json": null,
+    "description": "Surowy wojownik-zakonnik w pociemniałej zbroi płytowej, z długim mieczem i relikwiarzem pełnym suszu przy pasie. Walczy metodycznie, zmusza przeciwnika do cofania się i wykorzystuje autorytet oraz chłodną dyscyplinę.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-14 18:31:21",
+    "updated_at": "2026-07-19 09:26:46",
+    "tier": "boss",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 150,
+    "conditions_immune": null,
+    "loot_table_key": "loot_brat_lorik",
+    "note": "Raz podczas walki może wzmocnić się oparami suszu, ignorując chwilowo strach i ból oraz zmuszając przeciwnika do testu odporności psychicznej.",
+    "review_status": "pending_review",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784453206_aigm_01119_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "stern warrior monk, darkened plate armor, long sword, reliquary at belt, dried herbs, austere visage, disciplined stance, oppressive authority, methodical combat, grim presence, shadowy cathedral atmosphere, cold steel, worn metal, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 10,
+    "created_by": "llm_plan",
+    "template_id": null,
+    "lore_text": null,
+    "terrain_tags": null,
+    "max_level": null,
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "brigand",
@@ -653,7 +769,9 @@
     "lore_text": "Rozbójnik czai się tam, gdzie kończy się gościniec, a zaczyna strach: w zaułkach, na przeprawach i pod czarną ścianą boru. Rzadko szuka uczciwej walki — woli nóż przy żebrze, kamień z ciemności albo groźbę, która odbiera oddech szybciej niż cios. Mówią, że najgorsi z nich rabują nie tylko sakwy, ale i odwagę, bo po spotkaniu z takim drapieżcą człek długo ogląda się przez ramię.",
     "terrain_tags": "road,hills,forest",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "brokk_zelazny_slad",
@@ -668,7 +786,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 09:42:23",
-    "updated_at": "2026-07-12 09:42:23",
+    "updated_at": "2026-07-19 09:27:04",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -685,16 +803,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453224_aigm_01120_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "ancient dwarf, sunken eyes, gaunt weathered face, braided gray beard, heavy rune-etched surveyor hammer, measuring instruments, brass calipers, chained tools, layered miner armor, stone dust, methodical stance, grim determination, subterranean gloom, cold torchlight, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "llm_plan",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "cave_bear",
@@ -735,7 +855,9 @@
     "lore_text": "Niedźwiedź jaskiniowy to stary król podziemi, ogromny jak zawalona brama, o futrze przesiąkniętym wilgocią i wonią kamienia. Gdy wychodzi z czerni pieczary, bije zawsze dwa razy — najpierw łamie kości, potem odbiera odwagę tym, którzy jeszcze stoją. Mówią, że echo jego ryku błąka się po korytarzach długo po uczcie, szukając następnych śmiałków.",
     "terrain_tags": "cave,mountain,forest",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "cultist",
@@ -776,7 +898,9 @@
     "lore_text": "Kultista to człek, który oddał duszę ciemnemu bóstwu, a w zamian otrzymał tylko żar ślepej wiary i obietnicę straszliwej łaski. Choć ręka jego bywa niezgrabna, rzuca się do walki z obłędem w oczach, jakby każda rana przybliżała go do spełnienia bluźnierczego ślubu. Nocą powiadają, że modlitwy takich jak on potrafią ściągnąć na wieś coś znacznie gorszego niż sama śmierć.",
     "terrain_tags": "dungeon,ruins,swamp",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "czarny_hask",
@@ -817,7 +941,9 @@
     "lore_text": "Czarny Hask wygląda jak człowiek obedrany z litości: wysoki, suchy, obciągnięty czarnym skórzanym kaftanem, z krótkim mieczem w jednej dłoni i hakowanym nożem w drugiej. Rzuca się bez ostrzeżenia, tnie nisko, by podciąć nogi, a zaraz potem szuka gardła, jakby znał tylko dwa miejsca, w których kończy się odwaga. Mówią, że nie odchodzi od rannego, póki nie wbije ostrza raz, krótko i głęboko — dla pewności, dla ciszy.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "dark_elf",
@@ -858,7 +984,9 @@
     "lore_text": "Mroczny elf to dziecko głębin i zdrady — wygnaniec z podziemnych rodów albo sługa ciemności, która pożarła mu serce. Porusza się bezszelestnie jak cień między korzeniami, a jego ciosy są tak szybkie i pewne, jakby prowadziła je sama nienawiść. Powiadają, że gdzie raz padnie jego spojrzenie, tam prędzej czy później popłynie krew.",
     "terrain_tags": "forest,cave,dungeon",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "dark_mage",
@@ -899,7 +1027,9 @@
     "lore_text": "Mroczny Czarodziej to człowiek lub elf, którego duszę przeżarła czarna moc, aż oczy stały się głębsze niż noc nad stepem. Nie szuka starcia twarzą w twarz — z oddali splata przekleństwa, ogień i obłęd, jakby sama ciemność szeptała przez jego usta. Gdzie staje jego cień, tam milką ptaki, a ludzie długo jeszcze boją się wypowiedzieć jego imię.",
     "terrain_tags": "ruins,dungeon,city",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "dark_priest",
@@ -940,7 +1070,9 @@
     "lore_text": "Mroczny Kapłan to człowiek, który oddał duszę bóstwu milczącemu spod ziemi, a jego święty znak stał się naczyniem chłonącym śmierć i rozpacz. Gdy unosi symbol swego pana, powietrze stygnie, światło przygasa, a z ran i grobów budzi się nekrotyczna moc posłuszna jego szeptom. Powiadają, że tam, gdzie modli się szeptem, nawet zmarli odwracają twarze od wiecznego spoczynku.",
     "terrain_tags": "dungeon,ruins,castle",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "demon_lord",
@@ -981,7 +1113,9 @@
     "lore_text": "Pan Demonów to nie tyle istota, co rozdarcie świata, przez które sączy się sama zagłada. Przyzwany przez obłędny kult, kroczy jak żywa klątwa — gdzie spojrzy, tam milką modlitwy, a ziemia pamięta tylko ogień, krew i ruinę.",
     "terrain_tags": "dungeon,ruins,castle",
     "max_level": null,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "demon"
   },
   {
     "key": "dragon_young",
@@ -1022,7 +1156,9 @@
     "lore_text": "Młody smok nie nosi jeszcze całej pychy i ciężaru pradawnych gadów, lecz już teraz jest nieszczęściem, które potrafi spalić sioło, rozszarpać drużynę i zatruć serca samą swoją obecnością. Jego głód bywa porywczy, gniew nagły jak burza nad stepem, a każdy ślad łusek i spalenizny każe szeptać, że tam, gdzie poluje, ziemia długo nie wyda plonu. Kto ujrzy go z bliska i przeżyje, ten do końca dni słyszy w nocy szelest skrzydeł nad dachem.",
     "terrain_tags": "mountain,ruins,cave",
     "max_level": null,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "dziki_pies",
@@ -1037,7 +1173,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:12:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:27:22",
     "tier": "weak",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -1054,16 +1190,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453242_aigm_01121_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "gaunt feral mongrel, emaciated canine, raised hackles, matted fur, scarred muzzle, bared teeth, cowardly scavenger, roadside predator, wasteland pack hunter, carrion eater, grim atmosphere, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 1,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,plains,heath,hills",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "enemy",
@@ -1104,7 +1242,52 @@
     "lore_text": "Napastnikiem zwą nie jedną bestię, lecz każde plugastwo, które bez ostrzeżenia wychodzi z mroku, by rzucić się do gardła człowiekowi. W opowieściach kresowych to cień z pazurami, ślepą furią i głodem krwi, co nie pyta, kim jesteś ani skąd przybywasz. Gdy w borze nagle cichnie ptactwo, a koń zaczyna rwać uzdę, starzy ludzie mówią tylko jedno — napastnik już jest blisko.",
     "terrain_tags": "road,wilderness",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "gerrit_sroka",
+    "label": "Gerrit Sroka",
+    "hp_base": 34,
+    "ac_base": 14,
+    "attack_bonus": 0,
+    "dex_modifier": 0,
+    "damage_die": "1d8",
+    "skills_json": null,
+    "description": "Szczupły najemnik o lisiej twarzy, w skórzni i z rapierem oraz pistoletem lontowym; walczy sprytnie, wykorzystując osłony, kurz i przewagę pozycji.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 12:18:21",
+    "updated_at": "2026-07-20 19:51:45",
+    "tier": "elite",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 50,
+    "conditions_immune": null,
+    "loot_table_key": "loot_gerrit_sroka",
+    "note": "Potrafi wycofać się po trafieniu i oddać strzał z ukrycia; jeśli przegrywa, próbuje targować się informacjami.",
+    "review_status": "pending_review",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577105_aigm_01208_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "slender fox-faced mercenary, cunning anthropomorphic vulpine features, lean agile build, weathered leather armor, tattered cloak, rapier, matchlock pistol, dusty battlefield, tactical cover, ambush stance, sly expression, grimy textures, muted earth tones, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 6,
+    "created_by": "llm_plan",
+    "template_id": null,
+    "lore_text": null,
+    "terrain_tags": null,
+    "max_level": null,
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "ghost",
@@ -1145,7 +1328,9 @@
     "lore_text": "Duch to niespokojna dusza, która nie odeszła, lecz zrosła się z miejscem swej śmierci jak mgła z bagnem o świcie. Błąka się po ruinach, kurhanach i pustych izbach, a tam, gdzie się zjawia, stygnie powietrze i cichną nawet psy. Żelazo i stal przechodzą przezeń jak przez zimny dym, więc niejeden śmiałek zginął, nim pojął, że zmarłych nie ima się oręż żywych.",
     "terrain_tags": "ruins,castle,dungeon",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "ghoul",
@@ -1186,7 +1371,9 @@
     "lore_text": "Ghul to wychudły, plugawy trup, który porusza się z nieludzką szybkością, jakby ziemia sama pchała go ku żywym. Poluje nocą na samotnych i rannych, a jego pazury niosą martwe odrętwienie, po którym ciało sztywnieje, nim ofiara zdąży krzyknąć. Mówią, że tam, gdzie ghul raz posmakował ludzkiego mięsa, jeszcze długo słychać w ciemności chrapliwy oddech i skrobanie pazurów o kamień.",
     "terrain_tags": "dungeon,ruins,swamp",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "giant_rat",
@@ -1227,7 +1414,9 @@
     "lore_text": "Olbrzymi szczur bywa wielkości wychudłego psa, lecz w ciemności wydaje się większy, jakby niosła go sama zaraza. Jego zęby, długie i ostre niczym sztylety, nie tylko rozdzierają ciało, ale i wpuszczają w krew jad, po którym rana czernieje szybciej niż noc nad bagnem. Mówią, że tam, gdzie pojawia się pierwszy, reszta już czeka pod podłogą.",
     "terrain_tags": "dungeon,cave,city",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "giant_spider",
@@ -1268,7 +1457,9 @@
     "lore_text": "Olbrzymi pająk, wielki jak wiejski kundel, czai się tam, gdzie światło boi się sięgnąć: w zapadłych piwnicach, pustych stodołach i pod korzeniami starych drzew. Jego nić jest mocna jak dratva i lepka niczym grzech, a kto wpadnie w sieć, rychło czuje ukłucie jadu, po którym ciało kamienieje, choć rozum wciąż krzyczy.",
     "terrain_tags": "forest,cave,dungeon",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "goblin",
@@ -1309,7 +1500,9 @@
     "lore_text": "Goblin to mały, chyży szkodnik, co bije tylko wtedy, gdy czuje przewagę, a ucieka, nim krew dobrze ostygnie na nożu. Krąży po skrajach lasów, ruinach i mokradłach, wypatrując słabych, rannych i zagubionych, bo w otwartym boju wart jest mniej niż strach, który niesie. Powiadają, że gdzie nocą słychać chichot spod korzeni i plusk lekkich stóp w trzcinie, tam goblin już obrał sobie ofiarę.",
     "terrain_tags": "forest,cave,hills",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "goblin_archer",
@@ -1350,7 +1543,9 @@
     "lore_text": "Gobliński łucznik rzadko daje się dopaść — czai się na skraju kniei, między omszałymi głazami i suchymi trzcinami, skąd cicho, niemal złośliwie, sieje grad czarnych strzał. Nie szuka chwały ni uczciwej walki; kąsa z oddali, cofając się w cień, aż ofiara padnie zmęczona, krwawiąca i ślepa od strachu.",
     "terrain_tags": "forest,hills",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "goblin_u31",
@@ -1391,7 +1586,9 @@
     "lore_text": "Goblin z kresowych ostępów to nie śmieszny chochlik, jeno mały plugawiec o zębach jak drzazgi i ślepiach błyszczących w trzcinach niby błotne ogniki. Trzyma się kurhanów, rozkopanych mogił i wilgotnych piwnic, gdzie kradnie jadło, dziecięce paciorki i wszystko, co pachnie ludzkim domem. Mówią starzy, że gdy nocą słychać chichot spod podłogi, lepiej nie zaglądać w ciemność — bo goblin rzadko przychodzi sam.",
     "terrain_tags": "forest,cave,hills",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "golem_stone",
@@ -1432,7 +1629,9 @@
     "lore_text": "Golem Kamienny wygląda jak martwy posąg wyrwany z ruin świątyni, lecz gdy pan wyda rozkaz, w jego skalnym ciele budzi się zimna, nieubłagana siła. Idzie wolno, z łoskotem miażdżąc ziemię pod stopami, a ostrza i strzały częściej krzeszą z niego iskry, niż czynią mu krzywdę. Mówią, że nie zna litości, zmęczenia ani trwogi — i dopóki trwa wola jego twórcy, trwa też kamienne posłuszeństwo bestii.",
     "terrain_tags": "mountain,dungeon,ruins",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "guard",
@@ -1473,7 +1672,9 @@
     "lore_text": "Strażnik to nie człowiek, choć nosi mundur i chodzi tam, gdzie kończy się prawo, a zaczyna nocne posłuszeństwo. Mówią, że rodzi się z przysięgi złamanej pod latarnią i odtąd pilnuje bram, zaułków oraz posterunków z gorliwością martwego psa, co pamięta tylko rozkaz. Kto po zmroku usłyszy stuk jego obutych kroków, ten wie już, że nie ucieka przed strażą, lecz przed czymś, co dawno zapomniało, za kogo trzyma wartę.",
     "terrain_tags": "city,castle,road",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "halbrecht_czarny_poborca",
@@ -1514,7 +1715,9 @@
     "lore_text": "Halbrecht Czarny Poborca chodzi jak wyrok po błotnistych traktach, okutany w czarną kapę i skórę, spod której błyska cep bojowy, a przy biodrze śpi krótki nóż dla tych, co padli już na kolana. Mówią, że najgłośniej śmieje się wtedy, gdy krew z człeka uszła wraz z odwagą, bo na silnych warczy z dala, lecz na rannych i strwożonych spada z pewnością hycla. W jego cieniu nawet dług wydaje się lżejszy od własnej głowy.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "halwen_herszt_wyrostkow",
@@ -1555,7 +1758,52 @@
     "lore_text": "Halwen, herszt wyrostków, chodzi jak człek, który każdą zniewagę nosi pod skórą niby żar: krępy, o knykciach zbitych jak kamień i nosie łamanym tyle razy, że już sam straszy swoim kształtem. Najgłośniej śmieje się wtedy, gdy może upokorzyć słabszego, bo jego odwaga jest tylko maską dla wstydu po odmowie Brony, o której ponoć pamięta każdej nocy. Mówią, że kto spojrzy mu w oczy zbyt długo, ujrzy nie gniew, jeno tępy głód odwetu, co z człeka czyni bestię gorszą niż wilk.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "harpia_granicka",
+    "label": "Harpia Graniowa",
+    "hp_base": 18,
+    "ac_base": 13,
+    "attack_bonus": 5,
+    "dex_modifier": 0,
+    "damage_die": "1d6",
+    "skills_json": null,
+    "description": "Gnieździ się w urwiskach nad przełęczami. Nie atakuje wprost — krzykiem odbitym od ścian próbuje strącić ofiarę z półki skalnej.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:52:05",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 1,
+    "damage_type": "physical",
+    "xp_award": 115,
+    "conditions_immune": null,
+    "loot_table_key": "loot_harpia_granicka",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577125_aigm_01209_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "gaunt cliff-dwelling predator, batlike humanoid, elongated limbs, hooked talons, ragged membrane wings, pale stone-gray skin, eyeless face, gaping shriek maw, sinewy body, mountain pass precipice, echoing menace, storm mist, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 3,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Gnieździ się w urwiskach nad przełęczami. Nie atakuje wprost — krzykiem odbitym od ścian próbuje strącić ofiarę z półki skalnej.",
+    "terrain_tags": "mountain,hills",
+    "max_level": 6,
+    "world_scope": "global",
+    "region_tag": "siwe_granie",
+    "creature_type": null
   },
   {
     "key": "harpy",
@@ -1596,7 +1844,9 @@
     "lore_text": "Harpia ma twarz niewiasty, lecz w jej oczach nie ma litości — tylko głód i zimne okrucieństwo drapieżnego ptaka. Krąży nad jarami i urwiskami, a jej śpiew, słodki jak kołysanka, mąci zmysły i prowadzi zbłąkanych ku przepaści. Mówią, że kto raz usłyszy ten głos o zmierzchu, temu długo potem śnią się skrzydła szeleszczące nad dachem.",
     "terrain_tags": "mountain,hills,ruins",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "herszt_wyrostkow",
@@ -1637,7 +1887,9 @@
     "lore_text": "Wicek Młynarczyk to młody byk o barkach jak belki młyna, z gębą pooraną starym żelazem i pychą, która rozsadza mu łeb bardziej niż gorzałka. Gdy raz poczuje smak cudzego strachu, wraca po niego jak wilk do krwawego tropu, bo każda zniewaga pali go gorzej niż rozpalone węgle pod skórą. Choć sieje postrach po karczmach i obejściach, starzy ludzie spluwają na jego ślad i mówią, że to nie pan ciemności, jeno żeruń, co urósł na cudzej słabości.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "herszt_wyrostkow_2",
@@ -1678,7 +1930,9 @@
     "lore_text": "Najstarszy z wyrostków nie musi być największy — wystarczy, że jego śmiech pierwszy rozcina ciszę, a cudza odwaga więdnie pod spojrzeniem pooranej bliznami twarzy. Kpi, bo pod szyderstwem kryje starą ujmę, której nie zapomniał, i dla samej rozkoszy ustępowania mu z drogi gotów jest rozpętać burdę z byle iskry. Mówią, że najgorsze w nim nie są pięści, lecz ta chora duma, co każe mu szczuć innych, póki w człowieku nie zostanie nic prócz strachu.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "herszt_wyrostkow_3",
@@ -1719,7 +1973,9 @@
     "lore_text": "Marek zwany Szczurem to nie bestia z bajędy, jeno chudy, poobijany wyrostek, co nosi w oczach wieczną urazę, a w sercu głód cudzego strachu. Stroszy się jak panicz nad cudzym losem, choć jego okrucieństwo nie rodzi się z odwagi, lecz z pychy i rozpaczliwej potrzeby, by choć na chwilę wydać się kimś większym, niż jest. Kto raz ujrzy jego urażoną dumę, ten wie, że najlichszy szczur najzacieklej gryzie wtedy, gdy czuje pod stopami własną nędzę.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "herszt_wyrostkow_4",
@@ -1760,7 +2016,9 @@
     "lore_text": "Marek Kłonica nie ryczy jak potwór z bajęd, lecz chodzi między ludźmi z rozbitą wargą i urazą cięższą od żelaza, a gdzie stanie, tam prędko kwaśnieje zgoda. Mówią, że kto zranił jego dumę, temu nocą popuszczą się jarzma, stępią siekiery i zniknie zboże z worków, bo Marek mści się nie ciosem, jeno cierpliwą szkodą. W jego spojrzeniu nie ma odwagi, tylko głód, by cudzy lęk udawał należny mu szacunek.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "herszt_wyrostkow_harl",
@@ -1801,7 +2059,9 @@
     "lore_text": "Harl to bydlę w ludzkiej skórze: szeroki w barkach, z nosem rozbitym jak źle sklejony dzban i dumą, która cuchnie gorzej niż gorzałka na jego oddechu. Po tym, jak Brunn starł go przy ludziach z pychy aż do kości, chodzi po kątach jak wściekły pies i podjudza słabszych, by cudzymi rękami odzyskać stracone męstwo. W takich jak on najprędzej budzi się nieszczęście — bo gdy prostak bierze brutalność za władzę, krew leje się prędzej niż deszcz nad stepem.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "hetman_rozbojcow",
@@ -1816,7 +2076,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:27:40",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -1833,16 +2093,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 16, \"DEX\": 10, \"CON\": 14, \"INT\": 7, \"WIS\": 8, \"CHA\": 8, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453260_aigm_01122_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "bandit warlord, elite raider chieftain, stolen chainmail, bear fur cloak, brutal axe, scarred face, hardened veteran, commanding presence, ruthless expression, road tyrant, rugged leather, iron pauldrons, grim atmosphere, moody shadows, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 8,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,plains,ruins",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "imp",
@@ -1883,7 +2145,9 @@
     "lore_text": "Imp to drobny pomiot piekieł o czerwonawej skórze, zwinny jak iskra i równie trudny do pochwycenia. Nie tyle zabija siłą, co doprowadza człeka do szału: kąsa, drwi, znika w cieniu i wraca, nim zdążysz przeżegnać się po raz wtóry. W ludowych podaniach mówią, że gdzie zadomowi się imp, tam noc staje się dłuższa, a gniew przychodzi ludziom łatwiej niż modlitwa.",
     "terrain_tags": "dungeon,ruins",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "demon"
   },
   {
     "key": "iron_golem",
@@ -1924,7 +2188,9 @@
     "lore_text": "Golem Żelazny to milczący kolos z kutego metalu, jakby wykuty nie ręką kowala, lecz gniewem samej ziemi. Idzie powoli, ciężko i nieuchronnie, a każdy jego cios potrafi roztrzaskać kość, mur i odwagę naraz. Mówią, że ostrze ślizga się po nim jak deszcz po nagrobku, a kto raz usłyszy zgrzyt jego kroków w ciemności, ten długo potem boi się dźwięku własnego serca.",
     "terrain_tags": "dungeon,castle,ruins",
     "max_level": null,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kamienny_wojownik",
@@ -1939,7 +2205,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:44",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:27:58",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -1956,16 +2222,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 16, \"DEX\": 10, \"CON\": 14, \"INT\": 7, \"WIS\": 8, \"CHA\": 8, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453278_aigm_01123_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "awakened stone guardian, runic monolith body, massive hulking construct, avalanche-like bulk, ancient trail sentinel, ruin protector, carved glowing runes, cracked granite skin, heavy stone armor, colossal fists, relentless stance, dust and debris, grim ancient presence, cold mystical aura, shadowy ruins, ominous atmosphere, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 8,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "mountain,ruins,dungeon,road",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "klusownik",
@@ -1980,7 +2248,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:12:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:28:17",
     "tier": "weak",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -1997,16 +2265,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453297_aigm_01124_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "furtive trapper creature, gaunt humanoid, weathered leather armor, hooded face, wary eyes, short bow, belt snares, rope traps, forest ambusher, crouched pose, thorny brush, muddy boots, grimy hands, tense silhouette, shadowy woodland, ominous mood, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 1,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,forest,heath,hills",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kobold",
@@ -2047,7 +2317,9 @@
     "lore_text": "Kobold to drobny jaszczurolud o łuskach matowych jak błoto z przydrożnych rowów i ślepiach błyszczących chytrze spod niskiego czoła. Sam niewiele znaczy, lecz rzadko bywa sam — z ciemnych nor i rumowisk wypełza ich cała czereda, kąsając, drapiąc i osaczając ofiarę, aż padnie bardziej ze strachu niż od ran. W kresowych opowieściach powiadają, że gdzie nocą słychać ich skrzekliwy chichot, tam o świcie braknie nie tylko drobiu, ale i dziecięcych śladów spod okna.",
     "terrain_tags": "cave,dungeon,mountain",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kolekcjoner_kosci",
@@ -2062,7 +2334,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 09:42:23",
-    "updated_at": "2026-07-12 09:42:23",
+    "updated_at": "2026-07-19 09:28:35",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -2079,16 +2351,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453315_aigm_01125_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "gaunt fanatic, emaciated humanoid, stitched cloak, bone fetishes, ritual talismans, hollow eyes, pallid skin, ragged robes, hooked glaive, bone dust, occult warrior, elite enemy, grim aura, cursed relics, sinister presence, bleak atmosphere, moody shadows, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "llm_plan",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "krypta_opiekun",
@@ -2129,7 +2403,9 @@
     "lore_text": "Strażnik Grobowca to prastary upiór okutany w zbutwiałą zbroję, który drzemie pośród kurzu i kości, póki obcy krok lub szept nie naruszy ciszy mogiły. Gdy się budzi, w korytarzach rozlega się chrzęst żelaza i głuchy oddech śmierci, a ci, którzy ośmielili się wejść, rychło pojmują, że nie strzeże on skarbów, lecz samego prawa zmarłych do wiecznego spoczynku.",
     "terrain_tags": "dungeon,ruins",
     "max_level": null,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "kultowy_tropiciel",
@@ -2170,7 +2446,9 @@
     "lore_text": "Kultowy Tropiciel sunie przez chaszcze jak cień przywołany szeptem, chudy i bezgłośny pod skórzanym płaszczem, z twarzą skrytą za maską zszytą z popiołowego płótna i ptasich kości. Nie ściga ofiary z gniewu, lecz z nabożną cierpliwością — tygodniami bada ślady, nawyki i lęki, aż zna człowieka lepiej, niż ten zna siebie. Gdy wreszcie uderza, czyni to z ciemności, jednym pewnym ciosem, po którym w zaroślach zostaje tylko zapach mokrej ziemi i ciche trzepotanie czegoś, co nie powinno mieć skrzydeł.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultowy_zbieracz",
@@ -2211,7 +2489,9 @@
     "lore_text": "Kultowy Zbieracz chodzi tam, gdzie dogasa bitwa, zakapturzony w skórze i milczeniu, z twarzą skrytą za maską z popiołu i żelaza, jakby już dawno wyrzekł się własnego oblicza. Nie szuka chwały ani pojedynku — czeka cierpliwie, aż krew osłabi ofiarę, a potem kończy dzieło krótkim, pewnym ciosem, bez gniewu i bez litości. Mówią, że gdzie znajdą jego ślady, tam nocą znikają ciała, a wraz z nimi imiona tych, których kult przeznaczył na zapomnienie.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultysta_cienia_pod_popiolem",
@@ -2252,7 +2532,9 @@
     "lore_text": "Kultysta Cienia pod Popiołem chodzi z twarzą utopioną w sadzy i czarnym płótnie, jakby już za życia należał do pogorzeliska, a nie do ludzi. Nie każdy z nich oddał duszę z własnej woli — jedni klękli przed trwogą, drudzy uwierzyli, że tylko strach i pożoga mogą uleczyć chory świat. Gdy wychodzą z dymu, niosą ze sobą nie tylko nóż i ogień, lecz także tę cichą pewność, że pod popiołem najłatwiej ukryć grzech.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultysta_cienia_pod_popiolem_2",
@@ -2293,7 +2575,9 @@
     "lore_text": "Kultysta Cienia pod Popiołem wygląda jak zwykły wędrowiec, dopóki nie dostrzeżesz sadzy pod paznokciami i tego nieludzkiego spokoju, z jakim mówi o krwi, ogniu i koniecznym porządku. Nie wrzeszczy jak obłąkany — modli się szeptem, a jego wiara jest tym straszniejsza, że rodzi się nie z chaosu, lecz z przekonania, iż groza i przemoc są sprawiedliwą daniną za świat bez buntu. W popiołach po spalonych chatach ludzie nieraz znajdowali ślady ich butów, równe i spokojne, jakby szli tam nie mordować, lecz spełniać święty obowiązek.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultysta_popiolu",
@@ -2334,7 +2618,9 @@
     "lore_text": "Kultysta Popiołu nosi na sobie skórę i płótno jak żałobę po dawnym człowieczeństwie, a spod kaptura patrzą oczy wygłodniałe nie chleba, lecz cudzego bólu. Twarz ma pobieloną popiołem, jakby już za życia należał do stosu, przy którym składa śluby swojej ślepej wierze. Walczy spokojnie i bez wahania, z posłuszeństwem groźniejszym niż szał, bo każdy cios przyjmuje i zadaje jak modlitwę do boga, który odpowiada tylko cierpieniem.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultysta_popiolu_2",
@@ -2375,7 +2661,9 @@
     "lore_text": "Kultysta Popiołu nosi na sobie woń spalenizny i ciszę grobu, a popielne znaki na jego szyi zdają się żarzyć, gdy wypowiada imiona rzeczy pogrzebanych zbyt płytko. W jego oczach nie ma już zwykłej wiary — jest tylko cień czegoś, co spojrzało nań z drugiej strony żaru i nie pozwoliło odejść. Jedni rzucają się na śmierć z obłędem w gardle, drudzy liczą ofiary chłodno jak zimowe ziarno, lecz każdy z nich służy temu samemu popiołowi, który nie zna sytości.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultysta_popiolu_3",
@@ -2416,7 +2704,9 @@
     "lore_text": "Kultysta Popiołu z ludu Vossa wygląda jak wędrowiec z traktu, lecz pod ciężkim płaszczem nosi popielne sznury, noże rytualne i znaki wypalone w ciele niby pieczęcie dawno złożonej przysięgi. Nie każdy wpada w ślepy szał — wielu bije się z lodowatą karnością najemnika, jakby wiara była tylko ostrzem, które nigdy nie drży w dłoni. Gdzie przejdą, zostaje swąd sadzy i wrażenie, że ogień, któremu służą, dawno już przestał dawać ciepło.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "kultysta_popiolu_4",
@@ -2457,7 +2747,9 @@
     "lore_text": "Kultysta Popiołu wygląda jak zwykły wędrowiec, dopóki spod płaszcza nie błyśnie sadzista maska i nie ucichnie wszystko wokół, jak przed pożarem. Mówią mało, kroczą równo i zabijają bez gniewu, bo wierzą, że człowiek najłatwiej klęka wtedy, gdy dusi go strach. Tam, gdzie przechodzą, zostaje zapach spalenizny i to ciche przeczucie, że ogień jeszcze nie zgasł, tylko czeka.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "lich",
@@ -2498,7 +2790,9 @@
     "lore_text": "Lisz to nekromanta, który oszukał grób i przykuł własną duszę do świata, by trwać dłużej niż pamięć o jego dawnym imieniu. Tam, gdzie stąpa, mlecznieje powietrze, a umarli podnoszą głowy, jakby słyszeli rozkaz sprzed wieków. Spotkanie z nim nie jest walką, lecz próbą przetrwania wobec woli tak starej i zimnej, że nawet śmierć zdaje się przy niej łaską.",
     "terrain_tags": "dungeon,ruins,castle",
     "max_level": null,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "lizardman",
@@ -2539,7 +2833,9 @@
     "lore_text": "Jaszczuroludek to plugawy mieszkaniec trzęsawisk i zapadłych ruin, gdzie pośród mgieł i zgniłej wody czai się niby człowiek, a przecie bardziej gad niż żywa dusza. Łuski na jego ciele połyskują jak mokry grób, a z paszczy sterczą kły, którymi rozszarpuje tych, co zabłądzą zbyt blisko. Gdy rusza do boju, niesie topór oblepiony błotem i starą krwią, a w jego ślepiach tli się zimna, bagienna nienawiść.",
     "terrain_tags": "swamp,river",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "lowca_rubiezy",
@@ -2554,7 +2850,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:28:53",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 1,
@@ -2571,16 +2867,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453333_aigm_01126_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "silent borderland stalker, wolf pelt hood, gaunt hunter, weathered leather armor, fur mantle, hidden face, longbow, barbed arrows, woodland ambusher, stealthy predator, shadowy forest, cold mist, grim menace, muted earth tones, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,forest,heath",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "marek_voss_final",
@@ -2621,7 +2919,9 @@
     "lore_text": "Marek Voss zrzuca kupiecką maskę jak skórę i staje do walki w ciemnym płaszczu, którego podszewkę znaczą znaki tak stare, że zdają się szeptać w ogniu. U jego boku kroczą Wierni Popiołu — milczący, zdyscyplinowani kultyści, co nie wpadają w szał, lecz zabijają z posłuszeństwem godnym żałobnego obrzędu. Sam Voss nie zna furii; przemoc jest dla niego narzędziem, używanym chłodno i bez wahania, jak nóż kapłana nad ofiarnym kamieniem.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "mercenary",
@@ -2662,7 +2962,9 @@
     "lore_text": "Najemnik to nie rycerz ni bohater, jeno człek sprzedany temu, kto sypnie srebrem ciężej od sumienia. W kolczudze, z dobrą stalą u pasa i okiem zimnym jak lufa rusznicy, idzie tam, gdzie inni cofnęliby się przed grzechem. Mówią, że najgorsze bestie nie wyją w borze, lecz targują się spokojnym głosem, nim zapukają do drzwi o świcie.",
     "terrain_tags": "road,city,plains",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "moc_rozbitej_gwiazdy",
@@ -2703,7 +3005,9 @@
     "lore_text": "Wybuch mocy Rozbitej Gwiazdy nie ma ciała ani pyska, a jednak nadciąga jak drapieżnik: w smugach ciemnego światła, pośród drgających odłamków i szeptów, które rodzą się bez ust. Gdzie się objawi, kości zaczynają boleć, krew stygnie, a gniew i trwoga ludzi zdają się tylko rozniecać jego żar. Starzy powiadają, że to sama rana po upadku gwiazdy, która żeruje nie na mięsie, lecz na przemocy noszonej w sercu.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "mrozny_wilkolak",
@@ -2718,7 +3022,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:44",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:29:11",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -2735,16 +3039,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453351_aigm_01127_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "cursed winter hunter, elite beast, silver-maned neck, feral humanoid wolf, frostbitten fur, glowing icy eyes, ragged chainmail scraps, massive claws, bloodstained fangs, stalking predator, frozen night, eerie mist, moonlit snow, menacing howl, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 8,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "forest,hills,snow",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "najemny_zabojca",
@@ -2759,7 +3065,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:44",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:29:30",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -2776,16 +3082,61 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453370_aigm_01128_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "faceless silent assassin, hooded human killer, nameless mercenary, lean build, weathered leather armor, dark cloak, hidden daggers, short sword, precise killer, roadside stalker, alley ambusher, grim expression, shadowy presence, cold menace, muted palette, gritty realism, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "ognik_siarkowy",
+    "label": "Ognik Siarkowy",
+    "hp_base": 10,
+    "ac_base": 13,
+    "attack_bonus": 3,
+    "dex_modifier": 0,
+    "damage_die": "1d4",
+    "skills_json": null,
+    "description": "Kłąb ognia tańczący nad szczeliną wyziewu. Zbieracze siarki mówią, że ognik nie goni — po prostu jest tam, gdzie zaraz staniesz.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:52:26",
+    "tier": "weak",
+    "attacks_per_turn": 1,
+    "damage_bonus": 1,
+    "damage_type": "fire",
+    "xp_award": 48,
+    "conditions_immune": null,
+    "loot_table_key": "loot_ognik_siarkowy",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577146_aigm_01210_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "malevolent will-o-wisp, dancing fire orb, sulfuric fumes, volcanic vent fissure, ember spirit, smokeless flame, eerie presence, uncanny anticipation, glowing heat haze, infernal atmosphere, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 2,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Kłąb ognia tańczący nad szczeliną wyziewu. Zbieracze siarki mówią, że ognik nie goni — po prostu jest tam, gdzie zaraz staniesz.",
+    "terrain_tags": "mountain",
+    "max_level": 4,
+    "world_scope": "global",
+    "region_tag": "siwe_granie",
+    "creature_type": null
   },
   {
     "key": "ogr",
@@ -2826,7 +3177,9 @@
     "lore_text": "Ogr z kresowych opowieści nie ryczy bezmyślnie jak zwierz, lecz mruczy do siebie ludzkim głosem, jakby wspominał dawne imię, którego już nikt nie pamięta. Wielki jak stodoła i cuchnący błotem, krwią oraz dymem, wychodzi z mokradeł o zmierzchu, by łamać kości jak suche gałęzie i porywać tych, których światło świec nie zdołało ocalić. Powiadają, że gdzie jego ślad odciśnie się w ziemi, tam jeszcze długo nocą słychać płacz dzieci i trzask rozrywanych drzwi.",
     "terrain_tags": "hills,cave",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "ogre",
@@ -2867,7 +3220,9 @@
     "lore_text": "Ogr to tępy olbrzym, w którego łapach siła zastępuje rozum, a gniew bywa jedyną mową, jaką zna. Jedno uderzenie tej bestii potrafi rzucić człowieka w błoto jak snop słomy i połamać kości, nim ofiara zdąży krzyknąć. Tam, gdzie przejdzie, zostają wdeptane ślady, krew i cisza ciężka jak przed burzą.",
     "terrain_tags": "hills,mountain,cave",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "okaleczony_lowca",
@@ -2882,7 +3237,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 07:24:38",
-    "updated_at": "2026-07-13 07:24:38",
+    "updated_at": "2026-07-19 09:29:48",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -2899,16 +3254,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453388_aigm_01129_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "gaunt bandit, burned scarred face, hollow cheeks, ragged hood, tattered leather armor, knife in hand, short bow, stealthy ambusher, lurking in shadows, predatory posture, grimy, menacing, gritty realism, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 1,
     "created_by": "llm_plan",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "old_man",
@@ -2949,7 +3306,9 @@
     "lore_text": "Starzec wygląda jak zgarbiony, bezbronny dziad, którego łatwo minąć bez drugiego spojrzenia — i właśnie na tym żeruje jego groza. W ludowych opowieściach pojawia się tam, gdzie litość miesza się z niepokojem, a ci, którzy zbyt długo wsłuchują się w jego szept, czują, jak coś zimnego zagląda im pod skórę. Niby słaby, niby schorowany, lecz w mroku kresowych dróg bywa zwiastunem nieszczęścia większego, niż sam jest w stanie unieść.",
     "terrain_tags": "city,road",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "opat_popiolu",
@@ -2964,7 +3323,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 07:24:38",
-    "updated_at": "2026-07-13 07:24:38",
+    "updated_at": "2026-07-19 09:30:06",
     "tier": "boss",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -2981,16 +3340,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453406_aigm_01130_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "towering fanatic, soot-blackened robes, scorched iron mask, burned human face visage, occult priest, chained staff, ritual sickle, ash-stained cloth, corroded metal, menacing stance, infernal aura, smoky darkness, ember glow, grim cathedral mood, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 10,
     "created_by": "llm_plan",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "orc",
@@ -3031,7 +3392,9 @@
     "lore_text": "Ork to wojownik zrodzony do walki, brutalny i nieustępliwy, jakby sama ziemia wypluła go w gniewie. Tam, gdzie stąpa jego ciężka noga, zostaje tylko błoto, krew i trzask łamanych kości. W mroku opowiada się, że ork nie boi się śmierci — bo od dawna nosi ją w sobie jak wiernego druha.",
     "terrain_tags": "plains,hills,mountain",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "orc_shaman",
@@ -3072,7 +3435,9 @@
     "lore_text": "Szaman orków nosi na twarzy grubą skorupę barw i popiołu, jakby ukrywał pod nią nie oblicze, lecz cudzy głos. W boju nie wybiera między pałką a przekleństwem — każde uderzenie splata z rytuałem, a z jego gardła płyną słowa, od których ogień przygasa, a krew w żyłach zdaje się gęstnieć. Mówią, że gdzie padnie jego cień, tam nawet martwi nasłuchują rozkazów.",
     "terrain_tags": "plains,hills",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "orc_warchief",
@@ -3113,7 +3478,9 @@
     "lore_text": "Wódz Orków kroczy w pełnej zbroi wojennej jak ruchoma mogiła z żelaza, a każdy ślad jego butów zdaje się ugniatać ziemię głębiej niż zwykły śmiertelnik zdołałby unieść. Włada klanem nie prawem ni honorem, lecz pięścią, krwią i strachem tak starym, że milkną przy nim nawet najdziksze gardła. Powiadają, że tam, gdzie podnosi broń, słabsi nie giną od ciosu, lecz od samej pewności, że nie ma przed nim ucieczki.",
     "terrain_tags": "plains,hills,mountain",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "orc_warrior",
@@ -3154,7 +3521,9 @@
     "lore_text": "Wojownik Orków nosi na sobie zbroję zdartą z poległych, poskładaną z obcych blach i skór, jakby każda zdobycz miała przedłużać jego życie. Jest szybszy niż jego pobratymcy i bije z wyrachowaną wprawą, nie wpadając w ślepą furię, lecz szukając szczelin w obronie jak wilk krwi. Mówią, że kto ujrzy na nim znajomy hełm lub herb, ten już wie, jak skończy się noc.",
     "terrain_tags": "plains,hills,mountain",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "pijawczy_roj",
@@ -3169,7 +3538,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:12:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:30:24",
     "tier": "weak",
     "attacks_per_turn": 2,
     "damage_bonus": 0,
@@ -3186,16 +3555,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453424_aigm_01131_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "swarm of finger-thick black leeches, writhing mass, shoreline predator, slick wet bodies, bloodsucking parasites, clinging to legs, murky water edge, fetid marsh, grotesque organic horror, glistening skin, dim overcast gloom, sinister ambience, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 1,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "river,swamp",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "popielny_egzekutor",
@@ -3236,7 +3607,9 @@
     "lore_text": "Popielny Egzekutor to najwierniejszy pies kultu, okutany w skórę i blachy sczerniałe od sadzy, jakby wyszedł prosto z pogorzeliska świątyni. Spod żelaznej półmaski nie pada niemal żadne słowo, lecz jego milczenie bywa cięższe od wyroku i mrozi krew szybciej niż uniesiony topór. Gdzie staje, tam ludzie odruchowo spuszczają wzrok, bo w jego obecności czuć chłód dołu, popiół stosu i pewność, że ktoś tej nocy nie doczeka świtu.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "popielny_straznik",
@@ -3277,7 +3650,9 @@
     "lore_text": "Popielny Strażnik wygląda jak człowiek, którego śmierć nie przyjęła do końca: pół ciała ma z kamienia, pół z wyschłej skóry, a po nim snują się wstęgi popiołu znaczone starymi runami. Jego twarz, gładka i starta jak nagrobek bez imienia, budzi trwogę większą niż wojenny hełm, bo nie ma w niej gniewu, tylko pamięć obowiązku. Idzie powoli, z głuchym ciężarem, lecz każdy cios i każdy krok stawia z taką pewnością, jakby wciąż wykonywał przysięgę złożoną dawno pogrzebanym panom.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "popielny_straznik_2",
@@ -3318,7 +3693,9 @@
     "lore_text": "Popielny Strażnik powstaje tam, gdzie ogień pożarł mury razem z tymi, którzy przysięgali ich bronić, a potem nie pozwolił im odejść. Zlepiony z popiołu, zwęglonych kości i strzępów dawnych szat, sunie wśród ruin na skrzypiących stawach, rozsypując sadzę niczym żałobny ślad. W jego pustych oczodołach tli się czerwony pył, jakby sama pamięć płomieni wciąż szukała żywych.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "popielny_trup_straznika",
@@ -3359,7 +3736,9 @@
     "lore_text": "Popielny Trup Strażnika to wyschnięte ścierwo dawnego opiekuna pieczęci, którego kości noszą wypalone znaki ochronne, a strzępy całunu szeleszczą jak modlitwa odmawiana przez umarłych. Idzie sztywno, lecz nie zna wahania ani bólu, jakby sama przysięga trzymała go przy progu, którego nie wolno przekroczyć żywym. Powiadają, że nie ściga z gniewu, lecz z obowiązku — i właśnie dlatego budzi większy lęk niż najdziksza bestia.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "popielny_wyznawca",
@@ -3400,7 +3779,9 @@
     "lore_text": "Popielny Wyznawca wygląda jak człowiek, którego piec przyjął za własnego: skóra ma w nim barwę sadzy, blizny układają się w bluźniercze znaki, a w oczach tli się gorączka ślepej wiary. Mówią, że latami szeptał modlitwy do ognia, aż ten wypalił z niego litość, strach i ludzkie imię. Gdzie stąpa, tam czuć duszny żar i swąd mokrego popiołu, jakby samo palenisko ruszyło szukać nowych ofiar.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "popiolowy_straznik",
@@ -3441,7 +3822,9 @@
     "lore_text": "Popiołowy Strażnik błąka się po zgliszczach jak cień dawnej przysięgi, opleciony wirującym popiołem, zwęglonymi bandażami i pękniętymi znakami tych, którzy nie dopilnowali ognia. Nie przemawia po ludzku — z jego spalonej piersi dobywa się syk podobny wichrowi hulającemu wśród zwęglonych belek, od którego blednie krew i cichną psy. Mówią, że staje na drodze tym, którzy bez czci grzebią w ruinach, a tam, gdzie dotknie ziemi, zostaje tylko szary pył i zapach starego pożaru.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "prior_severin",
@@ -3482,7 +3865,9 @@
     "lore_text": "Prior Severin kroczy jak wyrok odziany w relikwiarzową stal, stary mnich-wojownik, którego miecz i żelazny pastorał nie drżą nigdy, nawet pośród wrzasku i krwi. Nie zna szału ni litości — tylko lodowaty porządek, który łamie ludzi pewniej niż gniew, jakby sama świątynna przysięga szła za nim i dusiła powietrze wokół.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "rozbojnik_traktowy",
@@ -3497,7 +3882,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:30:42",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -3514,16 +3899,61 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 16, \"DEX\": 10, \"CON\": 14, \"INT\": 7, \"WIS\": 8, \"CHA\": 8, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453442_aigm_01132_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "battle-hardened bandit, scar across cheek, grim rugged face, weathered leather armor, hooded cloak, crossbow at belt, dagger, road toll collector, menacing stance, muddy roadside, bleak forest path, gritty realism, ominous mood, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,plains",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "ryk_krwawy",
+    "label": "Ryk Krwawy",
+    "hp_base": 34,
+    "ac_base": 14,
+    "attack_bonus": 0,
+    "dex_modifier": 0,
+    "damage_die": "1d8",
+    "skills_json": null,
+    "description": "Ciężko zbudowany najemnik o twarzy pooranej bliznami, noszący kolczą kamizę i tasak piechura. Walczy brutalnie, napiera bez wahania i karze przeciwnika za każdy błąd.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-14 18:31:21",
+    "updated_at": "2026-07-19 09:31:00",
+    "tier": "elite",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 50,
+    "conditions_immune": null,
+    "loot_table_key": "loot_ryk_krwawy",
+    "note": "Zadaje dodatkowe obrażenia, jeśli przeciwnik jest osaczony lub walczy w ciasnym przejściu.",
+    "review_status": "pending_review",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784453460_aigm_01133_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "heavily built mercenary, scarred face, brutal enforcer, chainmail hauberk, infantry cleaver, thick leather straps, battered armor, aggressive stance, relentless advance, grim expression, battle-worn, dark gritty atmosphere, moody shadows, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 6,
+    "created_by": "llm_plan",
+    "template_id": null,
+    "lore_text": null,
+    "terrain_tags": null,
+    "max_level": null,
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "rykar_wilkowy",
@@ -3564,7 +3994,9 @@
     "lore_text": "Rykar Wilkowy to herszt, o którym mówią szeptem przy dogasającym ogniu: barczysty, o twarzy pooranej bliznami, w zdobycznym napierśniku i wilczej skórze, wygląda bardziej jak upiór bitwy niż człowiek. Idzie do natarcia bez cienia trwogi, a ciężka siekiera w jego łapach rozłupuje nie tylko kości, lecz i odwagę tych, którzy staną mu na drodze. Tam, gdzie się zjawia, strach biegnie przodem, bo Rykar lepiej od wojennego porządku zna sztukę terroru.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "rzeczny_oprych",
@@ -3579,7 +4011,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:43",
-    "updated_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-19 09:31:18",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -3596,16 +4028,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453478_aigm_01134_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "sinister ferryman, gaunt river brigand, hooded ragged cloak, weathered face, rotten teeth, river mud stains, iron boat hook weapon, crude dagger, patched leather armor, swamp ford ambush, old wooden footbridge, misty riverbank, predatory stare, grimy hands, damp decay, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "river,road",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "s2_pw_bandyta_lucznik",
@@ -3646,7 +4080,9 @@
     "lore_text": "Bandyta Łucznik czai się na skraju traktu jak cierń wbity w gardło puszczy, milczący, cierpliwy i podły. Mówią, że jego strzały znajdują człowieka nawet przez mgłę i śnieżycę, a nim ofiara zrozumie, skąd przyszła śmierć, krew już wsiąka w czarną ziemię. Tam, gdzie krążą tacy jak on, nawet wrony siadają ciszej.",
     "terrain_tags": "road,forest",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "s2_pw_custom_stats",
@@ -3687,7 +4123,9 @@
     "lore_text": "To coś nie ma jeszcze imienia, bo mało kto przeżył dostatecznie długo, by je nadać. Widziano je na skraju borów i pośród mgieł nad mokradłami, gdzie szło bezszelestnie, jakby ziemia sama niosła jego ciężar. Mówią, że przyciąga je ludzki lęk — a gdy raz pochwyci czyjś trop, noc staje się za krótka, by przed nim uciec.",
     "terrain_tags": "wilderness",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "s4_pw_kaplan",
@@ -3728,7 +4166,9 @@
     "lore_text": "Kapłan Mrocznego Kultu to człowiek, który zbyt długo szeptał w ciemność, aż ta odpowiedziała jego własnym głosem. W łachmanach przesiąkniętych kadzidłem i krwią prowadzi obrzędy, po których milką psy, a dzieci budzą się z krzykiem, wspominając twarz bez oczu. Gdzie staje jego stopa, tam wiara paczy się w zabobon, a noc zdaje się słuchać jego modlitw.",
     "terrain_tags": "dungeon,city,ruins",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "s4_pw_osilek",
@@ -3769,7 +4209,52 @@
     "lore_text": "Osiłek Brutus to nie człek, jeno żywy taran z mięsa, gniewu i kości, co idzie przez błoto i chrust, jakby ziemia sama ustępowała mu z drogi. Powiadają, że nie czuje bólu, a gdy dopadnie ofiary, rozrywa je gołymi łapskami z taką łatwością, jak chłop rozdziera czerstwy bochen. Tam, gdzie Brutus przeszedł, zostają połamane drzewa, krwawe bruzdy i cisza, w której nawet wilki boją się zawyć.",
     "terrain_tags": "city,road",
     "max_level": 5,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "salamandra_siarkowa",
+    "label": "Salamandra Siarkowa",
+    "hp_base": 24,
+    "ac_base": 13,
+    "attack_bonus": 5,
+    "dex_modifier": 0,
+    "damage_die": "1d8",
+    "skills_json": null,
+    "description": "Grzeje się w gorących rozpadlinach Czarnych Skał. Skóra pokryta żółtym nalotem; oddech pachnie zapałkami na sekundę przed ciosem.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:52:47",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 1,
+    "damage_type": "fire",
+    "xp_award": 145,
+    "conditions_immune": null,
+    "loot_table_key": "loot_salamandra_siarkowa",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577167_aigm_01211_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "heat-dwelling reptilian creature, black volcanic rock lurker, yellow sulfur-coated skin, cracked scales, ember-glowing eyes, smoking nostrils, match-scent breath, crouched predator, scorched claws, ash-stained hide, ominous haze, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 4,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Grzeje się w gorących rozpadlinach Czarnych Skał. Skóra pokryta żółtym nalotem; oddech pachnie zapałkami na sekundę przed ciosem.",
+    "terrain_tags": "mountain",
+    "max_level": 7,
+    "world_scope": "global",
+    "region_tag": "siwe_granie",
+    "creature_type": null
   },
   {
     "key": "serce_rezonatora",
@@ -3784,7 +4269,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 09:42:23",
-    "updated_at": "2026-07-12 09:42:23",
+    "updated_at": "2026-07-19 09:31:36",
     "tier": "boss",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -3801,16 +4286,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453496_aigm_01135_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "formless stone wraith, black obsidian mass, iron fragments embedded, swirling spectral voices, jagged rock shards, vibration waves, shattered monolith body, cursed mineral entity, abyssal aura, ominous gloom, cold cavern setting, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 10,
     "created_by": "llm_plan",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "campaign"
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "shadow_stalker",
@@ -3851,7 +4338,9 @@
     "lore_text": "Cień nie idzie — on odkleja się od nocy i sunie tam, gdzie zgasło ludzkie serce. Przywołany przez prastare zło, w mroku jest ledwie drgnieniem czerni, chłodem na karku i szeptem, który nie ma ust. Mówią, że kto ujrzy go zbyt późno, ten już nigdy nie odzyska własnego cienia.",
     "terrain_tags": "dungeon,ruins,city",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "skeleton",
@@ -3892,7 +4381,9 @@
     "lore_text": "Szkielet to kości, którym śmierć nie dała spoczynku, a cudza wola kazała raz jeszcze powstać z ziemi lub popiołu. Idzie bez tchu i bez bólu, skrzypiąc stawami jak stara studnia na wietrze, a w pustych oczodołach zdaje się czaić głód życia, którego już nigdy nie zazna. Mówią, że najgorsze są te, co pamiętają drogę do własnego grobu i wracają tam po każdego, kto zakłócił ich sen.",
     "terrain_tags": "dungeon,ruins",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "slime",
@@ -3933,7 +4424,52 @@
     "lore_text": "Szlam pełznie jak żywa plama zgnilizny, bez kości ni pyska, a przecie zdaje się łaknąć ciepła i ruchu. Powolny niby rozlana smoła, dopada nie pośpiechem, lecz cierpliwością, bo jego kwaśny śluz po cichu przeżera skórę, drewno i żelazo. Mówią starzy, że tam, gdzie zostawia mokry ślad, jeszcze długo czuć odór piwnic, grobów i rzeczy, których nie należało budzić.",
     "terrain_tags": "swamp,cave,dungeon",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "sniezny_wilk",
+    "label": "Śnieżny Wilk",
+    "hp_base": 12,
+    "ac_base": 12,
+    "attack_bonus": 3,
+    "dex_modifier": 0,
+    "damage_die": "1d6",
+    "skills_json": null,
+    "description": "Biała wataha grań. Większy i cichszy od wilków z nizin — zimą schodzi za karawanami aż pod bramy hołdów i czeka, aż ktoś zostanie z tyłu.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:53:08",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 80,
+    "conditions_immune": null,
+    "loot_table_key": "loot_sniezny_wilk",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577188_aigm_01212_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "large pale ridge wolf, silent predator, shaggy white fur, lean muscular build, icy blue eyes, scarred muzzle, snow-dusted pelt, mountain hunter, stalking posture, winter gloom, caravan ambusher, cold mist, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 1,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Biała wataha grań. Większy i cichszy od wilków z nizin — zimą schodzi za karawanami aż pod bramy hołdów i czeka, aż ktoś zostanie z tyłu.",
+    "terrain_tags": "mountain,plains,forest",
+    "max_level": 3,
+    "world_scope": "global",
+    "region_tag": "siwe_granie",
+    "creature_type": null
   },
   {
     "key": "spaczony_prorok",
@@ -3974,7 +4510,9 @@
     "lore_text": "Spaczony Prorok wygląda jak wygłodzony pustelnik, którego twarz rozdarła własna ręka, a z ust sypie się czarny popiół zamiast słów. Miota się niespokojnie, z nagłymi, nieludzkimi zrywami, jakby coś niewidzialnego szarpało go za ścięgna, gdy nasłuchuje szeptów płynących z odłamków. Powiadają, że kto zbyt długo słucha jego bredni, rychło zaczyna słyszeć ten sam głos i śnić o ogniu, który nie daje ciepła.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "stepowy_grasant",
@@ -3989,7 +4527,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:31:55",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 1,
@@ -4006,16 +4544,61 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453515_aigm_01136_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "mounted marauder, степpe raider, rugged horseman, fur-lined coat, trophy hides, weathered leather armor, curved saber, rope lasso, dusty horizon, charging horse, predatory glare, nomadic outlaw, savage scavenger, grim atmosphere, windblown dust, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "plains,hills",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "straznik_rdzenia",
+    "label": "Strażnik Rdzenia",
+    "hp_base": 85,
+    "ac_base": 17,
+    "attack_bonus": 9,
+    "dex_modifier": 0,
+    "damage_die": "2d8",
+    "skills_json": "{}",
+    "description": "Kamienno-metaliczna konstrukcja z krasnoludzkich płyt, poruszana echem wspomnień zmarłych; atakuje ciężkimi ciosami i falami ogłuszających szeptów.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 12:18:21",
+    "updated_at": "2026-07-20 19:53:28",
+    "tier": "boss",
+    "attacks_per_turn": 1,
+    "damage_bonus": 2,
+    "damage_type": "physical",
+    "xp_award": 950,
+    "conditions_immune": "[]",
+    "loot_table_key": "loot_straznik_rdzenia",
+    "note": "Zadaje presję psychiczną wizjami winy i strachu; może chwilowo unieruchomić przeciwnika, jeśli ten zawaha się pod naporem wspomnień.",
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577208_aigm_01213_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "stone-metal construct, dwarven forged plates, ancient runic armor, hulking boss creature, spectral soul echoes, haunted core, heavy crushing fists, shockwave attack, whispering ghosts, ominous presence, cracked iron, weathered stone, dark cavern atmosphere, cold mist, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 10,
+    "created_by": "llm_plan",
+    "template_id": null,
+    "lore_text": null,
+    "terrain_tags": null,
+    "max_level": null,
+    "world_scope": "campaign",
+    "region_tag": null,
+    "creature_type": "rdzen"
   },
   {
     "key": "szczury_grobowe",
@@ -4056,7 +4639,9 @@
     "lore_text": "Szczury Grobowe to przerośnięte, błotem oblepione bestie o łysych grzbietach i pyskach czarnych od zaschłej, cudzej krwi, które suną stadą jak żywa plama zgnilizny. Nie płoszy ich ani ogień, ani krzyk — idą prosto na człeka, wiedzione głodem i słodkim dla nich zapachem świeżej śmierci. Mówią na Kresach, że gdzie nocą zaszeleści ziemia nad mogiłą, tam rankiem zostają już tylko kości i ślady małych, mokrych łap.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "szepczacy_odlamek",
@@ -4097,7 +4682,9 @@
     "lore_text": "Szepczący Odłamek nie żyje własnym życiem — jest wyrzutem spaczonej mocy, co obleka się w drżący cień, popielne iskry i szepty mówiące cudzymi wspomnieniami, jakby znały twoje winy lepiej od ciebie. Budzi się, gdy w sercu nosiciela wezbrze strach, gniew albo chciwość, a wtedy przysiada przy nim jak zły omen, sącząc obłęd i pchając ku zgubie. Powiadają, że kto raz usłyszy jego głos we własnej pamięci, ten już nigdy nie ma pewności, które myśli należą jeszcze do niego.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "thug",
@@ -4138,7 +4725,9 @@
     "lore_text": "Thug to nie bestia z kniei, lecz człowiek, który dawno oddał duszę przemocy i chciwości. Czeka w zaułkach, na rozstajach i przy karczemnych progach, bijąc szybko i brudno, nim ofiara zdąży zawołać o litość. Powiadają, że najgorsi z nich noszą przy sobie amulety z zębów zabitych, by noc lepiej kryła ich przed sprawiedliwością.",
     "terrain_tags": "city,road",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "troll",
@@ -4179,7 +4768,52 @@
     "lore_text": "Troll to wielka, garbata bestia o skórze twardej jak stary pień i sile, która potrafi roztrzaskać człeka jednym ciosem. Mówią, że mieszka tam, gdzie nie dochodzi dźwięk dzwonów — w mokradłach, jarach i pod zapomnianymi mostami. Jeśli raz poczuje krew, idzie za ofiarą uparcie, jakby sama ziemia pchała go do mordu.",
     "terrain_tags": "swamp,cave,hills",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "troll_gorski",
+    "label": "Troll Górski",
+    "hp_base": 46,
+    "ac_base": 15,
+    "attack_bonus": 7,
+    "dex_modifier": 0,
+    "damage_die": "1d10",
+    "skills_json": null,
+    "description": "Kawał grani, który wstaje. Trolle śpią wrośnięte w piarg i budzą się wtedy, gdy ktoś idzie zbyt hałaśliwie — a krasnoludy chodzą hałaśliwie.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:53:49",
+    "tier": "elite",
+    "attacks_per_turn": 1,
+    "damage_bonus": 3,
+    "damage_type": "physical",
+    "xp_award": 280,
+    "conditions_immune": null,
+    "loot_table_key": "loot_troll_gorski",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 16, \"DEX\": 10, \"CON\": 14, \"INT\": 7, \"WIS\": 8, \"CHA\": 8, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577229_aigm_01214_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "hulking stone troll, living granite outcrop, jagged boulder flesh, scree-covered body, embedded rocks, moss and dust, massive limbs, crude stone fists, ancient mountain beast, awakened by noise, looming menace, shadowy alpine wasteland, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 6,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Kawał grani, który wstaje. Trolle śpią wrośnięte w piarg i budzą się wtedy, gdy ktoś idzie zbyt hałaśliwie — a krasnoludy chodzą hałaśliwie.",
+    "terrain_tags": "mountain,hills",
+    "max_level": 9,
+    "world_scope": "global",
+    "region_tag": "siwe_granie",
+    "creature_type": null
   },
   {
     "key": "trupiarz_bezimienny",
@@ -4220,7 +4854,9 @@
     "lore_text": "Trupiarz Bezimienny wypełza z rozmokłej ziemi jak wyrzut sumienia, z twarzą zapadniętą tak głęboko, jakby grób wciąż trzymał ją w garści. W jego dłoniach czernieje mokra ziemia, a każdy ruch szarpie nim jak marionetką, której sznurki prowadzą prosto do mogiły. Nie zna imienia ni wspomnienia, lecz gdy ktoś naruszy miejsce jego spoczynku, budzi się w nim ślepy, uparty gniew, przed którym nie ma prośby ani przebaczenia.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "undead_champion",
@@ -4261,7 +4897,9 @@
     "lore_text": "Nieumarły Mistrz to dawny rycerz lub wojownik, którego czarna magia wyrwała śmierci, lecz nie odebrała mu kunsztu oręża. W pustych oczodołach tli się zimna rozwaga, a każdy jego cios niesie pamięć setek pojedynków i rzezi. Powiadają, że walczy bez gniewu i trwogi, jakby sam grób nauczył go cierpliwości doskonalszej niż za życia.",
     "terrain_tags": "ruins,castle,dungeon",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "unknown_attacker",
@@ -4302,7 +4940,9 @@
     "lore_text": "Mówią, że czasem człowieka nie zabija wilk, upiór ni wiedźma, jeno coś bez imienia, co wychodzi z ciemności, gdy nikt nie patrzy. Taki napastnik nie ma jednej twarzy ani jednego śladu — bywa cieniem między drzewami, chrapliwym oddechem za plecami albo nagłym bólem, co zwala w błoto, nim zdążysz się przeżegnać.",
     "terrain_tags": "wilderness,road",
     "max_level": 2,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "vampire",
@@ -4343,7 +4983,9 @@
     "lore_text": "Wampir to nieumarły pan nocy, w którym dawna pańskość skwaśniała w wieczny głód ludzkiej krwi. Porusza się z nieludzką szybkością i siłą, a żelazo, modlitwa i ogień nieraz tylko drażnią to, co już dawno wymknęło się śmierci. Mówią, że najstraszniejszy nie jest wtedy, gdy szczerzy kły, lecz gdy przemawia łagodnie jak dawny dziedzic, zapraszając pod swój dach tych, których zamierza wypić do cna.",
     "terrain_tags": "castle,ruins,city",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "vampire_master",
@@ -4384,7 +5026,9 @@
     "lore_text": "Mistrz Wampirów to pradawny pan krwi, wokół którego gromadzą się całe kliny nocnych pomiotów, posłuszne mu jak psy swemu katowi. Powiadają, że jedno jego spojrzenie ścina człeka z nóg i odbiera wolę, a wtedy ofiara stoi niema, czekając na kły jak na wyrok. Gdzie przestąpi próg, tam cichnie modlitwa, a nawet umarli zdają się szeptać jego imię z bojaźnią.",
     "terrain_tags": "castle,ruins",
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "werewolf",
@@ -4425,7 +5069,52 @@
     "lore_text": "Wilkołak to człek naznaczony wilczą klątwą, co za dnia nosi ludzką twarz, lecz gdy księżyc dojrzeje, skóra pęka na nim jak stary lód, a w sercu budzi się głód krwi. Powiadają, że w noc pełni nie poznaje ni brata, ni żony, ni własnego imienia — gna przez las i sioła, zostawiając po sobie jeno strzępy, ślady pazurów i wycie, od którego stygnie pacierz na ustach.",
     "terrain_tags": "forest,wilderness,hills",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "widmo_lodowe",
+    "label": "Widmo Lodowe",
+    "hp_base": 20,
+    "ac_base": 12,
+    "attack_bonus": 5,
+    "dex_modifier": 0,
+    "damage_die": "1d8",
+    "skills_json": "{}",
+    "description": "Sine zawirowanie śniegu, które porusza się pod wiatr. Krasnoludy nie nazywają go duchem — mówią po prostu: „to, co zostało na lodzie”.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:54:09",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "cold",
+    "xp_award": 125,
+    "conditions_immune": "[]",
+    "loot_table_key": "loot_widmo_lodowe",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577249_aigm_01215_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "whirling blue snow wraith, against-the-wind blizzard form, frozen revenant, spectral ice remnants, dwarf folklore horror, faceless frost entity, swirling shards, pale cyan glow, arctic gloom, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 3,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Sine zawirowanie śniegu, które porusza się pod wiatr. Krasnoludy nie nazywają go duchem — mówią po prostu: „to, co zostało na lodzie”.",
+    "terrain_tags": "mountain,plains,ruins",
+    "max_level": 7,
+    "world_scope": "global",
+    "region_tag": "siwe_granie",
+    "creature_type": "undead"
   },
   {
     "key": "wilk_stepowy",
@@ -4440,7 +5129,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:12:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:32:13",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -4457,16 +5146,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453533_aigm_01137_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "gaunt gray plains predator, sunken flanks, lean sinewy body, yellow eyes, scarred muzzle, matted fur, stalking posture, roadside hunter, feral menace, bleak wasteland atmosphere, muted earth tones, ominous shadows, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 1,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,plains,wilderness",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wit_srogi",
@@ -4507,7 +5198,9 @@
     "lore_text": "Wit Srogi to herszt wyrostków, chłystek o barkach jak do bójki stworzonych i twarzy pooranej dawnym guzem, który nosi swą bliznę niczym znak prawa silniejszego. W jego oczach siedzi urażona duma i ta głucha pewność człeka, co zbyt długo brał cudzy strach za własną wielkość. Bardziej zawzięty niż rozumny, nie szuka zgody ni litości — prędzej kość złamie, niż słowo odpuści, a tam, gdzie staje, nawet odważni oglądają się przez ramię.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "witch",
@@ -4548,7 +5241,9 @@
     "lore_text": "Wiedźma to nie tylko czarodziejka, lecz naczynie dla sił, których imienia rozsądni ludzie nie wymawiają po zmroku. Jednym szeptem potrafi spętać wolę człowieka, a jednym gestem ściągnąć na chatę chorobę, ogień albo obłęd. Mówią, że gdzie przejdzie jej cień, tam mleko kwaśnieje w garnkach, dzieci budzą się z krzykiem, a psy wyją do pustego progu.",
     "terrain_tags": "swamp,forest,cave",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "witek_lysek",
@@ -4589,7 +5284,9 @@
     "lore_text": "Witek Łysek chodzi jak pan drogi i nieszczęścia, z krzywym nosem, szyderczym uśmiechem i spojrzeniem, które częściej łamie wolę niż kości. Mówią, że jego największą siłą nie są ręce, lecz pewność tak twarda, iż ludzie sami ustępują mu z drogi, nim zdąży pokazać, ile naprawdę wart jest w walce. Kto cofnie się przed Łyskiem raz, ten już zawsze słyszy za plecami jego cichy śmiech, jakby bestia wygrała, zanim padł pierwszy cios.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "witek_mlynski_enemy",
@@ -4630,7 +5327,9 @@
     "lore_text": "Witek Młyński to herszt z tych, co śmieją się zbyt głośno, a zaraz potem biją tak, jakby chcieli zagłuszyć własny strach. Twarz ma wiecznie wykrzywioną między szyderą a furią, a gdzie staje, tam rozmowa rychło zmienia się w groźbę, a groźba w krew. Mówią, że jego siła nie płynie z męstwa, jeno z bezkarności — bo długo żywił się cudzym lękiem, aż sam począł wierzyć, że nic na tym świecie nie ośmieli się go tknąć.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wolf",
@@ -4640,18 +5339,18 @@
     "attack_bonus": 3,
     "dex_modifier": 2,
     "damage_die": "1d6",
-    "skills_json": null,
+    "skills_json": "{}",
     "description": "Dzikie zwierzę.",
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:16:52",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-15 18:13:31",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
     "damage_type": "physical",
     "xp_award": 71,
-    "conditions_immune": null,
+    "conditions_immune": "[]",
     "loot_table_key": "loot_wolf",
     "note": null,
     "review_status": "permanent",
@@ -4662,16 +5361,18 @@
     "loot_tier": null,
     "drop_chance": 0.7,
     "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
-    "image_url": "/images/tiles/aigm_1781766410_aigm_00618_.png",
+    "image_url": "/images/tiles/aigm_1784139207_aigm_01105_.png",
     "image_url_raw": null,
-    "image_gen_prompt": "feral beast, savage animal, mangy fur, scarred hide, snarling jaws, sharp fangs, glowing eyes, muscular body, dirty claws, low stalking posture, wilderness predator, grim atmosphere, shadowy background, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "image_gen_prompt": "A fantasy wolf beast, wild, realistic not cute, standing on four legs. The creature is huge and powerful, with a muscular body, thick dark fur, glowing predatory eyes, sharp fangs, massive paws with claws, and subtle supernatural features such as faint mist, rune-like markings, or an eerie magical aura. Place it in a dark fantasy setting like a moonlit forest, ruined battlefield, or fog-covered mountain pass. The atmosphere should be ominous, cinematic, and intense, with dramatic lighting, deep shadows, and a strong sense of raw hunting instinct. Make it highly detailed, atmospheric, and suitable for a fantasy creature concept art piece.",
     "min_level": 1,
     "created_by": null,
     "template_id": null,
     "lore_text": "Wilk na Kresach nie jest tylko zwierzęciem, lecz cieniem o ślepiach jak żar, który od wieków krąży skrajem borów i stepów. Sam unika człowieka, lecz głód, zima albo zapach krwi potrafią przywieść go pod same zagrody, gdzie jego wycie budzi lęk starszy niż modlitwa. W ludowych opowieściach mówi się, że ten, kto spotka samotnego wilka o zmierzchu, wróci do domu odmieniony albo nie wróci wcale.",
     "terrain_tags": "forest,hills,wilderness,road,plains",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wraith",
@@ -4712,7 +5413,9 @@
     "lore_text": "Widmo jawi się jako czarna sylwetka, co przemyka skrajem światła, jakby samo ciemne powietrze przybrało ludzki kształt. Nie stąpa, lecz sunie bezszelestnie, a tam, gdzie wyciągnie dłoń, z żywych uchodzi ciepło, oddech i wola, jakby noc upominała się o to, co do niej należy. Mówią, że kto raz spojrzy w pustkę pod jego kapturem, temu jeszcze długo śnią się groby bez krzyży i zimne pola pod martwym księżycem.",
     "terrain_tags": "ruins,dungeon,swamp",
     "max_level": 5,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "wynaturzona_bestia",
@@ -4727,7 +5430,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:39:44",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:32:31",
     "tier": "elite",
     "attacks_per_turn": 1,
     "damage_bonus": 2,
@@ -4744,16 +5447,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 14, \"DEX\": 14, \"CON\": 13, \"INT\": 3, \"WIS\": 12, \"CHA\": 6, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453551_aigm_01138_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "eldritch corrupted beast, grotesque mutant creature, too many limbs, too many teeth, twisted anatomy, chitinous flesh, bone spikes, crawling horror, feral posture, tainted wasteland aura, ominous gloom, menacing silhouette, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 6,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": null,
     "max_level": 10,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wynaturzony_trup",
@@ -4794,7 +5499,9 @@
     "lore_text": "Wynaturzony Trup wypełza z mokradeł jak źle pogrzebana wina: rozmokłe ścierwo oblepione czarną ziemią, z połamanymi kończynami i pustymi oczodołami, w których zdaje się zalegać noc. Porusza się szarpanie, jakby niewidzialna ręka ciągnęła je za gnijące stawy, lecz w tej pokraczności kryje się uparta, bezmyślna zajadłość. Nie woła ani nie ryczy — tylko mokro charczy, rzucając się na każdego żywego, jakby sama śmierć nie chciała go już przyjąć.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": "undead"
   },
   {
     "key": "wyrostki_spod_mlyna",
@@ -4835,7 +5542,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się kupą jak bezpańskie psy: oblepieni błotem, z kijami i roboczymi nożami, szczekają głośniej, niż gryzą, lecz i tak potrafią osaczyć człeka tam, gdzie nikt nie usłyszy wołania. Znają każdą miedzę, rów i stary sad, więc znikają w ciemności równie prędko, jak z niej wyskakują, a ich zuchwałość bywa groźniejsza od odwagi. Mówią, że kto raz da się im upokorzyć, temu jeszcze długo po nocach szumi w uszach młynskie koło i ich chamski śmiech.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_10",
@@ -4876,7 +5585,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się kupą jak szczury przy worku z ziarnem: śmiałe w zgrai, a cichnące, gdy krew bryźnie naprawdę. W ubłoconych butach, z kijami i hakami, oblegają samotnych, słabszych i tych, których wieś już skazała spojrzeniem. Nie są to żołnierze ni zbóje z boru, jeno ludzka podłość, co pod osłoną śmiechu i liczby rośnie prędzej niż chwast na mogile.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_11",
@@ -4917,7 +5628,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się kupą jak psy przy padlinie: ubłocone buty, kije i noże do sznura czynią z nich postrach dla samotnych i słabszych. Najgłośniejsi są w gromadzie, bo każdy z osobna ma w sercu więcej zuchwałości niż odwagi, lecz gdy osaczą człeka między wodą a ścianą, potrafią obić go do niepoznaki i jeszcze śmiać się, jakby to była niewinna zabawa.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_2",
@@ -4958,7 +5671,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się gromadą jak bezpańskie psy: brudne kaftany, kije, noże do paszy i oczy, w których więcej zuchwałości niż męstwa. Znają każdą ścieżkę między płotami i każdy domowy wstyd, więc nie biją tam, gdzie najtwardziej, jeno tam, gdzie człowiek nie zdąży krzyknąć. Mówią, że gdy po zmroku młyn staje cicho, ich śmiech niesie się po wodzie jak chlupot czegoś, co dawno powinno było utonąć.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_3",
@@ -4999,7 +5714,9 @@
     "lore_text": "Wyrostki spod młyna to nie żołnierze, jeno kundlata wataha chłystków, co obsiada groble i zaułki z kijami, hakami i zuchwałością większą niż rozum. Pojedynczo pierzchają jak wróble, lecz w kupie gęstnieją niby błoto po deszczu — obskakują, popychają, szarpią i biją tak długo, aż człek sam nie wie, z której strony przyszła krzywda. W ich rechocie jest coś gorszego niż groźba: pewność, że nad słabym zawsze znajdzie się noc, rów i kilku swoich.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_4",
@@ -5040,7 +5757,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się kupą jak psy przy rzeźni: obite gęby, błoto na butach i oczy, w których więcej drwiny niż rozumu. Nie są jeszcze zbójami z gościńca, lecz już nauczyli się, że strach cudzy smakuje lepiej niż chleb, a noc i przewaga liczby czynią z tchórzy panów. Gdzie słychać ich śmiech po zmroku, tam lepiej nie pytać o drogę ani nie bronić swego zbyt głośno.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_5",
@@ -5081,7 +5800,9 @@
     "lore_text": "Wyrostki spod młyna to nie bestie z bajęd, jeno chłystki z błotem po kolana, co po zmroku zbierają się z kijami i nożami do sznura, szczerząc zęby śmielej, niźli serce im bije. Najchętniej dopadają samotnych na skraju wsi i przy brodach, bo razem rosną w siłę jak stado kundli, co zwietrzyło słabość. Kto ich lekceważy, temu rychło przyjdzie poznać, że najgorsze wilki chodzą czasem na dwóch nogach.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_6",
@@ -5122,7 +5843,9 @@
     "lore_text": "Wyrostki spod młyna nie rodzą się z piekła, jeno z głodu, nudy i bezkarności, a przecie nieraz bywają gorsi od wilków. W znoszonych kaftanach, z kijem, hakiem albo kamieniem, czają się tam, gdzie szum wody zagłuszy krzyk, i dopadają tych, którzy nie mogą pozwolić sobie na zwadę. Znają każdą ścieżkę i każdy parów, a ich buta karmi się lękiem podróżnych, co muszą jeszcze dożyć świtu i ruszyć dalej.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_7",
@@ -5163,7 +5886,9 @@
     "lore_text": "Wyrostki spod młyna wyglądają jak obdartusy i śmieszki, ale pod tą błotnistą skórą noszą coś gorszego niż nóż: znajomość każdego obejścia, każdej kłótni i każdego wstydu, który wieś chciałaby zakopać pod progiem. Chodzą kupą, osaczają słowem, śmiechem i kamieniem, a cudzy strach wietrzą jak psy krew na śniegu. Kto raz da im poznać, czego się lęka, temu będą stukać w okiennice po zmroku, aż sam zacznie wierzyć, że młyn miele nie zboże, lecz ludzką odwagę.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_8",
@@ -5204,7 +5929,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się kupy jak psy przy rzeźni: śmierdzą mokrą wełną, kwaśnym piwem i bezkarnością, a w oczach mają tę głupią odwagę, która rodzi się tylko tam, gdzie nikt jeszcze nie oddał im krzywdy z nawiązką. Nie są wojami ani zbójami z pieśni, lecz właśnie przez to bywają gorsi — rzucą kamieniem, dobiją kijem, a potem będą przysięgać przed ludźmi i Bogiem, że to przecie był tylko żart. Kto spotka ich po zmroku przy młynie, ten rychło pojmie, jak łatwo z chłopięcej swawoli rodzi się małe, podwórzowe okrucieństwo.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyrostki_spod_mlyna_9",
@@ -5245,7 +5972,9 @@
     "lore_text": "Wyrostki spod młyna trzymają się kupą jak stado wychudłych kundli: ubłocone buty chlupią im po grobli, a z połatanych kubraków śmierdzi pleśnią, piwem i biedą. Nie są to wojacy, jeno głodne pyski zuchwałe tak długo, jak długo czują przewagę i znają każde obejście, płot oraz okno, przez które można zajrzeć cudzej trwodze w oczy. Gdy jednak noc nie odpowie echem na ich śmiech, a z ciemności spojrzy coś starszego od ludzkiego strachu, pierzchają pierwsi, zostawiając po sobie tylko błoto, przekleństwa i czyjąś krzywdę.",
     "terrain_tags": null,
     "max_level": null,
-    "world_scope": "template"
+    "world_scope": "template",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "wyvern",
@@ -5286,7 +6015,52 @@
     "lore_text": "Wiwerna jest jak zły sen o smoku — mniejsza, chudsza i szybsza, z błoniastymi skrzydłami szeleszczącymi nad bagnem niby całun. Nie zieje ogniem, lecz jej ogon kończy się jadowitym kolcem, od którego krew czernieje, a śmierć idzie za człowiekiem jeszcze kilka kroków. Powiadają, że krąży tam, gdzie ścierwo długo nie stygnie, i że jej cień wystarczy, by konie rwały postronki z obłędu.",
     "terrain_tags": "mountain,hills",
     "max_level": 9,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
+  },
+  {
+    "key": "zamarzniety_pielgrzym",
+    "label": "Zamarznięty Pielgrzym",
+    "hp_base": 16,
+    "ac_base": 11,
+    "attack_bonus": 4,
+    "dex_modifier": 0,
+    "damage_die": "1d6",
+    "skills_json": null,
+    "description": "Postać wmarznięta w lód po pas, wciąż zwrócona twarzą pod górę. Gdy podejdziesz zbyt blisko, procesja rusza dalej — tak, jak szła.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-20 18:28:31",
+    "updated_at": "2026-07-20 19:54:30",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 92,
+    "conditions_immune": null,
+    "loot_table_key": "loot_zamarzniety_pielgrzym",
+    "note": null,
+    "review_status": "permanent",
+    "behavior_profile_key": null,
+    "hit_location_table": "standard",
+    "fear_aura": 0,
+    "fear_dc": 12,
+    "loot_tier": null,
+    "drop_chance": 1.0,
+    "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
+    "image_url": "/images/tiles/aigm_1784577270_aigm_01216_.png",
+    "image_url_raw": null,
+    "image_gen_prompt": "frozen pilgrim, half-buried in ice, waist-deep glacier entrapment, face tilted uphill, gaunt corpse, frostbitten skin, tattered procession robes, rime-covered limbs, eerie motion, bleak mountain pass, cold mist, ominous atmosphere, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
+    "min_level": 2,
+    "created_by": "seed",
+    "template_id": null,
+    "lore_text": "Postać wmarznięta w lód po pas, wciąż zwrócona twarzą pod górę. Gdy podejdziesz zbyt blisko, procesja rusza dalej — tak, jak szła.",
+    "terrain_tags": "mountain,plains,ruins",
+    "max_level": 5,
+    "world_scope": "pool",
+    "region_tag": "siwe_granie",
+    "creature_type": "undead"
   },
   {
     "key": "zbieg",
@@ -5301,7 +6075,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-13 16:12:43",
-    "updated_at": "2026-07-13 17:06:26",
+    "updated_at": "2026-07-19 09:32:49",
     "tier": "standard",
     "attacks_per_turn": 1,
     "damage_bonus": 0,
@@ -5318,16 +6092,18 @@
     "loot_tier": null,
     "drop_chance": 1.0,
     "stats_json": "{\"STR\": 10, \"DEX\": 10, \"CON\": 10, \"INT\": 10, \"WIS\": 10, \"CHA\": 10, \"LCK\": 10}",
-    "image_url": null,
+    "image_url": "/images/tiles/aigm_1784453569_aigm_01139_.png",
     "image_url_raw": null,
-    "image_gen_prompt": null,
+    "image_gen_prompt": "ragged deserter, worn faded gambeson, chipped sword, gaunt face, unshaven, hollow eyes, desperate bandit, scavenged belt gear, tattered clothing, roadside ambusher, grimy hands, bleak mood, muddy road, gritty realism, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI, character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI",
     "min_level": 1,
     "created_by": "seed",
     "template_id": null,
     "lore_text": null,
     "terrain_tags": "road,plains,forest",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": null
   },
   {
     "key": "zombie",
@@ -5368,6 +6144,8 @@
     "lore_text": "Zombie to trup wyrwany z ciszy mogiły, który idzie wolno, lecz nigdy nie ustaje, jakby pchała go cudza, przeklęta wola. Nie czuje bólu ni litości, a jedyne, czego łaknie, to ciepłe mięso żywych i oddech, którego sam już dawno został pozbawiony. Powiadają, że tam, gdzie nocą słychać ciężkie, szurające kroki, świt zastaje już tylko krew na progu i otwarte drzwi.",
     "terrain_tags": "swamp,ruins,dungeon",
     "max_level": 2,
-    "world_scope": "global"
+    "world_scope": "global",
+    "region_tag": null,
+    "creature_type": "undead"
   }
 ]

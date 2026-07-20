@@ -518,5 +518,125 @@
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
+  },
+  {
+    "id": 36651,
+    "location_key": "kamienny_grod",
+    "npc_key": "balrik_siwotarczy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36652,
+    "location_key": "kamienny_grod",
+    "npc_key": "dagna_mlotodzierzca",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36653,
+    "location_key": "kamienny_grod",
+    "npc_key": "torvin_mistrz_kuzni",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36654,
+    "location_key": "kamienny_grod",
+    "npc_key": "grimm_rdzawy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36655,
+    "location_key": "kamienny_grod",
+    "npc_key": "helga_solnobroda",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36656,
+    "location_key": "kamienny_grod",
+    "npc_key": "hadmar_obserwator",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36657,
+    "location_key": "grod_sala_rodow",
+    "npc_key": "balrik_siwotarczy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36658,
+    "location_key": "grod_sala_rodow",
+    "npc_key": "dagna_mlotodzierzca",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36659,
+    "location_key": "grod_pod_rdzawym_mlotem",
+    "npc_key": "grimm_rdzawy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36660,
+    "location_key": "grod_pod_rdzawym_mlotem",
+    "npc_key": "dagna_mlotodzierzca",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36661,
+    "location_key": "grod_wielka_kuznia",
+    "npc_key": "torvin_mistrz_kuzni",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36662,
+    "location_key": "grod_targ_solny",
+    "npc_key": "helga_solnobroda",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36663,
+    "location_key": "echo_wieza",
+    "npc_key": "hadmar_obserwator",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36664,
+    "location_key": "sanktuarium_zamarznietej_pielgrzymki",
+    "npc_key": "brat_elias",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36665,
+    "location_key": "oboz_wygnancow_lodu",
+    "npc_key": "kettil_wodz_wygnancow",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
   }
 ]
