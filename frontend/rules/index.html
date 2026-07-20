@@ -171,6 +171,9 @@
   .gloss .more{display:block;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font-family:sans-serif;font-size:12.5px;letter-spacing:.05em;color:var(--gold-soft);text-decoration:none}
   .gloss .more:hover{color:var(--gold)}
   .gloss .more:after{content:" →"}
+  .more-inline{font-family:sans-serif;font-size:12.5px;letter-spacing:.05em}
+  .more-inline a{color:var(--gold-soft);text-decoration:none;border-bottom:1px solid var(--line)}
+  .more-inline a:hover{color:var(--gold)}
   .gloss .more.soon:before{content:"Pełny opis · ";opacity:.7}
 
   /* formuła */
@@ -467,6 +470,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r11-czekanie">Czekanie</a></li>
           <li><a href="#r11-marsz">Marsz i budżet dnia</a></li>
           <li><a href="#r11-teren">Teren pogranicza</a></li>
+          <li><a href="#r11-granie">Teren Siwych Grań</a></li>
           <li><a href="#r11-rzeki">Przeprawy przez rzeki</a></li>
           <li><a href="#r11-pogoda">Pogoda i tempo marszu</a></li>
           <li><a href="#r11-spotkania">Spotkania na szlaku</a></li>
@@ -2482,6 +2486,63 @@ document.addEventListener('DOMContentLoaded',function(){
       Objazd traktem: osiem heksów po pół godziny. Cztery godziny i spokój.</p>
       <p>Liczby powyżej to <strong>wartości startowe</strong> — Mistrz Gry może je stroić, a pogoda, pora
       doby i zmęczenie i tak dopisują swoje do rachunku.</p>
+
+      <h2 id="r11-granie">Teren Siwych Grań</h2>
+      <p>Na północy tabela z pogranicza przestaje wystarczać. <strong>Siwe Granie</strong> — górska
+      kraina krasnoludów — mają trzy rodzaje terenu, których na Kresach nie spotkasz, i każdy z nich
+      psuje plan podróży inaczej: jeden zjada godziny, drugi zdrowie, trzeci daje chwilę oddechu.</p>
+
+      <table>
+        <caption>Teren Siwych Grań — cena marszu i ryzyko (wartości startowe)</caption>
+        <thead><tr><th>Teren</th><th>Godzin za heks</th><th>Ryzyko spotkania</th><th>Co to znaczy w drodze</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="gloss" tabindex="0">Lodowiec<span class="tip"><span class="tip-h">Lodowiec</span>Wieczny
+            lód Lodowego Pasu na północy Grań. Najdroższy przechodni teren w grze — droższy od gór, tańszy
+            tylko od bagna. Dróg tam nie ma i nigdy nie było: na lodowiec się nie jeździ, przez lodowiec
+            się przeprawia.</span></span></td>
+            <td class="dc">3,5</td><td>średnie</td>
+            <td>Jeden heks to prawie pół dziennego budżetu. <b>Obozowanie na lodzie jest skrajnie
+            ryzykowne</b> — nocleg tutaj ściąga spotkanie znacznie częściej niż gdziekolwiek indziej.</td>
+          </tr>
+          <tr>
+            <td><span class="gloss" tabindex="0">Pola siarkowe<span class="tip"><span class="tip-h">Pola
+            siarkowe</span>Dymiąca żółta jałowizna pod Czarnymi Skałami. Idzie się szybko, ale nie ma tam
+            wody, nie ma czym oddychać i jest tam więcej towarzystwa niż na jakimkolwiek terenie poza
+            bagnem i ruinami.</span></span></td>
+            <td class="dc">2</td><td class="dc">duże</td>
+            <td>Marsz jak przez las, ryzyko jak nigdzie indziej w górach — <b>drugi najgroźniejszy biom
+            po bagnie</b>. Przechodzi się je szybko i nie rozbija obozu.</td>
+          </tr>
+          <tr>
+            <td><span class="gloss" tabindex="0">Las iglasty<span class="tip"><span class="tip-h">Las
+            iglasty</span>Świerkowy bór na południowych, niższych stokach Grań. Jedyny łagodny teren
+            krainy: kosztuje tyle co zwykły las, a zaczepiają w nim rzadziej.</span></span></td>
+            <td class="dc">2</td><td>mniejsze niż w lesie</td>
+            <td>Bór dolnych stoków — najspokojniejsza droga przez Granie. Tędy chodzą karawany, gdy
+            trakt jest zasypany.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>Zbieranie ziół w górach.</strong> Lód i siarka to jałowizna: próba zebrania czegokolwiek
+      to test <b>Trudny (16)</b> i zwykle strata czasu. W borze iglastym runo jest uboższe niż w lesie
+      liściastym — <b>Średni (12)</b>, ale coś się znajdzie.
+      <span class="more-inline">Pełny opis → <a href="#r14-zbieranie">rozdział XIV · Zbieranie ziół</a></span></p>
+
+      <div class="aside">
+        <h4>Północ nie wybacza skrótów</h4>
+        <p>Na Kresach skrót przez bagno kosztuje godziny. W Graniach skrót przez lodowiec kosztuje
+        <em>dzień</em> — i noc, której nie da się bezpiecznie przespać. Trakt z Przesmyku Wilczej Grani
+        przez Karawanseraj do Kamiennego Grodu istnieje po to, by nim iść. Lodowiec i głęboka tundra
+        nie mają dróg celowo: to nie luka na mapie, to ostrzeżenie.</p>
+      </div>
+      <p class="ex"><span class="pc">„Wchodzę na lodowiec i idę prosto do sanktuarium."</span> Trzy heksy
+      lodu to dziesięć i pół godziny — więcej niż zdrowy dzień marszu. Nocleg wypada w połowie drogi,
+      na lodzie, gdzie obóz przyciąga kłopoty jak nigdzie indziej.</p>
+      <p>W Graniach wozi się też ze sobą coś, czego na Kresach nikt nie kupuje: <b>sól</b>. Nie na drogę —
+      na to, co pod ziemią. <span class="more-inline">Pełny opis → <a href="#r8-sol">rozdział VIII ·
+      Sól Siwych Grań</a></span></p>
 
       <h2 id="r11-rzeki">Przeprawy przez rzeki</h2>
       <p><strong>Rzeka to bariera, nie ścieżka.</strong> Nie przejdziesz przez nurt suchą stopą tam, gdzie

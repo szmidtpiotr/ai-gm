@@ -32,7 +32,7 @@
    "name": "Siwe Granie",
    "tag": "Północ i mróz",
    "img": "assets/img/kraina-siwe-granie.webp",
-   "desc": "Surowa północ: lód, siarka, wymarłe kopalnie. Krasnoludy odeszły z Kopalni Czarnego Hutmana — dowierciły się do żyły Rdzenia i obudziły coś, co stuka do dziś. Przed czym uciekły?",
+   "desc": "Ojczyzna krasnoludów: granit, wieczny śnieg i wymarłe kopalnie. Kamienny Gród trwa, Linia Soli wyznacza granicę, poniżej której kopać nie wolno — a z głębi wciąż dochodzi stukanie. Nikt nie wie, co to jest.",
    "anchor": "kraina-granie",
    "available": true,
    "key": "siwe_granie"
