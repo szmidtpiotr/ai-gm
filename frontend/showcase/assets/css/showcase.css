@@ -159,6 +159,13 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .gaz-map img{width:100%;display:block}
 .gaz-map figcaption{padding:14px 22px;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;line-height:1.5;border-top:1px solid var(--line)}
 
+/* ilustracja klimatyczna wewnątrz wpisu krainy (SG-LORE #1481) — wzorzec dla każdej krainy */
+.gaz-fig{margin:26px 0 4px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--bg2)}
+.gaz-fig img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover}
+.gaz-fig figcaption{padding:12px 20px;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;line-height:1.5;border-top:1px solid var(--line)}
+/* wariant szerokiego przerywnika między wpisami */
+.gaz-fig.wide{max-width:900px;margin:40px auto}
+
 /* kodeks świata (swiat.html) */
 .prose{max-width:760px;margin:0 auto;color:var(--ink-dim);font-size:16px;line-height:1.75}
 .prose p{margin-bottom:16px}
