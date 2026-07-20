@@ -156,4 +156,21 @@ Pierwsze haki: Dagna werbuje do sprawy Hutmana, Balrik płaci za coś przeciwneg
 
 ---
 
+## 10. Stan wdrożenia — domknięcie SG-9 (2026-07-20)
+
+Liczby zmierzone na DEV przy snapshocie końcowym. Sekcja opisowa: nie zmienia kanonu z §1–§9, tylko notuje, co implementacja doprecyzowała.
+
+**Mapa.** 2546 heksów. Monotonia spadła z 84 % (mountain + snow przed falą) do **52 %**. Rozkład: mountain 910 · snow 417 · las_iglasty 258 · river 185 · tundra 182 · lodowiec 147 · hills 116 · road 102 · heath 69 · siarka 50 · grania 44 · lake 20 · bridge 19 · ruins 15 · village 7 · przelecz 4 · town 1.
+
+**Trakty.** Cztery przełęcze graniczne — (4,−3), (12,−7), (24,−13), (38,−20). Sieć dróg spina je z Kamiennym Grodem (16,−17): BFS po `road`/`bridge`/`przelecz`/`town`/`village` obejmuje 131 heksów i **dociera do Grodu**. Poza grafem zostają świadomie Obóz Wygnańców Lodu i Lodowy Pas — zgodnie z §5 północ nie ma dróg.
+
+**Treść.** 53 lokacje krainy (27 makro + 26 sub), 26 heksów z dowiązaniem `location_key`, 15 przypisań NPC, 24 przypisania wrogów, 2 lochy (Sztolnia Umarłego Rodu lvl 2, Kopalnia Czarnego Hutmana lvl 7), 15 plotek regionalnych, 3 nowi wrogowie (`widmo_lodowe`, `zamarzniety_pielgrzym`, `straznik_rdzenia`), 3 przedmioty solne. Od SG-9 wszystko to leży w git-seedach (`data/seeds/content/`), nie tylko w bazie DEV.
+
+**Otwarte po SG-9 (nie blokuje bramki, do osobnych zadań):**
+- `tundra_mrozu` — lokacja makro bez heksa i bez współrzędnych (sierota po wcześniejszym reseedzie terenu).
+- Wydarzenia regionalne (#1193) — kraina ma 0 wpisów; wszystkie 3 istniejące należą do Kresów.
+- Pule spotkań dla nowych terenów żyją w kodzie (`hex_travel_service._WORLD_ENCOUNTER_FALLBACK_POOLS`), nie w danych heksów — własną pulę ma 9 heksów (6 lodowiec, 2 przełęcz, 1 ruiny).
+
+---
+
 *Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa regionu: `data/regions/region_siwe_granie.json` (git = prawda, DB = kopia robocza).*

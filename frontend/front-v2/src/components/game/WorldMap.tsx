@@ -147,8 +147,10 @@ export function WorldMap({
     : "—";
   // #1219 — klik w zegar nagłówka Mapy otwiera popup „Łuk dnia" (parytet z paskiem gry).
   const [clockOpen, setClockOpen] = useState(false);
-  const locationLabel =
-    character.data?.current_location_label ?? "W drodze przez Kresy";
+  // SG-9 (#1481): fallback nie moze nazywac krainy na sztywno — bohater w drodze przez
+  // Siwe Granie dostawal „W drodze przez Kresy". API mapy nie zwraca nazwy krainy,
+  // wiec bez niej mowimy neutralnie.
+  const locationLabel = character.data?.current_location_label ?? "W drodze";
 
   // ── zoom / pan ─────────────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
