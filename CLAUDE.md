@@ -35,8 +35,13 @@ docker compose -f docker-compose.dev.yml up -d --build --remove-orphans  # rebui
 # Fast TDD iteration (docker cp avoids rebuild; use --build only in FAZA 4 deploy)
 docker cp backend/tests/test_foo.py ai-gm-dev-backend-1:/app/tests/test_foo.py
 docker cp backend/app/services/my_service.py ai-gm-dev-backend-1:/app/app/services/my_service.py
-docker exec ai-gm-dev-backend-1 pytest tests/test_foo.py -v        # run single test file
-docker exec ai-gm-dev-backend-1 pytest tests/ -k "pattern" -q      # run by keyword
+
+# ALWAYS run pytest through this wrapper (#1487): it hands the suite a COPY of the DB,
+# so tests can never write to the live DEV database. Bare `docker exec … pytest` bypasses
+# the isolation and pollutes live data — use it only with a deliberate reason.
+./scripts/test_dev.sh tests/test_foo.py -v          # run single test file (isolated DB)
+./scripts/test_dev.sh tests/ -k "pattern" -q        # run by keyword
+./scripts/test_dev.sh --live tests/test_foo.py      # opt out: run against the live DB
 
 # DO NOT run the full suite (pytest tests/) — ~8-9 min, many pre-existing failures.
 # Piotr runs the full suite manually per phase. Target only the relevant file(s).

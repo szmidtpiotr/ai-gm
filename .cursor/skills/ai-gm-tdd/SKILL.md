@@ -20,6 +20,10 @@ Human-readable setup: [`docs/GETTING_STARTED.md`](../../../docs/GETTING_STARTED.
 
 Path args: `tests/foo.py` or `backend/tests/foo.py` (both work; rewritten for cwd).
 
+**Both wrappers isolate the DB (#1487):** the suite runs against a throwaway *copy*, so
+tests can never write to the live DEV database. Pass `--live` to opt out deliberately.
+Calling `pytest` directly (or `docker exec … pytest`) skips this and pollutes live data.
+
 **Inside Docker**, tests are at `tests/` (WORKDIR `/app`), **not** `backend/tests/`.
 
 ```bash
