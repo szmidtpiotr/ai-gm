@@ -43,6 +43,11 @@ docker cp backend/app/services/my_service.py ai-gm-dev-backend-1:/app/app/servic
 ./scripts/test_dev.sh tests/ -k "pattern" -q        # run by keyword
 ./scripts/test_dev.sh --live tests/test_foo.py      # opt out: run against the live DB
 
+# Playwright from /admin/#tools (#1488): pick target "Sandbox" (isolated stack, own DB).
+./scripts/sandbox_up.sh        # start sandbox (:13002 / :18100) + seed + demo/demo account
+./scripts/sandbox_down.sh      # stop it (add --wipe to drop its data volume)
+# Target "Żywy DEV" still works; whatever a run leaves behind is auto-cleaned afterwards.
+
 # DO NOT run the full suite (pytest tests/) — ~8-9 min, many pre-existing failures.
 # Piotr runs the full suite manually per phase. Target only the relevant file(s).
 

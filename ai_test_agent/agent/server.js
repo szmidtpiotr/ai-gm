@@ -287,8 +287,21 @@ app.get("/playwright/specs", (_req, res) => {
   }
 });
 
+// #1488 — caller may point a run at another stack (isolated sandbox instead of the
+// live DEV one). Only http(s) URLs are accepted; anything else falls back to the
+// agent's own env, so a malformed value can never silently redirect a run.
+function safeUrl(raw) {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:" ? raw : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 app.post("/playwright/run", (req, res) => {
-  const { spec } = req.body || {};
+  const { spec, baseUrl, backendUrl } = req.body || {};
   // spec is a path relative to playwright/ux — either a single *.spec.js file or
   // a suite folder (regression / acceptance / admin3). Empty → run every suite.
   if (spec && (spec.includes("..") || !/^[A-Za-z0-9_./-]+$/.test(spec))) {
@@ -296,8 +309,13 @@ app.post("/playwright/run", (req, res) => {
     return;
   }
   const specArg = spec ? `playwright/ux/${spec}` : "playwright/ux";
+  const targetBase = safeUrl(baseUrl);
+  const targetBackend = safeUrl(backendUrl);
 
-  logStructured("info", "playwright_run_start", { spec: spec || "all" });
+  logStructured("info", "playwright_run_start", {
+    spec: spec || "all",
+    baseUrl: targetBase || process.env.BASE_URL,
+  });
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -311,8 +329,14 @@ app.post("/playwright/run", (req, res) => {
   const args = ["playwright", "test", specArg, "--config=playwright/playwright.config.js", "--reporter=line"];
   const child = spawn("npx", args, {
     cwd: path.resolve(__dirname, ".."),
-    env: { ...process.env, FORCE_COLOR: "0" },
+    env: {
+      ...process.env,
+      FORCE_COLOR: "0",
+      ...(targetBase ? { BASE_URL: targetBase } : {}),
+      ...(targetBackend ? { BACKEND_URL: targetBackend } : {}),
+    },
   });
+  if (targetBase) send({ type: "log", line: `🎯 Cel testów: ${targetBase}` });
 
   child.stdout.on("data", (chunk) => {
     chunk.toString().split("\n").filter(Boolean).forEach((line) => send({ type: "log", line }));

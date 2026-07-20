@@ -275,12 +275,18 @@ async function _runPlaywrightSpec(filename, btn) {
 
   const tok = localStorage.getItem('aigm_admin_token') || '';
   try {
+    const target = document.getElementById('pw-target')?.value || 'live';
     const resp = await fetch('/api/test_runner/playwright-run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
-      body: JSON.stringify({ spec: filename }),
+      body: JSON.stringify({ spec: filename, target }),
     });
-    if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
+    if (!resp.ok) {
+      // 409 = sandbox nie stoi. Pokazujemy instrukcję zamiast cicho uderzać w żywy DEV.
+      let detail = `HTTP ${resp.status}`;
+      try { detail = (await resp.json()).detail || detail; } catch (_) { /* bez treści */ }
+      throw new Error(detail);
+    }
 
     logEl.innerHTML = '';
     const reader = resp.body.getReader();
@@ -1505,6 +1511,18 @@ export async function init(panel) {
             <div class="card-header">
               <span class="card-title">Testy Playwright</span>
               <button class="btn btn-sm btn-primary" id="pw-run-all">▶ Uruchom wszystkie</button>
+            </div>
+            <!-- #1488 — cel przebiegu. Sandbox = osobny stack z własną bazą; żywy DEV
+                 zostawia ślady w prawdziwych danych (są sprzątane po przebiegu). -->
+            <div style="padding:10px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <label style="font-size:0.72rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.04em">Cel</label>
+              <select id="pw-target" style="flex:1;min-width:150px;font-size:0.78rem;padding:3px 6px">
+                <option value="sandbox">🧪 Sandbox (izolowana baza)</option>
+                <option value="live">⚠️ Żywy DEV</option>
+              </select>
+            </div>
+            <div id="pw-target-hint" style="padding:4px 12px 0;font-size:0.7rem;color:var(--t3)">
+              Sandbox trzeba podnieść: <code>./scripts/sandbox_up.sh</code>
             </div>
             <div style="padding:12px;display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto" id="pw-spec-list">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij zakładkę aby załadować…</div>

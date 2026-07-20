@@ -712,6 +712,24 @@ def _load_ai_test_config_file() -> dict[str, Any]:
 
 class PlaywrightRunReq(BaseModel):
     spec: str | None = Field(default=None, description="filename, np. issue_392_hp_no_death.spec.js; null = uruchom wszystkie")
+    target: str = Field(default="live", description="'sandbox' = izolowany stack e2e, 'live' = żywy DEV")
+
+
+def _sandbox_urls() -> tuple[str, str]:
+    """Adresy izolowanego stacku e2e widziane z kontenera test-agenta (#1488)."""
+    host = os.getenv("AI_SANDBOX_HOST", "host.docker.internal")
+    return (
+        os.getenv("AI_SANDBOX_BASE_URL", f"http://{host}:{os.getenv('E2E_FRONTEND_PORT', '13002')}"),
+        os.getenv("AI_SANDBOX_BACKEND_URL", f"http://{host}:{os.getenv('E2E_BACKEND_PORT', '18100')}"),
+    )
+
+
+def _sandbox_ready(backend_url: str) -> bool:
+    try:
+        with httpx.Client(timeout=httpx.Timeout(4.0, connect=2.0)) as client:
+            return client.get(f"{backend_url}/api/healthz").status_code == 200
+    except Exception:
+        return False
 
 
 @router.get("/playwright-specs", dependencies=[Depends(require_admin_bearer_or_query)])
@@ -754,10 +772,25 @@ def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
 
     from app.services import test_cleanup_service as tcs
 
-    try:
-        before = tcs.snapshot()
-    except Exception:                      # sprzątanie nie może wywrócić przebiegu
-        before = None
+    sandbox = body.target == "sandbox"
+    base_url, backend_url = _sandbox_urls() if sandbox else (None, None)
+    if sandbox and not _sandbox_ready(backend_url):
+        # Bez cichego przełączenia na żywy DEV — to właśnie było źródłem śmieci.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Sandbox nie odpowiada ({backend_url}). Podnieś go: "
+                "./scripts/sandbox_up.sh — albo wybierz cel „żywy DEV”."
+            ),
+        )
+
+    # Na sandboxie baza jest osobna i jednorazowa — nie ma czego sprzątać.
+    before = None
+    if not sandbox:
+        try:
+            before = tcs.snapshot()
+        except Exception:                  # sprzątanie nie może wywrócić przebiegu
+            before = None
 
     def gen():
         # Czytamy stream agenta w wątku → kolejka. Główna pętla emituje heartbeat (komentarz SSE)
@@ -772,7 +805,10 @@ def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
         def _reader() -> None:
             try:
                 with httpx.Client(timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=5.0)) as client:
-                    with client.stream("POST", f"{agent}/playwright/run", json={"spec": body.spec}) as resp:
+                    payload: dict[str, Any] = {"spec": body.spec}
+                    if base_url:
+                        payload |= {"baseUrl": base_url, "backendUrl": backend_url}
+                    with client.stream("POST", f"{agent}/playwright/run", json=payload) as resp:
                         if resp.status_code != 200:
                             err_txt = resp.read()[:2000].decode("utf-8", errors="replace")
                             q.put(("data", json.dumps({'type': 'done', 'success': False, 'error': f'HTTP {resp.status_code}: {err_txt}'})))

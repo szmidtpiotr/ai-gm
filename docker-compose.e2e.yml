@@ -6,7 +6,11 @@ name: ai-gm-e2e
 services:
   backend:
     build:
-      context: ./backend
+      # #1488 — kontekst musi być rootem repo (Dockerfile kopiuje CHANGELOG.md i VERSION
+      # spoza backend/). Przy `context: ./backend` build padał, więc sandbox od dawna
+      # nie wstawał i testy „izolowane" leciały po żywym DEV.
+      context: .
+      dockerfile: backend/Dockerfile
     command: ["/bin/sh", "/app/scripts/e2e_entrypoint.sh"]
     ports:
       - "${E2E_BACKEND_PORT:-18100}:8000"
