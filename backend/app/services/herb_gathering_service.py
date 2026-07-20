@@ -40,6 +40,8 @@ TERRAIN_DC = {
     # Hard 16 — góry i pustkowia.
     "mountain": 16, "przelecz": 16, "grania": 16, "snow": 16,
     "sea": 16, "ruins": 16,
+    # SG-1 #1481 — lód i siarka to jałowizna; bór iglasty uboższy w runo niż las liściasty.
+    "lodowiec": 16, "siarka": 16, "las_iglasty": 12,
 }
 DEFAULT_DC = 12  # Medium — równiny/wzgórza/wrzosowiska/drogi itd.
 

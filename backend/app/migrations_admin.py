@@ -3949,6 +3949,27 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         WHERE q=24 AND r=-13 AND map_level=0 AND hex_type='przelecz'
     """, "v1248-r8-enc-pass-przemytnicy")
 
+    # SG-1 #1481 — nowe typy terenu Siwych Grań (docs/world/regions/siwe_granie.md §5).
+    # WARTOŚCI STARTOWE (Numbers Policy — strojone po playtestach, nie kanon):
+    #   lodowiec    travel 3.5h = najdroższy przechodni teren w grze (drożej niż
+    #               mountains 3.0, taniej niż swamp 4.0) — przeprawa, nie spacer.
+    #               camp_encounter_boost 0.60 = obozowanie na lodzie skrajnie ryzykowne
+    #               (twardy zakaz obozowania wymaga osobnego hooka w silniku — nie tu).
+    #   siarka      travel 2.0h = średni (jak forest/hills), ale encounter 0.35 —
+    #               drugi najgroźniejszy biom po bagnie; opary = ryzyko kondycji.
+    #   las_iglasty travel 2.0h = jak forest, encounter 0.22 < forest 0.30 —
+    #               "łagodniejszy encounter pool" wprost z §5.
+    # INSERT OR IGNORE = idempotentne; nie rusza istniejących wierszy.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
+             is_passable, placement_mode, location_spawn_chance, camp_encounter_boost)
+        VALUES
+        ('lodowiec',    'Lodowiec',    3.5, 0.25, '#bfe3f2', '🧊', 1, 'biome', 0.02, 0.60),
+        ('siarka',      'Pola siarkowe', 2.0, 0.35, '#c9a227', '♨️', 1, 'biome', 0.08, 0.40),
+        ('las_iglasty', 'Las iglasty', 2.0, 0.22, '#1f4536', '🌲', 1, 'biome', 0.15, 0.20)
+    """, "vSG1-siwe-granie-hex-types")
+
     logger.info("v2_schema_migrations_complete")
 
 

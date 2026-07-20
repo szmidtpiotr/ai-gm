@@ -1150,6 +1150,11 @@ const _ROW_REGISTRY = {
   }
 
 // ── Terrain ────────────────────────────────────────────────────────────────────
+  // SG-1 #1481 — typy terenu, które mają ilustrację w frontend/images/terrain/<klucz>.png.
+  // Jawna lista, nie próba-z-onerror: ta druga wysypywała ~27 błędów 404 do konsoli
+  // (jeden na każdy teren bez kafla). Dodajesz nowy kafel → dopisz tu klucz.
+  const TERRAIN_TILE_KEYS = new Set(['lodowiec', 'siarka', 'las_iglasty']);
+
   async function _loadTerrain() {
     const tbody = document.getElementById('terrain-tbody');
     if (!tbody) return;
@@ -1162,7 +1167,12 @@ const _ROW_REGISTRY = {
       tbody.innerHTML = items.map(r => {
         const pct = totalW > 0 && r.spawn_weight > 0 ? ((r.spawn_weight/totalW)*100).toFixed(1) : '0';
         return `<tr>
-          <td style="text-align:center;font-size:1.2rem">${r.map_icon||'?'}</td>
+          <td style="text-align:center;font-size:1.2rem">
+            ${TERRAIN_TILE_KEYS.has(r.hex_type) ? `<img src="/images/terrain/${_esc(r.hex_type)}.png" alt="" loading="lazy"
+              title="Ilustracja terenu — ${_esc(r.label||r.hex_type)}"
+              style="display:block;margin:0 auto 3px;width:36px;height:36px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--border)">` : ''}
+            ${r.map_icon||'?'}
+          </td>
           <td class="td-mono" style="font-size:0.75rem">${_esc(r.hex_type)}</td>
           <td class="td-name editable" onclick="mechPatchEdit(this,'/api/admin/world/hex-terrain-config/${_esc(r.hex_type)}','label')">${_esc(r.label||'')}</td>
           <td>

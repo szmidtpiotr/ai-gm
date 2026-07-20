@@ -293,6 +293,10 @@ _WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
     "road": ["bandit"],
     "bridge": ["bandit"],
     "ruins": ["unknown_attacker", "goblin"],
+    # SG-1 #1481 — Siwe Granie.
+    "las_iglasty": ["wolf", "goblin", "bandit"],
+    "lodowiec": ["wolf", "unknown_attacker"],
+    "siarka": ["unknown_attacker", "giant_rat"],
 }
 _WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
 

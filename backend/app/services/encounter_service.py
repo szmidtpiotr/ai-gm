@@ -868,6 +868,12 @@ _HEX_TYPE_TO_TERRAIN = {
     "coast": "river",
     "village": "city",
     "town": "city",
+    # SG-1 #1481 — nowe tereny Siwych Grań. Słownik `terrain_tags` wrogów nie zna
+    # lodu ani siarki, więc mapujemy na najbliższy istniejący tag; bez tego filtr
+    # terenu dawałby PUSTKĘ → relax-to-all (off-theme śmieci).
+    "lodowiec": "mountain",
+    "siarka": "mountain",
+    "las_iglasty": "forest",
 }
 
 

@@ -85,6 +85,10 @@ const TERRAIN_ICONS: Record<string, Icon> = {
   tundra: Snowflake,
   snow: Snowflake,
   volcanic: Fire,
+  // SG-1 #1481 — nowe tereny Siwych Grań.
+  lodowiec: Snowflake,
+  siarka: Fire,
+  las_iglasty: Tree,
 };
 
 export function terrainIcon(hexType: string | null | undefined): Icon {
@@ -114,6 +118,11 @@ const TERRAIN_HOURS: Record<string, number> = {
   mountain: 8,
   grania: 8,
   volcanic: 8,
+  // SG-1 #1481 — skala ŻAR (szacunek panelu) proporcjonalna do hex_type_config:
+  // lodowiec 3.5h/hex = najdroższy przechodni teren → 9; siarka i bór jak forest.
+  lodowiec: 9,
+  siarka: 6,
+  las_iglasty: 5,
 };
 
 const TERRAIN_DIFFICULTY: Record<string, string> = {
@@ -134,6 +143,9 @@ const TERRAIN_DIFFICULTY: Record<string, string> = {
   grania: "bardzo trudny",
   snow: "bardzo trudny",
   volcanic: "bardzo trudny",
+  lodowiec: "bardzo trudny",
+  siarka: "trudny",
+  las_iglasty: "umiarkowany",
 };
 
 // Ryzyko spotkania — high=czerwone ostrzeżenie w panelu.
@@ -147,6 +159,10 @@ const HIGH_RISK = new Set([
   "dungeon",
   "ruins",
   "volcanic",
+  // SG-1 #1481 — siarka 0.35 to drugi najgroźniejszy biom po bagnie; lodowiec 0.25
+  // jak góry. `las_iglasty` (0.22) celowo POZA listą — §5 chce łagodniejszej puli.
+  "siarka",
+  "lodowiec",
 ]);
 const LOW_RISK = new Set([
   "road",
