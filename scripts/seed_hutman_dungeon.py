@@ -110,6 +110,59 @@ TILES = [
     dict(label="Zawalisko", doors=["N", "S"], enemies=[],
          desc="Strop osiadł i zostawił szczelinę na jednego człowieka. Gruz jest świeży, "
               "a spod niego wystaje kilof z rękojeścią startą do połysku."),
+    # ── więcej komnat „przelotowych" — pula musi mieć z czego losować 8 komnat
+    #    trasy głównej + do 3 odnóg, inaczej te same sale wracają w każdym zejściu
+    dict(label="Warsztat Cieśli", doors=["N", "S", "E"], enemies=[],
+         desc="Stoły do ciosania stempli, sterta desek i piła oparta o ścianę. Trociny "
+              "leżą równą warstwą, jakby ktoś przerwał pracę w pół ruchu."),
+    dict(label="Sala Wentylacyjna", doors=["N", "S", "W"], enemies=[],
+         desc="Wielkie miechy sprzęgnięte z wałem ciągną powietrze z góry. Ciąg jest "
+              "wyczuwalny, choć nikt nie napędza koła — i idzie w złą stronę."),
+    dict(label="Rząd Wózków", doors=["E", "W"], enemies=[{"enemy_key": "skeleton", "count": 2}],
+         desc="Kilkanaście wózków stoi sczepionych w rząd na szynie. Pierwszy jest pusty, "
+              "reszta pełna rudy, a ostatni wykolejony w poprzek chodnika."),
+    dict(label="Podziemne Rozlewisko", doors=["N", "E", "W"], enemies=[{"enemy_key": "ghoul", "count": 1}],
+         desc="Woda rozlała się szeroko i płytko po całej komorze, odbijając światło lamp. "
+              "Coś zmąciło ją chwilę przed twoim wejściem."),
+    dict(label="Komora Kruszarki", doors=["N", "S", "E", "W"],
+         enemies=[{"enemy_key": "kamienny_wojownik", "count": 1}],
+         desc="Żeliwna kruszarka wielkości wozu zajmuje pół komory. W jej gardzieli "
+              "tkwi kamień, którego nie zmieliła — i który nie wygląda na kamień."),
+    dict(label="Nisza Rodowych Znaków", doors=["N", "S"], enemies=[],
+         desc="Ściana pokryta znakami rodów, jeden pod drugim, jak podpisy pod umową. "
+              "Ostatni wykuto niedbale i płycej niż resztę."),
+
+    # ── ZAŚLEPKI (1 drzwi) — silnik domyka nimi ślepe wyjścia, po 2 na każdy
+    #    kierunek. Bez nich graf zostawia drzwi prowadzące donikąd (patrz docstring).
+    dict(label="Ślepy Przodek", doors=["N"], enemies=[],
+         desc="Chodnik urywa się na surowej ścianie. Ślady kilofów są świeże, choć "
+              "narzędzia leżą pod nią pordzewiałe na wylot."),
+    dict(label="Nisza Lampiarza", doors=["N"], enemies=[],
+         desc="Ciasna wnęka z półką na lampy i wiadrem oleju. Jedna lampa wciąż się pali."),
+    dict(label="Zawalony Chodnik", doors=["S"], enemies=[],
+         desc="Strop zszedł tu w całości. Zza rumowiska nie dochodzi żaden dźwięk — "
+              "i to jest w tym najgorsze."),
+    dict(label="Skład Stempli", doors=["S"], enemies=[],
+         desc="Belki ułożone w kozły sięgają stropu. Kilku brakuje, wyciągnięto je "
+              "pospiesznie, bo reszta stosu osunęła się na bok."),
+    dict(label="Wnęka Modlitewna", doors=["E"], enemies=[],
+         desc="Wykuta w skale półka z solną misą i wytartym znakiem rodu. Sól w misie "
+              "jest sucha i biała, jakby ktoś ją wczoraj wymienił."),
+    dict(label="Ślepa Odnoga", doors=["E"], enemies=[],
+         desc="Krótki chodnik drążony na próbę i porzucony po kilku metrach. Na ścianie "
+              "wyskrobano jedno słowo: „nie tędy”."),
+    dict(label="Zasypany Szyb", doors=["W"], enemies=[],
+         desc="Szyb zasypano od góry, gruz usypał stożek do połowy komory. Z góry sączy "
+              "się cienka strużka piasku, bez przerwy."),
+    dict(label="Komórka Narzędziowa", doors=["W"], enemies=[],
+         desc="Kilofy, wiertła i młoty wiszą na hakach w idealnym porządku. Jeden hak "
+              "jest pusty."),
+    # UWAGA (zmierzone): 2 zaślepki na kierunek to maksimum przy tej wielkości puli.
+    # Próba 4 na kierunek (12 z 32 kafli = 37% puli) ROZWALIŁA budowę grafu — kafel
+    # 1-drzwiowy wylosowany na trasę główną jest ślepym końcem i cała próba przepada.
+    # Działające kategorie mają ~13% zaślepek (8 z 60). Żeby zejść z otwartymi drzwiami
+    # do zera, trzeba dołożyć SAL PRZELOTOWYCH, nie zaślepek — osobne zadanie.
+
     dict(label="Serce Głębokiego Bicia", doors=["N", "S", "E", "W"], boss=True,
          enemies=[{"enemy_key": "straznik_rdzenia", "count": 1}],
          desc="Komora, do której dowiercili się dwadzieścia lat temu. Nie ma tu rudy ani "
@@ -272,6 +325,17 @@ def verify(conn: sqlite3.Connection, boss_tile_id: int) -> list[str]:
     n_free = sum(1 for t in TILES if not t["enemies"] and not t.get("boss"))
     if n_free == 0:
         p.append("brak kafla bez wrogów — silnik nie ma gdzie postawić wejścia")
+    # zaślepki: silnik domyka nimi ślepe wyjścia i indeksuje je po kierunku drzwi,
+    # więc każdy z czterech kierunków musi mieć własną (inaczej graf zostawia
+    # drzwi prowadzące donikąd — patrz _fill_open_doors / _count_open_doors)
+    caps = {}
+    for t in TILES:
+        if len(t["doors"]) == 1 and not t.get("boss"):
+            caps.setdefault(t["doors"][0], 0)
+            caps[t["doors"][0]] += 1
+    for direction in ("N", "S", "E", "W"):
+        if caps.get(direction, 0) < 1:
+            p.append(f"brak zaślepki (kafel 1-drzwiowy) dla kierunku {direction}")
     n_tiles = conn.execute("SELECT count(*) c FROM dungeon_tiles WHERE category_key=? AND is_active=1",
                            (CATEGORY["key"],)).fetchone()["c"]
     if n_tiles < d["tile_count"]:
