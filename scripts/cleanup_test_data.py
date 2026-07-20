@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""Sprzątanie lokacji-śmieci po testach (#941/#1382/#1480).
+"""Sprzątanie danych-śmieci po testach (#941/#1382/#1480/#1487 Faza 3).
 
-Suity testowe zostawiają w `game_locations` rekordy typu `test_flow_<ts>` albo
-`issue1105_<nazwa>_<id>`. Śmieć potrafi zająć hex mapy świata (`world_hexes.location_key`)
-i przejąć sub-lokacje prawdziwej krainy — wtedy trafia do snapshotu mapy jako „kanon".
+Suity testowe i ręczne przebiegi zostawiają w bazie DEV rekordy, po których nikt nie
+sprząta. Od #1487 Fazy 2 pytest pracuje na kopii bazy, ale pozostają inne kanały
+(Playwright z panelu admina — #1488, MCP, ręczne testy przez API), więc ten skrypt
+zostaje jako stała sieć bezpieczeństwa (cron, patrz `--apply`).
 
-Skrypt: znajduje śmieci → raportuje wszystkie referencje → (z --apply) odpina i kasuje.
+Co kasuje AUTOMATYCZNIE (tylko rzeczy jednoznacznie martwe):
+  1. lokacje o kluczach testowych (`test_*`, `__test*`, `*_test_*`, `issue<N>*`)
+  2. sesje wskazujące na nieistniejącą kampanię
+  3. postacie, których kampania nie istnieje, o testowej nazwie
+  4. konta testowe (`test<cyfry>_*`) bez ani jednej kampanii i postaci
 
-Sub-lokacje wiszące pod śmieciem NIE są kasowane. Jeśli kanon contentu
-(`data/seeds/content/game_locations.json`) zna ich prawdziwego rodzica, rodzic jest
-odtwarzany z kanonu i dzieci wracają pod niego; w przeciwnym razie zostają bez rodzica
-(do ręcznego wpięcia) — nigdy nie znikają.
+Czego NIE rusza (świadomie — raportuje i zostawia decyzję człowiekowi):
+  * sub-lokacji pod śmieciem — prawdziwy rodzic jest odtwarzany z kanonu contentu
+    (`data/seeds/content/game_locations.json`) i dziecko wraca pod niego; gdy kanon go
+    nie zna, dziecko zostaje bez rodzica, ale nigdy nie ginie
+  * klonów `[SBX]`/`[SCN]` z żywą kampanią — sandbox czyści je sam przy każdym setupie
+  * kont `ai_test_*` — to seed trybu testowego, nie śmieć
+  * kampanii — bywają nazwane numerem issue i służą do wglądu
 
 Domyślnie DRY-RUN. Zapis dopiero z --apply (zrób wcześniej ./scripts/backup_dev.sh).
 
-    python3 scripts/cleanup_test_locations.py            # raport
-    python3 scripts/cleanup_test_locations.py --apply    # sprzątanie
+    python3 scripts/cleanup_test_data.py            # raport
+    python3 scripts/cleanup_test_data.py --apply    # sprzątanie
 """
 import argparse
 import json
@@ -63,18 +71,12 @@ def _canon_rows() -> dict[str, dict]:
     return {r["key"]: r for r in json.load(open(CANON_LOCATIONS, encoding="utf-8"))}
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--apply", action="store_true", help="wykonaj zmiany (domyślnie dry-run)")
-    ap.add_argument("--container", default="ai-gm-dev-backend-1")
-    ap.add_argument("--db", default="/data/ai_gm.db")
-    a = ap.parse_args()
-    C, DB = a.container, a.db
-
+def section_locations(C, DB) -> tuple[list[str], str]:
+    """Lokacje-śmieci + wszystko, co na nie wskazuje. Zwraca (SQL, podsumowanie)."""
     junk = q(C, f"SELECT id,key,label,region FROM game_locations WHERE {JUNK_PREDICATE} ORDER BY id;", DB)
     if not junk:
-        print("Brak lokacji-śmieci — nic do roboty.")
-        return
+        print("LOKACJE: brak śmieci.")
+        return [], "lokacje 0"
     ids = [r["id"] for r in junk]
     keys = [r["key"] for r in junk]
     id_list = ",".join(str(i) for i in ids)
@@ -98,7 +100,7 @@ def main():
         print(f"  ({h['q']},{h['r']}) lvl={h['map_level']} region={h['region']} → {h['location_key']}")
 
     canon = _canon_rows()
-    reparent: list[tuple[dict, str]] = []   # (dziecko, docelowy parent_key)
+    reparent: list[tuple[dict, str]] = []  # (dziecko, docelowy parent_key)
     orphan: list[dict] = []
     restore: dict[str, dict] = {}           # parent_key → wiersz kanonu do odtworzenia
     print(f"\nSUB-LOKACJE POD ŚMIECIEM: {len(kids)} (nie kasujemy)")
@@ -144,11 +146,7 @@ def main():
         print(f"  sesja {s['id']} (kampania {s['campaign_id']}, "
               + ("kampania ISTNIEJE → tylko odpięcie" if s["campaign_exists"] else "kampania nie istnieje → kasuję sesję") + ")")
 
-    if not a.apply:
-        print("\nDRY-RUN — nic nie zmieniono. Uruchom z --apply (najpierw ./scripts/backup_dev.sh).")
-        return
-
-    stmts = ["BEGIN;"]
+    stmts: list[str] = []
     for key, row in restore.items():
         cols = [c for c in ("key", "label", "description", "location_type", "parent_key", "region",
                             "biome", "location_subtype", "map_icon", "safe_for_rest",
@@ -170,14 +168,105 @@ def main():
         probe = key_list if c.lower().endswith("key") else id_list
         stmts.append(f'DELETE FROM "{t}" WHERE "{c}" IN ({probe});')
     stmts.append(f"DELETE FROM game_locations WHERE id IN ({id_list});")
-    stmts.append("COMMIT;")
-    write(C, "\n".join(stmts), DB)
 
+    if hexes:
+        print("  UWAGA: odpięto heksy mapy — po --apply zrób snapshot regionu "
+              "(snapshot_world_map.py --region <key>) i zacommituj.")
+    return stmts, (f"lokacje {len(junk)}, heksy odpięte {len(hexes)}, "
+                   f"rodzice z kanonu {len(restore)}, przepięte {len(reparent)}, osierocone {len(orphan)}")
+
+
+# Kasujemy PO WARUNKU, nie po liście id: część sesji ma `id` NULL (9 sztuk na DEV),
+# a `WHERE id IN (...)` nigdy takiego wiersza nie złapie — cicho zostawałyby w bazie.
+ORPHAN_SESSION_WHERE = "campaign_id NOT IN (SELECT id FROM campaigns)"
+
+
+def section_orphan_sessions(C, DB) -> tuple[list[str], str]:
+    """Sesje wskazujące na nieistniejącą kampanię — jednoznacznie martwe."""
+    rows = q(C, f"SELECT id, campaign_id FROM game_sessions WHERE {ORPHAN_SESSION_WHERE};", DB)
+    print(f"\nOSIEROCONE SESJE: {len(rows)}")
+    if not rows:
+        return [], "sesje 0"
+    for r in rows[:10]:
+        print(f"  sesja {r['id'] or '(bez id)'} → kampania {r['campaign_id']} (nie istnieje)")
+    if len(rows) > 10:
+        print(f"  … i {len(rows) - 10} więcej")
+    return [f"DELETE FROM game_sessions WHERE {ORPHAN_SESSION_WHERE};"], f"sesje {len(rows)}"
+
+
+def section_orphan_characters(C, DB) -> tuple[list[str], str]:
+    """Postacie testowe bez kampanii + kaskada po `character_id`.
+
+    Klony `[SBX]`/`[SCN]` z ŻYWĄ kampanią zostają — sandbox czyści je sam przy setupie.
+    """
+    rows = q(C, "SELECT id, name, campaign_id FROM characters "
+                "WHERE (name GLOB 'TEST[0-9]*' OR name LIKE '[[]SBX]%' OR name LIKE '[[]SCN]%' "
+                "       OR name LIKE 'ai[_]test%' ESCAPE '_') "
+                "  AND (campaign_id IS NULL OR campaign_id NOT IN (SELECT id FROM campaigns));", DB)
+    print(f"\nOSIEROCONE POSTACIE TESTOWE: {len(rows)}")
+    if not rows:
+        return [], "postacie 0"
+    for r in rows:
+        print(f"  #{r['id']} {r['name']} (kampania {r['campaign_id'] or '—'} nie istnieje)")
+    ids = ",".join(str(r["id"]) for r in rows)
+    stmts = []
+    for t in [x["name"] for x in q(C, "SELECT name FROM sqlite_master WHERE type='table';", DB)]:
+        if t == "characters":
+            continue
+        cols = [c["name"] for c in q(C, f"PRAGMA table_info('{t}');", DB)]
+        if "character_id" in cols:
+            n = q(C, f'SELECT count(*) AS n FROM "{t}" WHERE character_id IN ({ids});', DB)[0]["n"]
+            if n:
+                print(f"    ↳ {t}: {n} powiązanych wierszy")
+                stmts.append(f'DELETE FROM "{t}" WHERE character_id IN ({ids});')
+    stmts.append(f"DELETE FROM characters WHERE id IN ({ids});")
+    return stmts, f"postacie {len(rows)}"
+
+
+def section_orphan_users(C, DB) -> tuple[list[str], str]:
+    """Konta z testów (`test<cyfry>_*`) bez ani jednej kampanii i postaci.
+
+    `ai_test_*` to seed trybu testowego — nigdy nie ruszamy.
+    """
+    rows = q(C, "SELECT id, username FROM users WHERE username GLOB 'test[0-9]*' "
+                "AND id NOT IN (SELECT owner_user_id FROM campaigns WHERE owner_user_id IS NOT NULL) "
+                "AND id NOT IN (SELECT user_id FROM characters WHERE user_id IS NOT NULL);", DB)
+    print(f"\nOSIEROCONE KONTA TESTOWE: {len(rows)}")
+    if not rows:
+        return [], "konta 0"
+    for r in rows:
+        print(f"  #{r['id']} {r['username']} (0 kampanii, 0 postaci)")
+    ids = ",".join(str(r["id"]) for r in rows)
+    return [f"DELETE FROM users WHERE id IN ({ids});"], f"konta {len(rows)}"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--apply", action="store_true", help="wykonaj zmiany (domyślnie dry-run)")
+    ap.add_argument("--container", default="ai-gm-dev-backend-1")
+    ap.add_argument("--db", default="/data/ai_gm.db")
+    a = ap.parse_args()
+    C, DB = a.container, a.db
+
+    stmts: list[str] = []
+    summary: list[str] = []
+    for section in (section_locations, section_orphan_sessions,
+                    section_orphan_characters, section_orphan_users):
+        s, info = section(C, DB)
+        stmts += s
+        summary.append(info)
+
+    if not stmts:
+        print("\nBaza czysta — nic do sprzątania.")
+        return
+    if not a.apply:
+        print("\nDRY-RUN — nic nie zmieniono. Uruchom z --apply "
+              "(najpierw ./scripts/backup_dev.sh).")
+        return
+
+    write(C, "BEGIN;\n" + "\n".join(stmts) + "\nCOMMIT;", DB)
     left = q(C, f"SELECT count(*) AS n FROM game_locations WHERE {JUNK_PREDICATE};", DB)[0]["n"]
-    print(f"\nGOTOWE: skasowano {len(junk)} lokacji, odpięto {len(hexes)} heksów, "
-          f"odtworzono {len(restore)} rodziców z kanonu, przepięto {len(reparent)}, "
-          f"osierocono {len(orphan)}. Pozostało śmieci: {left}.")
-    print("Pamiętaj: snapshot mapy (snapshot_world_map.py --region <key>) + commit.")
+    print(f"\nGOTOWE: {'; '.join(summary)}. Pozostało lokacji-śmieci: {left}.")
 
 
 if __name__ == "__main__":

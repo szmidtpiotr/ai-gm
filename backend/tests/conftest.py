@@ -7,6 +7,80 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+# Tabele, które testy potrafią zaśmiecić na trwałe (#1487 Faza 3).
+_WATCHED_TABLES = ("game_locations", "game_sessions", "characters", "users", "campaigns", "npcs")
+
+
+def _live_db_or_none():
+    """Ścieżka bazy, jeśli suita pracuje na ŻYWEJ bazie; None gdy na kopii (#1487)."""
+    import os
+
+    try:
+        from app.core.db_runtime import DEFAULT_DB_PATH, resolve_db_path
+    except Exception:
+        return None
+    if os.getenv("AI_GM_SUPPRESS_LIVE_DB_WARNING"):
+        return None
+    path = resolve_db_path()
+    return path if path == DEFAULT_DB_PATH else None
+
+
+def _table_counts(db_path):
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(db_path)
+    except sqlite3.Error:
+        return {}
+    try:
+        out = {}
+        for t in _WATCHED_TABLES:
+            try:
+                out[t] = con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+            except sqlite3.Error:
+                pass
+        return out
+    finally:
+        con.close()
+
+
+def pytest_sessionstart(session):
+    """#1487 Faza 3 — zapamiętaj stan ŻYWEJ bazy przed przebiegiem.
+
+    Od Fazy 2 domyślna droga (`scripts/test_dev.sh`) podaje testom kopię — wtedy nie
+    ma czego pilnować. Liczymy tylko przy `--live` albo gołym `docker exec … pytest`,
+    czyli dokładnie wtedy, gdy zostawione wiersze są trwałe.
+    """
+    db = _live_db_or_none()
+    session.config._aigm_live_db = db
+    session.config._aigm_counts_before = _table_counts(db) if db else {}
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Wypisz, co suita zostawiła w żywej bazie.
+
+    Świadomie NIE kasujemy tutaj: reguły „co wolno usunąć" mieszkają w
+    `scripts/cleanup_test_data.py` (z dry-runem), a kasowanie w teardownie potrafiłoby
+    zabrać dane, których test nie tworzył.
+    """
+    db = getattr(config, "_aigm_live_db", None)
+    if not db:
+        return
+    before = getattr(config, "_aigm_counts_before", {})
+    after = _table_counts(db)
+    grew = {t: n - before.get(t, 0) for t, n in after.items() if n > before.get(t, 0)}
+    if not grew:
+        return
+    detail = ", ".join(f"{t} +{d}" for t, d in grew.items())
+    terminalreporter.write_line("")
+    terminalreporter.write_line(
+        f"⚠️  Suita pisała do ŻYWEJ bazy ({db}) i zostawiła: {detail}", red=True, bold=True
+    )
+    terminalreporter.write_line(
+        "    Użyj `./scripts/test_dev.sh` (izolowana kopia) albo posprzątaj: "
+        "`python3 scripts/cleanup_test_data.py`"
+    )
+
 
 @pytest.fixture(autouse=True)
 def _isolate_llm_runtime_state():
