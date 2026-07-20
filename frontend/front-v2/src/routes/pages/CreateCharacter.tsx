@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import {
   ALL_SKILL_ROWS,
   ARCHETYPE_BONUS,
+  RACE_BLOCKED_ARCHETYPES,
   RANK_LABEL,
   STAT_KEYS,
   STAT_META,
@@ -129,6 +130,22 @@ export default function CreateCharacter() {
   const [swapSlot, setSwapSlot] = useState<string | null>(null);
   // Step 5 — Finał
   const [identity, setIdentity] = useState<IdentityDraft | null>(null);
+
+  // #1477 — archetypy zamknięte dla wybranej rasy. Serwer jest źródłem prawdy;
+  // stała lokalna ratuje kreator, zanim odpowiedź /creation/races dojdzie.
+  const blockedArchetypes = ((): Archetype[] => {
+    const fromServer = raceOptions?.find((o) => o.key === race)?.blocked_archetypes;
+    return (fromServer ?? RACE_BLOCKED_ARCHETYPES[race] ?? []) as Archetype[];
+  })();
+
+  // Zmiana rasy nie może zostawić zablokowanego archetypu w stanie kroku 2
+  // (gracz wybrał Łotrzyka jako człowiek, cofnął się, wziął krasnoluda).
+  function pickRace(r: Race) {
+    setRace(r);
+    const blocked = (raceOptions?.find((o) => o.key === r)?.blocked_archetypes ??
+      RACE_BLOCKED_ARCHETYPES[r] ?? []) as Archetype[];
+    if (blocked.includes(archetype)) setArchetype("warrior");
+  }
 
   const bonus = ARCHETYPE_BONUS[archetype];
   const eff = (k: StatKey) => statBases[k] + (bonus[k] || 0);
@@ -309,7 +326,7 @@ export default function CreateCharacter() {
 
       <div className="mx-auto w-full max-w-xl flex-1 px-4 py-5">
         {step === 0 && (
-          <StepRace race={race} onPick={setRace} options={raceOptions} />
+          <StepRace race={race} onPick={pickRace} options={raceOptions} />
         )}
         {step === 1 && (
           <StepIdentity
@@ -317,6 +334,7 @@ export default function CreateCharacter() {
             setName={setName}
             archetype={archetype}
             setArchetype={setArchetype}
+            blockedArchetypes={blockedArchetypes}
             backstory={backstory}
             setBackstory={setBackstory}
           />
@@ -496,6 +514,7 @@ function StepIdentity({
   setArchetype,
   backstory,
   setBackstory,
+  blockedArchetypes = [],
 }: {
   name: string;
   setName: (v: string) => void;
@@ -503,7 +522,10 @@ function StepIdentity({
   setArchetype: (a: Archetype) => void;
   backstory: string;
   setBackstory: (v: string) => void;
+  /** #1477 — archetypy zamknięte dla wybranej rasy; karty w ogóle nie wchodzą. */
+  blockedArchetypes?: Archetype[];
 }) {
+  const options = ARCHETYPES.filter(({ key }) => !blockedArchetypes.includes(key));
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-center font-serif text-title-lg font-semibold text-text">Twój bohater</h1>
@@ -529,7 +551,7 @@ function StepIdentity({
       <div>
         <label className="mb-1.5 block font-ui text-label text-text-2">Archetyp</label>
         <div className="grid gap-3 sm:grid-cols-3">
-          {ARCHETYPES.map(({ key, ...rest }) => (
+          {options.map(({ key, ...rest }) => (
             <PickCard
               key={key}
               selected={archetype === key}

@@ -1323,6 +1323,18 @@ def _assert_race_region_open(race: str, user_id: int | None) -> None:
         conn.close()
 
 
+def _assert_race_archetype_allowed(race: str, archetype: str) -> None:
+    """#1477 — para rasa+archetyp musi być legalna (krasnolud bez Łotrzyka).
+
+    Kreator ŻAR chowa zamkniętą kartę, ale UI nigdy nie jest jedyną bramką:
+    zapis idzie do odrzucenia z czytelnym powodem po polsku.
+    """
+    from app.services.race_start_service import archetype_block_reason
+    reason = archetype_block_reason(race, archetype)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
+
+
 @router.get("/creation/races")
 def list_creation_races(authorization: str | None = Header(None), user_id: int | None = None):
     """Rasy do kreatora + informacja, czy da się nimi teraz zagrać (#1479).
@@ -1370,6 +1382,8 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
     # #1479 — rasa zakotwiczona w krainie (krasnolud → Siwe Granie) wymaga, by ta
     # kraina była otwarta. UI wyszarza kartę; backend nie ufa UI i odrzuca zapis.
     _assert_race_region_open(race, user_id)
+    # #1477 — krasnolud nie gra Łotrzykiem.
+    _assert_race_archetype_allowed(race, archetype)
 
     # Roll stats and skills exactly as the campaign-scoped endpoint does
     base_sheet["archetype"] = archetype
@@ -3159,7 +3173,14 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         _race = "human"
 
     # #1479 — kraina ojczysta rasy musi być otwarta (patrz hero-first wyżej).
-    _assert_race_region_open(_race, req.user_id)
+    # #1477 — i para rasa+archetyp musi być legalna (krasnolud bez Łotrzyka).
+    try:
+        _assert_race_region_open(_race, req.user_id)
+        _assert_race_archetype_allowed(_race, archetype)
+    except HTTPException:
+        conn.rollback()
+        conn.close()
+        raise
 
     cur.execute(
         """

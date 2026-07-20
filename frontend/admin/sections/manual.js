@@ -344,6 +344,15 @@ taką krainę, karta tej rasy w kreatorze bohatera <b>wyszarza się</b> z powode
 („te ziemie są jeszcze zamknięte") — nie znika, więc gracz wie, że coś nadejdzie.
 Człowiek nie ma kotwicy i jest dostępny zawsze. Istniejący bohaterowie grają dalej
 bez zmian.</p>
+<h4>Rasa wyznacza też archetyp i miejsce startu (#1477)</h4>
+<p>Krasnolud gra tylko <b>Wojownikiem</b> albo <b>Uczonym Rdzenia</b> — karta Łotrzyka
+nie pojawia się w kreatorze po wybraniu tej rasy, a backend odrzuca taki zapis, nawet
+gdyby ktoś próbował wysłać go z pominięciem UI. Człowiek ma wszystkie trzy archetypy.</p>
+<p>Kampania krasnoluda startuje w <b>Siwych Graniach</b>: domyślnie w szynku
+<b>„Pod Rdzawym Młotem"</b> (Kamienny Gród). Plan kampanii może zamiast tego wskazać
+<b>Karawanseraj na Trakcie</b> lub <b>Wyrobisko Srebrnej Żyły</b> — nazwa spoza tej trójki
+cofa start do szynku. Człowiek startuje jak dotąd. Jawny <i>start-hex</i> ustawiony
+w Kuźni wygrywa z kotwicą rasy, więc szablon może celowo postawić bohatera gdzie indziej.</p>
 <p><b>Flagę Tester</b> nadajesz w <b>Gracze</b> → konto → „Tester (może zgłaszać błędy)".
 Tester dostaje też rasy krain w stanie <b>coming</b> — skoro może tam wejść, może nimi grać.</p>
 <h4>Wizytówka nadąża sama</h4>

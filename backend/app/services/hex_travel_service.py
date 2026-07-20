@@ -1844,6 +1844,31 @@ def resolve_starting_hex(
                 }
                 _tpl_id = _tpl_hex[2]
 
+    # 2b. #1477 (SG-8) — rasa determinuje KRAINĘ startu. Krasnolud zaczyna w Siwych
+    # Graniach (domyślnie szynk „Pod Rdzawym Młotem"); plan LLM może wskazać wariant
+    # z whitelisty krainy, nazwa spoza whitelisty → default. Stoi PONIŻEJ start_hexa
+    # z Kuźni (jawne ustawienie Piotra wygrywa), ale POWYŻEJ label-matcha, reuse C18
+    # i losowania — inaczej krasnolud lądowałby na Kresach po ludzkiej kampanii.
+    _race_loc_key: str | None = None
+    if matched_hex is None:
+        try:
+            from app.services.race_start_service import resolve_race_start
+            _race_start = resolve_race_start(conn, character_id, starting_location_name)
+        except Exception as _rs_err:  # bramka rasy nigdy nie wywraca startu kampanii
+            logger.warning("race_start_error", campaign_id=campaign_id, error=str(_rs_err))
+            _race_start = None
+        if _race_start:
+            matched_hex = {
+                "q": _race_start["q"], "r": _race_start["r"],
+                "hex_type": _race_start["hex_type"], "label": _race_start["label"],
+            }
+            _race_loc_key = _race_start["loc_key"]
+            logger.info(
+                "race_start_applied",
+                campaign_id=campaign_id, loc_key=_race_loc_key,
+                region=_race_start["region"], q=_race_start["q"], r=_race_start["r"],
+            )
+
     # 4-precompute. C18 reuse candidate (owner's prior-campaign hex) — resolved now so it
     # can pre-empt the random sentinel pick below (a returning owner keeps their world).
     _reuse_coords = None
@@ -1954,6 +1979,12 @@ def resolve_starting_hex(
                 "s17_hex_location_paired",
                 campaign_id=campaign_id, loc_key=loc_key, q=sq, r=sr,
             )
+
+    # #1477 — start rasowy celuje w KONKRETNE miejsce (szynk), a nie w hub osady.
+    # On-hex pairing zwraca „Kamienny Gród"; sesja ma zacząć WEWNĄTRZ szynku, więc
+    # klucz z whitelisty nadpisuje hub (dalszy kod sam dosieje local_hex #1212).
+    if _race_loc_key:
+        loc_key = _race_loc_key
 
     # U28: try placement engine first (for new hexes only — existing hexes keep their location)
     if not loc_key and is_new:

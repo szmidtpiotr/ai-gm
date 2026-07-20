@@ -95,6 +95,8 @@ export interface CreationRace {
   available: boolean;
   reason: string | null;
   home_region: string | null;
+  /** #1477 — archetypy zamknięte dla rasy (krasnolud: "rogue"). */
+  blocked_archetypes?: string[];
 }
 
 export function useCreationRaces() {

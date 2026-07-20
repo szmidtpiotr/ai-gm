@@ -324,6 +324,7 @@ def _build_user_prompt(
     secret_predisposition: str,
     ideas_seeds: list[dict] | None = None,
     hero_chronicle: str = "",
+    race_hint: str = "",
 ) -> str:
     archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
 
@@ -350,6 +351,10 @@ def _build_user_prompt(
             "nawiązuj do poprzednich czynów, powracających NPC, konsekwencji decyzji.\n"
         )
 
+    # #1477 (SG-8) — rasa determinuje krainę startu; blok wchodzi PRZED zadaniem,
+    # żeby model traktował go jak ramę świata, a nie luźną sugestię.
+    race_text = f"\n{race_hint.strip()}\n" if (race_hint or "").strip() else ""
+
     return (
         f"POSTAĆ:\n"
         f"  Imię: {name}\n"
@@ -361,7 +366,8 @@ def _build_user_prompt(
         f"\nUKRYTA PREDYSPOZYCJA (TYLKO DLA MG, nie ujawniaj graczowi):\n"
         f"  {secret_predisposition or '(brak)'}\n"
         f"{seeds_text}"
-        f"{chronicle_text}\n"
+        f"{chronicle_text}"
+        f"{race_text}\n"
         "Stwórz plan kampanii spersonalizowany pod tę postać. "
         "Fabuła powinna wynikać z jej więzi i słabości — nie być generyczna."
     )
@@ -429,6 +435,15 @@ def generate_v2_campaign_plan(
     # Ideas Bank seeds
     seeds = _query_ideas_seeds(conn)
 
+    # #1477 (SG-8) — kraina rodowa rasy + pierwsze haki (Dagna vs Balrik).
+    # Pusty string dla człowieka → prompt bez zmian.
+    try:
+        from app.services.race_start_service import race_plan_hint
+        race_hint = race_plan_hint(conn, campaign_id)
+    except Exception as _rh_err:
+        logger.warning("race_plan_hint_failed", campaign_id=campaign_id, error=str(_rh_err))
+        race_hint = ""
+
     user_prompt = _build_user_prompt(
         name=name,
         archetype=archetype,
@@ -439,6 +454,7 @@ def generate_v2_campaign_plan(
         secret_predisposition=secret_predisposition,
         ideas_seeds=seeds,
         hero_chronicle=hero_chronicle,
+        race_hint=race_hint,
     )
 
     messages = [

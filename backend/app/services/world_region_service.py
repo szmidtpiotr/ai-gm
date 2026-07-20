@@ -215,6 +215,8 @@ def race_availability(
 
     passable = ("live", "coming") if include_coming else ("live",)
 
+    from app.services.race_start_service import blocked_archetypes_for_race
+
     out: list[dict] = []
     for key, label in RACE_LABELS.items():
         home = RACE_HOME_REGION.get(key)
@@ -230,6 +232,8 @@ def race_availability(
             "available": available,
             "reason": reason,
             "home_region": home,
+            # #1477 — archetypy zamknięte dla rasy; kreator chowa te karty.
+            "blocked_archetypes": blocked_archetypes_for_race(key),
         })
     return out
 

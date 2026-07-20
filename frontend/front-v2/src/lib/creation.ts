@@ -9,6 +9,15 @@ export const WIZARD_STAT_MAX = 18;
 export type Race = "human" | "dwarf";
 export type Archetype = "warrior" | "scholar" | "rogue";
 
+// #1477 (SG-8) — archetypy zamknięte dla rasy. Krasnolud nie gra Łotrzykiem
+// (DEX to fabularnie słaba cecha rasy). Fallback offline'owy: serwer podaje to
+// samo w GET /creation/races → races[].blocked_archetypes, i on jest źródłem
+// prawdy; ta stała ratuje kreator, gdy odpowiedź jeszcze nie doszła.
+export const RACE_BLOCKED_ARCHETYPES: Record<Race, Archetype[]> = {
+  human: [],
+  dwarf: ["rogue"],
+};
+
 export const STAT_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"] as const;
 export type StatKey = (typeof STAT_KEYS)[number];
 
