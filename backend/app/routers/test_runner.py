@@ -729,10 +729,35 @@ def list_playwright_specs() -> dict[str, Any]:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
 
+@router.post("/cleanup", dependencies=[Depends(require_admin_bearer_or_query)])
+def cleanup_test_leftovers() -> dict[str, Any]:
+    """Ręczne sprzątanie śmieci testowych w bieżącej bazie (#1488).
+
+    Bez zdjęcia „przed" kasuje wszystko, co pasuje do wzorca testowego — używane
+    z panelu, gdy ktoś chce posprzątać zaległości bez wchodzenia na serwer.
+    """
+    from app.services import test_cleanup_service as tcs
+
+    removed = tcs.cleanup_since({t: set() for t in tcs.WATCHED})
+    return {"removed": removed, "summary": tcs.summarize(removed)}
+
+
 @router.post("/playwright-run", dependencies=[Depends(require_admin_bearer_or_query)])
 def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
-    """Uruchom Playwright spec(s) — SSE stream z logami i wynikiem."""
+    """Uruchom Playwright spec(s) — SSE stream z logami i wynikiem.
+
+    #1488: specy klikają ŻYWY DEV, więc przed startem robimy zdjęcie bazy, a po
+    zakończeniu kasujemy to, co przebieg dołożył i co wygląda na testowe. Dzięki temu
+    baza nie rośnie po każdym uruchomieniu Test Runnera.
+    """
     agent = _agent_url()
+
+    from app.services import test_cleanup_service as tcs
+
+    try:
+        before = tcs.snapshot()
+    except Exception:                      # sprzątanie nie może wywrócić przebiegu
+        before = None
 
     def gen():
         # Czytamy stream agenta w wątku → kolejka. Główna pętla emituje heartbeat (komentarz SSE)
@@ -771,6 +796,16 @@ def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
         yield f"data: {json.dumps({'type': 'log', 'line': 'Uruchamianie testów (start Playwright potrafi potrwać ~90s)…'})}\n\n"
 
         _HEARTBEAT_S = 15  # < proxy idle timeout (NPM ~60s)
+        cleaned = False
+
+        def _cleanup_line() -> str:
+            """Posprzątaj po przebiegu i zwróć linię do logu (#1488)."""
+            try:
+                removed = tcs.cleanup_since(before)
+                return f"🧹 Sprzątanie po testach: {tcs.summarize(removed)}"
+            except Exception as e:                       # nigdy nie psuj raportu z testów
+                return f"🧹 Sprzątanie po testach nie powiodło się: {e}"
+
         while True:
             try:
                 kind, val = q.get(timeout=_HEARTBEAT_S)
@@ -779,10 +814,17 @@ def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
                 continue
             if kind == "eof":
                 break
-            if kind == "raw" and val is not None:
-                yield f"{val}\n\n"
-            elif kind == "data" and val is not None:
-                yield f"data: {val}\n\n"
+            if val is None:
+                continue
+            # Sprzątamy PRZED zdarzeniem 'done' — po nim frontend zamyka stream
+            # i nasza linia by nie dotarła.
+            if before is not None and not cleaned and '"done"' in val:
+                cleaned = True
+                yield f"data: {json.dumps({'type': 'log', 'line': _cleanup_line()})}\n\n"
+            yield f"{val}\n\n" if kind == "raw" else f"data: {val}\n\n"
+
+        if before is not None and not cleaned:
+            yield f"data: {json.dumps({'type': 'log', 'line': _cleanup_line()})}\n\n"
 
     return StreamingResponse(
         gen(),

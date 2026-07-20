@@ -199,9 +199,10 @@ def section_orphan_characters(C, DB) -> tuple[list[str], str]:
 
     Klony `[SBX]`/`[SCN]` z ŻYWĄ kampanią zostają — sandbox czyści je sam przy setupie.
     """
+    # Klasy znaków `[0-9]` działają w GLOB, nie w LIKE. Nazw seedowych (`ai_test*`)
+    # celowo tu nie ma — seed nie jest śmieciem (#1488).
     rows = q(C, "SELECT id, name, campaign_id FROM characters "
-                "WHERE (name GLOB 'TEST[0-9]*' OR name LIKE '[[]SBX]%' OR name LIKE '[[]SCN]%' "
-                "       OR name LIKE 'ai[_]test%' ESCAPE '_') "
+                "WHERE (name GLOB 'TEST[0-9]*' OR name LIKE '[[]SBX]%' OR name LIKE '[[]SCN]%') "
                 "  AND (campaign_id IS NULL OR campaign_id NOT IN (SELECT id FROM campaigns));", DB)
     print(f"\nOSIEROCONE POSTACIE TESTOWE: {len(rows)}")
     if not rows:
