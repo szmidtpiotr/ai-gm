@@ -216,15 +216,23 @@ def maybe_inject_encounter(
         #    present, preserving its priority.
         hex_type = None
         hex_pool = []
+        hex_region = None
         if q is not None and r is not None:
             pool_col = _world_hex_pool_column(conn)
             select_cols = f"hex_type, {pool_col} AS pool_json" if pool_col else "hex_type"
+            try:
+                if "region" in {c[1] for c in conn.execute("PRAGMA table_info(world_hexes)")}:
+                    select_cols += ", region"
+            except sqlite3.OperationalError:
+                pass
             hex_row = conn.execute(
                 f"SELECT {select_cols} FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
                 (q, r),
             ).fetchone()
             if hex_row:
                 hex_type = hex_row["hex_type"]
+                if "region" in hex_row.keys():
+                    hex_region = hex_row["region"]
                 if pool_col:
                     try:
                         hex_pool = json.loads(hex_row["pool_json"] or "[]")
@@ -251,6 +259,7 @@ def maybe_inject_encounter(
                     composed = encounter_composer(
                         conn, level=_cat_level, hex_type=hex_type,
                         recent_sigs=recent_sigs, power=_hero_power,
+                        region=hex_region,  # SG-6b #1481 — wrogowie krainy tylko u siebie
                     )
                 except Exception:
                     composed = None
@@ -261,7 +270,9 @@ def maybe_inject_encounter(
             cat_row = None
             try:
                 from app.services import encounter_catalog_service as _cat
-                cat_row = _cat.draw_combat(conn, hex_type, _cat_level, recent_sigs=recent_sigs)
+                cat_row = _cat.draw_combat(
+                    conn, hex_type, _cat_level, recent_sigs=recent_sigs, region=hex_region
+                )
             except Exception:
                 cat_row = None
             if cat_row is not None:
@@ -909,24 +920,56 @@ def _is_test_enemy_key(key: str | None) -> bool:
     return bool(_TEST_ENEMY_SUFFIX_RE.search(k))
 
 
-def _query_scoped_enemies(conn: sqlite3.Connection, lo: int, hi: int) -> list[dict]:
-    """Wrogowie world_scope='global'+permanent+active, których pasmo poziomów
-    PRZECINA okno [lo, hi]. NULL min/max = brak ograniczenia z danej strony.
-    #1369: rekordy testowe/placeholdery odsiane guardem po kluczu."""
-    rows = conn.execute(
-        """
+def _query_scoped_enemies(
+    conn: sqlite3.Connection,
+    lo: int,
+    hi: int,
+    *,
+    region: str | None = None,
+    pool_keys: set[str] | None = None,
+) -> list[dict]:
+    """Wrogowie dostępni dla composera, których pasmo poziomów PRZECINA okno [lo, hi].
+    NULL min/max = brak ograniczenia z danej strony.
+    #1369: rekordy testowe/placeholdery odsiane guardem po kluczu.
+
+    SG-6b (#1481) — dwa nowe wymiary zasięgu:
+      * `region`: wróg z `region_tag` pojawia się WYŁĄCZNIE w swojej krainie
+        (śnieżne wilki Grań nie wychodzą na Kresy). NULL/'' = globalny, jak dotąd.
+        Nieznany region (None) → tylko globalni; treść krainowa jest opt-in.
+      * `world_scope='pool'`: wróg wpuszczany tylko tam, gdzie autor wpisał go do
+        `world_hexes.encounter_pool` danego hexa (np. zamarznięci pielgrzymi wyłącznie
+        wokół sanktuarium). Bez tego autorska pula była filtrem MIĘKKIM i unikat
+        wyciekał na cały biom.
+    """
+    sql = """
         SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
                damage_bonus, attacks_per_turn, tier, min_level, max_level,
                terrain_tags
         FROM game_config_enemies
-        WHERE world_scope = 'global'
-          AND review_status = 'permanent'
+        WHERE review_status = 'permanent'
           AND is_active = 1
           AND (min_level IS NULL OR min_level <= ?)
           AND (max_level IS NULL OR max_level >= ?)
-        """,
-        (int(hi), int(lo)),
-    ).fetchall()
+    """
+    params: list = [int(hi), int(lo)]
+    keys = sorted(pool_keys or [])
+    if keys:
+        sql += (
+            " AND (world_scope = 'global' OR (world_scope = 'pool' AND key IN ("
+            + ",".join("?" * len(keys))
+            + ")))"
+        )
+        params += keys
+    else:
+        sql += " AND world_scope = 'global'"
+    try:
+        rows = conn.execute(
+            sql + " AND (region_tag IS NULL OR region_tag = '' OR region_tag = ?)",
+            params + [str(region or "")],
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # Baza sprzed migracji region_tag — zachowanie jak dotąd (wszyscy globalni).
+        rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows if not _is_test_enemy_key(r["key"])]
 
 
@@ -960,7 +1003,7 @@ def _apply_pool_keys(pool: list[dict], pool_keys: set[str] | None) -> list[dict]
 
 def eligible_enemy_pool(
     conn: sqlite3.Connection, *, level: int, hex_type: str | None,
-    pool_keys: set[str] | None = None,
+    pool_keys: set[str] | None = None, region: str | None = None,
 ) -> list[dict]:
     """BL-A2 (#1328) — pula wrogów do kompozycji.
 
@@ -983,7 +1026,9 @@ def eligible_enemy_pool(
 
         best: list[dict] = []
         for delta in range(0, max_delta + 1):
-            rows = _query_scoped_enemies(conn, level - delta, level + delta)
+            rows = _query_scoped_enemies(
+                conn, level - delta, level + delta, region=region, pool_keys=pool_keys
+            )
             pool = _apply_pool_keys(_filter_by_terrain(rows, hex_type), pool_keys)
             if len(pool) > len(best):
                 best = pool
@@ -996,7 +1041,11 @@ def eligible_enemy_pool(
         if not best:
             relaxed = _apply_pool_keys(
                 _filter_by_terrain(
-                    _query_scoped_enemies(conn, level - max_delta, level + max_delta), None
+                    _query_scoped_enemies(
+                        conn, level - max_delta, level + max_delta,
+                        region=region, pool_keys=pool_keys,
+                    ),
+                    None,
                 ),
                 pool_keys,
             )
@@ -1139,6 +1188,7 @@ def encounter_composer(
     recent_sigs: list[str] | None = None,
     power: float | None = None,
     pool_keys: set[str] | None = None,
+    region: str | None = None,
 ) -> dict | None:
     """BL-A2 (#1328) — złóż spotkanie z puli wrogów pod budżet zagrożenia.
 
@@ -1154,7 +1204,9 @@ def encounter_composer(
     f(level). Pula wrogów nadal filtrowana pasmem POZIOMÓW (min/max_level), bo pasma
     to dane wroga; f(power) skaluje tylko ILE budżetu wydać. None → fallback f(level).
     """
-    pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type, pool_keys=pool_keys)
+    pool = eligible_enemy_pool(
+        conn, level=level, hex_type=hex_type, pool_keys=pool_keys, region=region
+    )
     if not pool:
         return None
     if power is not None:
@@ -1321,9 +1373,12 @@ def compose_travel_encounter(
             sf = {}
         recent = recent_signatures(sf)
         pool_keys = _authored_pool_keys(hex_data)
+        # SG-6b (#1481): kraina hexa bramkuje wrogów regionalnych. hex_data pochodzi
+        # z world_hexes, więc region jest dokładny (nie z bieżącej lokacji bohatera).
         enc = encounter_composer(
             conn, level=level, hex_type=hex_type, rng=rng,
             recent_sigs=recent, power=power, pool_keys=pool_keys,
+            region=(hex_data or {}).get("region"),
         )
         if not enc or not enc.get("enemies"):
             return None

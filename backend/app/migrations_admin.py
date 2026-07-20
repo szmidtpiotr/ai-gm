@@ -3682,6 +3682,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE game_config_enemies ADD COLUMN terrain_tags TEXT DEFAULT NULL", "v2-enemies-terrain-tags")
     _exec("ALTER TABLE game_config_enemies ADD COLUMN max_level INTEGER DEFAULT NULL", "v2-enemies-max-level")
     _exec("ALTER TABLE game_config_enemies ADD COLUMN world_scope TEXT NOT NULL DEFAULT 'global'", "v2-enemies-world-scope")
+    # SG-6b (#1481) — przynależność wroga do krainy. NULL = wróg globalny (dotychczasowe
+    # zachowanie, cała gra). Ustawiony = wróg pojawia się TYLKO w tej krainie, więc
+    # śnieżne wilki Grań nie wychodzą na Kresy. Czyta `encounter_service.eligible_enemy_pool`.
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN region_tag TEXT DEFAULT NULL", "v2-enemies-region-tag")
 
     # ── ALTER TABLE: game_sessions ────────────────────────────────────────
 

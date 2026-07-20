@@ -222,20 +222,27 @@ def _weighted_pick_penalized(
 
 def draw_combat(
     conn: sqlite3.Connection, biome: str, level: int, rng=random,
-    recent_sigs: Optional[list] = None,
+    recent_sigs: Optional[list] = None, region: Optional[str] = None,
 ) -> Optional[dict]:
     """Wylosuj encounter combat dla biomu/poziomu. Pusto → None (fallback do hardcode).
 
     BL-A3 (#1329): `recent_sigs` (sygnatury ostatnich spotkań, index 0 = ostatnie)
     → twarda blokada rekordu o sygnaturze identycznej z OSTATNIM spotkaniem (chyba
     że brak alternatyw) + kara wagi ×REPEAT_WEIGHT_PENALTY dla rekordów z historii.
+
+    SG-6b (#1481): `region` bramkuje `region_tag`. Kolumna istniała od PT-D4a, ale
+    ŻADNE zapytanie jej nie czytało — scena krainy trafiłaby więc na hex tego samego
+    biomu w dowolnej innej krainie (lawina w Graniach = lawina na Kresach). Rekord bez
+    `region_tag` jest globalny; rekord z tagiem wchodzi tylko w swojej krainie, a przy
+    nieznanym regionie (None) — wcale (treść krainowa jest opt-in).
     """
     try:
         rows = conn.execute(
             """SELECT * FROM game_config_encounters
                WHERE kind='combat' AND is_active=1 AND biome=?
-                 AND level_min<=? AND level_max>=?""",
-            (biome, int(level), int(level)),
+                 AND level_min<=? AND level_max>=?
+                 AND (region_tag IS NULL OR region_tag='' OR region_tag=?)""",
+            (biome, int(level), int(level), str(region or "")),
         ).fetchall()
     except sqlite3.OperationalError:
         return None
