@@ -41,7 +41,7 @@ Surowa północ: granitowe pasma, wieczny śnieg, wymarłe kopalnie i wiatr, kt�
 
 ### Istniejące w DB (zostają)
 
-Kopalnia Czarnego Hutmana (przeklęta, serce mitu) · Lodowy Pas / „Tron Białej Bogini" · Krzyż Gór · Czarne Skały · Przesmyk Wilczej Grani · Stara Przełęcz Przemytników.
+Kopalnia Czarnego Hutmana (przeklęta, serce mitu — **endgame krainy**, §4a) · Lodowy Pas / „Tron Białej Bogini" · Krzyż Gór · Czarne Skały · Przesmyk Wilczej Grani · Stara Przełęcz Przemytników.
 
 ### Miejsca opuszczone / zapomniane (pole do kampanii i historii)
 
@@ -55,6 +55,27 @@ Kopalnia Czarnego Hutmana (przeklęta, serce mitu) · Lodowy Pas / „Tron Biał
 | **Sztolnia Umarłego Rodu** | Opuszczona kopalnia — farmowalny dungeon seed, tier niżej niż Hutman. |
 | **Stacja Pradawnych** | Ruina starsza niż krasnoludzkie hołdy — Pradawni byli tu przed nimi. Nić do Martwych Pustkowi. |
 | **Lodowa Brama** | Wmarznięte w lodowiec wrota. Nikt nie wie, co za nimi. Long-term mystery krainy — NIE otwieramy jej questem; ona czeka. |
+
+### 4a. Lochy krainy — dwa progi **[ZATWIERDZONE: Piotr, 2026-07-20]**
+
+Kraina ma dwa lochy kafelkowe (FAZA L) o różnym progu wejścia. Układ komnat losuje się przy
+każdym zejściu — loch to definicja generatora, nie zbudowany poziom.
+
+| Loch | Próg | Rola |
+|---|---|---|
+| **Sztolnia Umarłego Rodu** | poziom 2 | Farmowalny loch krainy. Opuszczona kopalnia rodu, którego już nie ma; kamienny strażnik pilnuje grobu. Tier niżej niż Hutman. |
+| **Kopalnia Czarnego Hutmana** | poziom 7 | **Endgame krainy.** Miejsce Głębokiego Bicia; w Sercu Głębokiego Bicia stoi **Strażnik Rdzenia**. Zejście tam łamie zakaz starszyzny — to nagroda za przejście całej krainy, nie zwykła zawartość. |
+
+**Decyzja i jej skutek dla fikcji.** Wcześniejsze notatki wykonawcze mówiły, że Hutman „nie jest
+dungeonem" — Piotr rozstrzygnął inaczej (2026-07-20): Hutman **jest** finałem krainy i wchodzi
+się do niego jak do lochu. Serce mitu zostaje nienaruszone: gracz dochodzi do wrót Rdzenia
+i mierzy się z jego strażnikiem, ale **natura tego, co stuka, pozostaje nierozstrzygnięta** —
+tak samo jak Lodowa Brama (§4). Pokonanie Strażnika nie jest odpowiedzią, tylko dojściem
+do progu.
+
+Sól jako izolator Rdzenia (§6) jest wpisana w sam loch: Skład Solny to jedyna komnata, w której
+stukanie milknie, a Chodnik Poniżej Linii Soli zaczyna się dokładnie tam, gdzie urywają się
+solne okucia.
 
 ## 4b. Trakty — ciągłość sieci dróg
 
