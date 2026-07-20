@@ -464,6 +464,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r11-zegar">Zegar świata</a></li>
           <li><a href="#r11-czekanie">Czekanie</a></li>
           <li><a href="#r11-marsz">Marsz i budżet dnia</a></li>
+          <li><a href="#r11-teren">Teren pogranicza</a></li>
           <li><a href="#r11-rzeki">Przeprawy przez rzeki</a></li>
           <li><a href="#r11-pogoda">Pogoda i tempo marszu</a></li>
           <li><a href="#r11-spotkania">Spotkania na szlaku</a></li>
@@ -2372,6 +2373,42 @@ document.addEventListener('DOMContentLoaded',function(){
       </div>
       <p>Przerwana podróż nie przepada — po spotkaniu, noclegu czy walce gra pamięta trasę i proponuje
       ruszyć dalej.</p>
+
+      <h2 id="r11-teren">Teren pogranicza</h2>
+      <p>Kresy — pogranicze, na którym zaczyna większość bohaterów — to nie jednolita równina. Każdy heks ma
+      swój <span class="gloss" tabindex="0">rodzaj terenu<span class="tip"><span class="tip-h">Rodzaj terenu</span>Charakter
+      pola na mapie: droga, las, bagno, góra… Rozstrzyga dwie rzeczy naraz — <b>ile godzin</b> kosztuje
+      przejście heksa i <b>jak często</b> coś zastąpi ci drogę.<a class="more" href="#r11-spotkania">Spotkania na szlaku</a></span></span>,
+      a rodzaj terenu rozstrzyga dwie rzeczy naraz: cenę w godzinach i ryzyko spotkania. Dlatego najkrótsza
+      trasa na mapie prawie nigdy nie jest najszybsza.</p>
+
+      <table>
+        <caption>Teren pogranicza — cena marszu i ryzyko (wartości startowe)</caption>
+        <thead><tr><th>Teren</th><th>Godzin za heks</th><th>Ryzyko spotkania</th><th>Co to znaczy w drodze</th></tr></thead>
+        <tbody>
+          <tr><td>Droga, trakt</td><td class="dc">0,5</td><td>bardzo małe</td><td>Dwa razy szybciej niż przez pola. Patrole, karczmy, świadkowie.</td></tr>
+          <tr><td>Równiny, wrzosowiska, wybrzeże</td><td class="dc">1</td><td>małe</td><td>Zwykły dzień drogi. Widać daleko — i ciebie też widać.</td></tr>
+          <tr><td>Śnieg, tundra, bród</td><td class="dc">1,5</td><td>średnie</td><td>Nogi grzęzną, tempo siada. Bród dodatkowo wymaga testu Siły.</td></tr>
+          <tr><td>Las, wzgórza, góry</td><td class="dc">2</td><td>średnie</td><td>Podszycie i podejścia. W lesie coś patrzy częściej, niż byś chciał.</td></tr>
+          <tr><td>Bagno</td><td class="dc">4</td><td class="dc">duże</td><td>Najdroższy teren w grze: jeden heks to pół dnia i największa szansa, że nie przejdziesz sam.</td></tr>
+          <tr><td>Ruiny</td><td class="dc">1</td><td class="dc">bardzo duże</td><td>Idzie się łatwo. Wyjść jest trudniej — tu spotkania są niemal pewne.</td></tr>
+          <tr><td>Rzeka, jezioro, morze</td><td class="dc">—</td><td>—</td><td>Bariera, nie ścieżka. Przechodzi się mostem, brodem albo łodzią.</td></tr>
+          <tr><td>Wioska, miasto</td><td class="dc">0</td><td>brak</td><td>Wejście do osady nie kosztuje godzin. Tu się kupuje, leczy i słucha plotek.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="aside">
+        <h4>Pierwsza lekcja pogranicza</h4>
+        <p>Kresy przecina najgęstsza sieć traktów w znanym świecie i mnóstwo rzek, które można przejść tylko
+        w kilkunastu miejscach. Trzymanie się drogi kosztuje czasem dwa razy więcej heksów — i mimo to
+        zwykle wychodzi szybciej i taniej niż skrót przez bagno. Skrót przez dzicz opłaca się wtedy, gdy
+        naprawdę nie chcesz, żeby ktoś cię na trakcie zobaczył.</p>
+      </div>
+      <p class="ex"><span class="pc">„Idę prosto na wschód, przez mokradła."</span> Trzy heksy bagna to
+      dwanaście godzin — cały dzienny budżet i jeszcze kawałek nocy, z ryzykiem spotkania przy każdym kroku.
+      Objazd traktem: osiem heksów po pół godziny. Cztery godziny i spokój.</p>
+      <p>Liczby powyżej to <strong>wartości startowe</strong> — Mistrz Gry może je stroić, a pogoda, pora
+      doby i zmęczenie i tak dopisują swoje do rachunku.</p>
 
       <h2 id="r11-rzeki">Przeprawy przez rzeki</h2>
       <p><strong>Rzeka to bariera, nie ścieżka.</strong> Nie przejdziesz przez nurt suchą stopą tam, gdzie
