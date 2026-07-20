@@ -6862,10 +6862,11 @@
   {
    "q": 16,
    "r": -17,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
+   "hex_type": "town",
+   "label": "Kamienny Gród",
+   "atmosphere": "Kuźniany żar i zimny przeciąg z przepaści mieszają się na ulicach; wszędzie słychać młot, a pod nim, głębiej, coś, czego nikt nie nazywa.",
+   "encounter_chance": 0.18,
+   "location_key": "kamienny_grod"
   },
   {
    "q": 16,
