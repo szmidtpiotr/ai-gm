@@ -27,6 +27,7 @@ from app.services.weapon_rules import (
     resolve_sheet_weapon,
     stat_modifier,
 )
+from app.services import salt_service
 from app.services.wound_utils import wound_dex_penalty, wound_penalty
 from app.services.world_state_service import set_world_state_flags
 from app.core.db_runtime import resolve_db_path
@@ -2351,7 +2352,11 @@ def _resolve_effect_spell_in_combat(
     if resolution["outcome"] == "miscast":
         _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (ch_id,)).fetchone()
         _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
-        _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
+        _miscast = spell_service.resolve_miscast(
+            sheet, enemy, conn, race=_char_race,
+            # SG-7 (#1481): szczypta soli łagodzi ten miscast o 1 stopień (raz na walkę).
+            soften=salt_service.consume_miscast_softening(sheet),
+        )
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, ch_id, sheet)
@@ -2485,7 +2490,11 @@ def _resolve_aoe_effect_spell_in_combat(
     except sqlite3.OperationalError:
         _char_race = "human"
     if player_raw is not None and spell_service.is_miscast(int(player_raw), _char_race):
-        _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
+        _miscast = spell_service.resolve_miscast(
+            sheet, enemy, conn, race=_char_race,
+            # SG-7 (#1481): szczypta soli łagodzi ten miscast o 1 stopień (raz na walkę).
+            soften=salt_service.consume_miscast_softening(sheet),
+        )
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, ch_id, sheet)
@@ -3267,7 +3276,11 @@ def _resolve_aoe_spell_in_combat(
     except sqlite3.OperationalError:  # izolowane fikstury bez kolumny race
         _char_race = "human"
     if player_raw is not None and spell_service.is_miscast(int(player_raw), _char_race):
-        _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
+        _miscast = spell_service.resolve_miscast(
+            sheet, enemy, conn, race=_char_race,
+            # SG-7 (#1481): szczypta soli łagodzi ten miscast o 1 stopień (raz na walkę).
+            soften=salt_service.consume_miscast_softening(sheet),
+        )
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         out["hit"] = False
@@ -5154,6 +5167,8 @@ def initiate_combat(
                 "xp_award": xp_award_e,
                 "tier": str(er["tier"] or "standard"),
                 "loot_tier": er["loot_tier"] if "loot_tier" in er.keys() else None,
+                # SG-7 (#1481): typ istoty (undead/demon/rdzen) — sól działa tylko na nie.
+                "creature_type": (er["creature_type"] if "creature_type" in er.keys() else None),
                 "zone": _default_zone_for_enemy(er["key"], er["label"]),
                 # Stored now for opposed checks in upcoming [S1b] formulas (T30).
                 "skills": _parse_enemy_skills(er["skills_json"]),
@@ -6018,6 +6033,8 @@ def initiate_combat_mp(
                 "xp_award": xp_e,
                 "tier": str(er["tier"] or "standard"),
                 "loot_tier": er["loot_tier"] if "loot_tier" in er.keys() else None,
+                # SG-7 (#1481): typ istoty (undead/demon/rdzen) — sól działa tylko na nie.
+                "creature_type": (er["creature_type"] if "creature_type" in er.keys() else None),
                 "zone": _default_zone_for_enemy(er["key"], er["label"]),
                 "skills": _parse_enemy_skills(er["skills_json"]),
                 "stats": parse_stats_json(er["stats_json"] if "stats_json" in er.keys() else None),
@@ -7184,6 +7201,18 @@ def _attack_compute_damage(
                 out["sneak_attack"] = _sneak
         if _hidden:
             _remove_combatant_conditions(_pc_for_dmg, _hidden)
+    # SG-7 (#1481): sól. Solona klinga dokłada +1k4 TYLKO istocie Rdzenia (oddzielny add
+    # po mnożniku — jak gear, nie podwajany na cricie). Szczypta soli tłumi własny kanał
+    # maga: −1 do obrażeń czarów do końca walki. Oba czytane z kondycji gracza.
+    _salt_bonus = salt_service.salted_blade_bonus(conn, _pc_for_dmg, enemy, sheet=sheet)
+    if _salt_bonus:
+        dmg += _salt_bonus
+        out["salt_blade_bonus"] = _salt_bonus
+    if str((wrow or {}).get("weapon_type") or "").strip().lower() == "spell":
+        _salt_pen = salt_service.spell_damage_penalty(_pc_for_dmg, sheet=sheet)
+        if _salt_pen:
+            dmg = max(0, dmg - _salt_pen)
+            out["salt_spell_penalty"] = _salt_pen
     # #826: margines→dmg + pancerz=redukcja (po wszystkich bonusach, przed HP).
     # Obrona celu = `ac_base` wroga (już nie próg trafienia — to liczy unik d20+DEX).
     # Nat 20 pomija pancerz (×2 obrażeń policzone wyżej, osobno).
@@ -8506,6 +8535,47 @@ def _resolve_enemy_attack_turn(
         str(enemy.get("enemy_key") or ""), str(enemy.get("name") or "")
     ) == ZONE_RANGED
     if not _prefers_ranged and e_zone != p_zone_e:
+        # SG-7 (#1481): krąg soli. Istota Rdzenia nie wejdzie do zwarcia — traci turę
+        # na próbie przekroczenia soli. Żywy wróg (troll, wilk) doskakuje normalnie.
+        if salt_service.salt_circle_blocks_charge(conn, player_c, enemy):
+            out["hit"] = False
+            out["damage"] = 0
+            out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
+            out["salt_circle_block"] = {
+                "actor_id": str(cur),
+                "enemy_name": out["enemy_name"],
+                "zone": e_zone,
+            }
+            cid_sc = int(row["id"])
+            tn_sc = _next_combat_log_sequence(conn, cid_sc)
+            log_combat_turn(
+                conn,
+                combat_id=cid_sc,
+                campaign_id=campaign_id,
+                turn_number=tn_sc,
+                actor="enemy",
+                event_type="zone_change",
+                roll_value=None,
+                damage=None,
+                hp_after=int(enemy.get("hp_current", 0) or 0),
+                target_id=str(cur),
+                target_name=out["enemy_name"],
+                hit=None,
+                narrative=json.dumps(
+                    {
+                        "enemy_name": out["enemy_name"],
+                        "from": e_zone,
+                        "to": e_zone,
+                        "charged": False,
+                        "blocked_by": "salt_circle",
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+            conn.commit()
+            out["combat_state"] = load_combat_snapshot(campaign_id)
+            return out
         # Melee enemy charges to player's zone — consumes the turn, no attack
         old_zone = e_zone
         enemy["zone"] = p_zone_e
@@ -10257,6 +10327,26 @@ def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None)
             char_id = int(row["character_id"])
             try:
                 _sync_companions_to_db(conn, row, json.loads(row["combatants"] or "[]"))
+            except Exception:
+                pass
+            # SG-7 (#1481): kondycje ważne „na jedną walkę" (effect_json.clear_on='combat_end',
+            # np. solona klinga / szczypta soli) schodzą z bohatera po zakończeniu walki.
+            # Prymityw danymi — żadnego `if key == ...`.
+            try:
+                _ch_row = conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id = ?", (char_id,)
+                ).fetchone()
+                if _ch_row:
+                    _sheet_ce = json.loads(_ch_row["sheet_json"] or "{}")
+                    _kept, _changed = salt_service.strip_combat_end_conditions(
+                        _sheet_ce.get("conditions") or []
+                    )
+                    if _changed:
+                        _sheet_ce["conditions"] = _kept
+                        conn.execute(
+                            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                            (json.dumps(_sheet_ce, ensure_ascii=False), char_id),
+                        )
             except Exception:
                 pass
         conn.execute(

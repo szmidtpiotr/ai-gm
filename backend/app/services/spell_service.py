@@ -235,11 +235,34 @@ def check_and_deduct_mana(
 
 # ── Miscast (Nat 1 on spell attack) ──────────────────────────────────────────
 
-def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: str = "human") -> dict:
+#: SG-7 (#1481): drabina miscastu w stopniach — poziom reprezentatywny każdego stopnia.
+#: Stopień 0 = L1-2 (ogłuszenie), 1 = L3-4 (1k4), 2 = L5-7 (1k6+ogłuszenie), 3 = L8+ (1k8+wtórny).
+_MISCAST_TIER_LEVEL = {0: 1, 1: 3, 2: 5, 3: 8}
+
+
+def _miscast_tier(level: int) -> int:
+    if level <= 2:
+        return 0
+    if level <= 4:
+        return 1
+    if level <= 7:
+        return 2
+    return 3
+
+
+def resolve_miscast(
+    sheet: dict,
+    enemy: dict,
+    conn: sqlite3.Connection,
+    race: str = "human",
+    soften: bool = False,
+) -> dict:
     """
     Apply miscast effects based on Scholar's level.
     Returns miscast result dict with self_damage, stun, narrative.
     #975 R6: Krasnolud miscast ma inny flavor (rdzen_miscast=True).
+    SG-7 (#1481): ``soften=True`` (szczypta soli) zbija miscast o JEDEN stopień
+    drabiny; ze stopnia najniższego — czar gaśnie bez kary (mana i tak przepadła).
     """
     level = int(sheet.get("level", 1) or 1)
     cur_hp = int(sheet.get("current_hp", 0) or 0)
@@ -249,6 +272,19 @@ def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: st
     # stun only (L1-2), self-damage only (L3-4), damage+stun (L5-7), damage+stun+secondary
     # (L8+). Default False, then each branch opts in where the Księga says so.
     result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": False, "narrative": "", "rdzen_miscast": is_dwarf}
+
+    if soften:
+        result["softened"] = True
+        tier = _miscast_tier(level) - 1
+        if tier < 0:
+            result["hp_after"] = cur_hp
+            result["narrative"] = (
+                "Sól na dłoniach chłonie odbicie żyły — czar gaśnie bez kary."
+                if is_dwarf
+                else "Sól na dłoniach chłonie odbicie — czar gaśnie bez kary."
+            )
+            return result
+        level = _MISCAST_TIER_LEVEL[tier]
 
     if is_dwarf:
         # Rdzeń-magia: żyła wibruje — inny flavor

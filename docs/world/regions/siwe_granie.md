@@ -111,6 +111,15 @@ Ekonomia: **sól = drugi towar eksportowy Grań** (obok srebra) — sztolnie sol
 
 Przy implementacji: wpis do **Księgi Zasad** (rozdział + karta przedmiotów + glosy, ledger #868) i do **wizytówki** (dział „Świat" — wiedza o soli jako część lore Grań).
 
+**WDROŻONE (SG-7, 2026-07-20):** `scripts/seed_salt_items.py` seeduje 3 kondycje
+(`salt_circle`, `salted_blade`, `salt_pinch`), 3 consumable (`salt_circle_pouch`,
+`salted_blade_kit`, `salt_pinch_vial`) i asortyment Helgi Solnobrodej. Kto jest „istotą
+Rdzenia" rozstrzyga nowa kolumna `game_config_enemies.creature_type`
+(`undead` / `demon` / `rdzen`; puste = żywe stworzenie, sól nie działa). Silnik:
+`backend/app/services/salt_service.py` czyta kondycje w trzech miejscach walki (doskok
+wroga, obrażenia, miscast). Ledger: Księga Zasad §VIII „Sól Siwych Grań", wizytówka
+(Siwe Granie → Linia Soli), instrukcja admina (Świat → Sól i „istoty Rdzenia").
+
 ## 7. Biała Bogini — bez nowego ludu **[ZATWIERDZONE: A + B razem]**
 
 Kanon trzyma Białą Boginię jako niedowiedzioną legendę. Żadnego żywego kultu-ludu. Dwa elementy wchodzą OBA:

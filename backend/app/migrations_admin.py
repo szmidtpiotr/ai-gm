@@ -3686,6 +3686,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     # zachowanie, cała gra). Ustawiony = wróg pojawia się TYLKO w tej krainie, więc
     # śnieżne wilki Grań nie wychodzą na Kresy. Czyta `encounter_service.eligible_enemy_pool`.
     _exec("ALTER TABLE game_config_enemies ADD COLUMN region_tag TEXT DEFAULT NULL", "v2-enemies-region-tag")
+    # SG-7 (#1481) — klasa istoty dla mechaniki soli (docs/world/regions/siwe_granie.md §6).
+    # NULL = zwykłe, żywe stworzenie (sól nie działa). 'undead' / 'demon' / 'rdzen' =
+    # istota Rdzenia: krąg soli jej nie wpuszcza do zwarcia, solona klinga tnie mocniej.
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN creature_type TEXT DEFAULT NULL", "v2-enemies-creature-type")
 
     # ── ALTER TABLE: game_sessions ────────────────────────────────────────
 

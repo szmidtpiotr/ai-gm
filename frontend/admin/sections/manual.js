@@ -57,6 +57,30 @@ wybierasz już na miejscu.</p>`,
     chapters: [
       { id: 'swiat', title: 'NPC, wrogowie i zasady świata', body: STUB },
       {
+        id: 'sol-rdzen',
+        title: 'Sól i „istoty Rdzenia" (klasa wroga)',
+        body: `
+<p>Wrogowie mają pole <b>klasa istoty</b> (<code>creature_type</code>) — puste dla zwykłych, żywych
+stworzeń, a dla reszty jedna z trzech wartości: <code>undead</code> (nieumarli), <code>demon</code>,
+<code>rdzen</code> (twory żyły Rdzenia). To pole robi jedną rzecz: decyduje, czy działają na wroga
+<b>przedmioty solne</b> z krainy Siwych Grań.</p>
+<h4>Trzy przedmioty solne</h4>
+<ul>
+  <li><b>Krąg soli</b> — istoty Rdzenia nie wchodzą do zwarcia przez 3 rundy; te, które już stoją
+      w zwarciu, zostają wypchnięte na dystans w chwili użycia.</li>
+  <li><b>Solona klinga</b> — +1k4 obrażeń przeciw istotom Rdzenia, na jedną walkę.</li>
+  <li><b>Szczypta soli</b> — najbliższy miscast maga o 1 stopień łagodniejszy (raz na walkę),
+      w zamian −1 do obrażeń czarów do końca walki.</li>
+</ul>
+<p>Na żywym wrogu (troll, wilk, bandyta) żaden z tych przedmiotów nie robi <b>nic</b> — tak działa
+fikcja krainy: sól nie jest magiczna, jest obojętna na Rdzeń.</p>
+<p>Jeśli dodajesz nowego nieumarłego albo demona i chcesz, żeby sól na niego działała, ustaw mu
+klasę istoty. Nowe wpisy bez klasy są traktowane jak żywe. Kupcem solnym jest
+<b>Helga Solnobroda</b> (targ Kamiennego Grodu) — asortyment solny widać w jej sklepie.</p>
+<p class="muted">Wartości (3 rundy, 1k4, −1 do obrażeń, ceny 30–45 GP) to wartości startowe —
+do strojenia w Sandboksie.</p>`,
+      },
+      {
         id: 'towarzysze',
         title: 'Zakładka Towarzysze (najemnicy i wierzchowce)',
         body: `

@@ -2293,6 +2293,65 @@ def _apply_condition_to_enemy_in_combat(
     return True
 
 
+def _apply_on_apply_zone_push(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    condition: dict[str, Any],
+) -> list[str]:
+    """SG-7 (#1481): kondycja z ``effect_json.on_apply='push_core_beings'`` (krąg soli)
+    wypycha żywe istoty Rdzenia ze zwarcia do dystansu w chwili nałożenia.
+
+    Zwraca nazwy wypchniętych wrogów (pusta lista = brak walki / brak takich wrogów).
+    Sterowane danymi — żaden ``if condition_key == 'salt_circle'``.
+    """
+    raw = condition.get("effect_json")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw or "{}")
+        except (ValueError, TypeError):
+            return []
+    if not isinstance(raw, dict) or str(raw.get("on_apply") or "").strip().lower() != "push_core_beings":
+        return []
+    try:
+        row = conn.execute(
+            "SELECT id, combatants FROM active_combat WHERE campaign_id = ? AND character_id = ? AND status = 'active' LIMIT 1",
+            (int(campaign_id), int(character_id)),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return []
+    if not row:
+        return []
+    try:
+        combatants = json.loads(row["combatants"] or "[]")
+    except Exception:
+        return []
+    if not isinstance(combatants, list):
+        return []
+
+    from app.services import salt_service
+
+    pushed: list[str] = []
+    for comb in combatants:
+        if not isinstance(comb, dict) or comb.get("id") == "player" or comb.get("type") != "enemy":
+            continue
+        if int(comb.get("hp_current", 0) or 0) <= 0:
+            continue
+        if str(comb.get("zone") or "engaged") != "engaged":
+            continue
+        if not salt_service.is_core_being(conn, comb):
+            continue
+        comb["zone"] = "ranged"
+        pushed.append(str(comb.get("name") or comb.get("enemy_key") or "wróg"))
+    if pushed:
+        conn.execute(
+            "UPDATE active_combat SET combatants = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(combatants, ensure_ascii=False), int(row["id"])),
+        )
+    return pushed
+
+
 def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
     """Consume one inventory stack and apply supported effects to the character sheet."""
     cid = int(character_id)
@@ -2517,18 +2576,40 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                     sheet["conditions"] = conditions
                     results.append({"type": "apply_condition", "condition_key": condition_key, "applied": True, "reason": "level_bumped"})
                     continue
-                conditions.append(
-                    {
-                        "key": str(cond_row["key"]),
-                        "label": str(cond_row["label"] or cond_row["key"]),
-                        "effect_json": cond_row["effect_json"],
-                        "source_item_key": catalog_key,
-                        "applied_at": "inventory_use",
-                        "runtime": {"level": 1} if stackable else {},
-                    }
+                new_cond = {
+                    "key": str(cond_row["key"]),
+                    "label": str(cond_row["label"] or cond_row["key"]),
+                    "effect_json": cond_row["effect_json"],
+                    "source_item_key": catalog_key,
+                    "applied_at": "inventory_use",
+                    "runtime": {"level": 1} if stackable else {},
+                }
+                # SG-7 (#1481): kondycja z effect.expires='duration_rounds:N' (np. krąg soli
+                # = 3 rundy) musi nieść licznik, inaczej silnik nie ma czego odliczać i buff
+                # z mikstury trwa w nieskończoność. Prymityw wspólny z apply_condition_to_player.
+                from app.services.combat_service import (
+                    _condition_effects as _cond_effects,
+                    _duration_rounds_from_effects as _dur_from_effects,
                 )
+                _dur = _dur_from_effects(_cond_effects(new_cond))
+                if _dur is not None:
+                    new_cond["duration_rounds"] = _dur
+                conditions.append(new_cond)
                 sheet["conditions"] = conditions
-                results.append({"type": "apply_condition", "condition_key": condition_key, "applied": True})
+                # SG-7: rytuał kręgu soli wypycha istoty Rdzenia ZE zwarcia w chwili użycia
+                # (inaczej przedmiot byłby martwy, gdy nieumarły już stoi przy bohaterze).
+                _pushed = _apply_on_apply_zone_push(
+                    conn,
+                    campaign_id=int(row["campaign_id"] or 0),
+                    character_id=cid,
+                    condition=new_cond,
+                )
+                results.append({
+                    "type": "apply_condition",
+                    "condition_key": condition_key,
+                    "applied": True,
+                    **({"pushed_enemies": _pushed} if _pushed else {}),
+                })
                 continue
 
             if effect_type == "damage_enemy":
