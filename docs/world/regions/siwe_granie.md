@@ -56,6 +56,15 @@ Kopalnia Czarnego Hutmana (przeklęta, serce mitu) · Lodowy Pas / „Tron Biał
 | **Stacja Pradawnych** | Ruina starsza niż krasnoludzkie hołdy — Pradawni byli tu przed nimi. Nić do Martwych Pustkowi. |
 | **Lodowa Brama** | Wmarznięte w lodowiec wrota. Nikt nie wie, co za nimi. Long-term mystery krainy — NIE otwieramy jej questem; ona czeka. |
 
+## 4b. Trakty — ciągłość sieci dróg
+
+Sieć dróg musi być SPÓJNYM grafem — od przejść granicznych do hubu (silnik podróży liczy po hexach; ślepe odcinki = bug klasy #1293). Istniejące 31 hexów `road` + mosty + 2 przełęcze zostają i stają się szkieletem:
+
+- **Trakt główny:** Przesmyk Wilczej Grani (granica Kresów) → Karawanseraj → **Kamienny Gród**.
+- **Odnogi:** do Wyrobiska Srebrnej Żyły; do Czarnych Skał/Siarkowych Pól (szlak handlowy siarki); Stara Przełęcz Przemytników łączy się ścieżką boczną (przemytniczą, celowo na uboczu).
+- **Północ:** szlak kończy się na skraju tundry. Lodowiec i głęboka tundra BEZ dróg — celowo (izolacja Wygnańców i sanktuarium; podróż = przeprawa, nie spacer).
+- **Krok seedowania:** graph-check spójności (BFS po `road`/`bridge`/`przelecz` od przejść granicznych do hubu) przed snapshotem.
+
 ## 5. Teren — plan różnicowania
 
 Stan zastany: 84% mapy to mountain+snow (1293+839 z 2544 hexów), 6 lokacji. Cel: góry zostają dominantą, ale zyskują strukturę — doliny osadnicze, pas lasu na południowych stokach, strefy specjalne.
@@ -88,6 +97,32 @@ Kanon trzyma Białą Boginię jako niedowiedzioną legendę. Żadnego żywego ku
 **A — Zamarznięta Pielgrzymka.** Na Lodowym Pasie stoi opuszczone sanktuarium, a w lodzie wokół — zamarznięta procesja pielgrzymów sprzed pokoleń. Nikt nie wie, skąd przyszli ani czemu szli w górę. Sanktuarium jest puste — ale odśnieżone. Jedyny żywy: **ostatni strażnik-pustelnik** (człowiek, JEDEN NPC — żaden lud), który nie pamięta, kiedy przyszedł. Kult martwy, tajemnica żywa.
 
 **B — Wygnańcy Lodu.** Krasnoludzki ród wyklęty za złamanie zakazu lodowca, koczujący w tundrze — nie nowa rasa, to krasnoludy. Żywa osada questowa (obóz w tundrze, poniżej Lodowego Pasu) i trzecia strona konfliktu rodów: starszyzna ich wyklęła, Młotodzierżcy po cichu z nimi handlują, a Wygnańcy jako jedyni widzieli lodowiec z bliska — i czegoś tam się boją bardziej niż wyklęcia.
+
+## 8. Obsada krainy — NPC-ikony **[ZATWIERDZONE ze stylem nazw]**
+
+Standard fali seedowania: każda kraina dostaje 6–10 NPC-ikon (wzór: Mizel/Marta na Kresach) — twarze frakcji, quest-giverzy, plotkarze. Wpisywani do DB (Świat→NPC) i podpinani narratorowi przez known-NPC seed (#1294/#1295) + plotki per-region (#1190).
+
+| NPC | Rola | Miejsce |
+|---|---|---|
+| **Balrik Siwotarczy** | Starszy Rodów — głos zakazów, zleca „przeciw Hutmanowi" | Sala Rodów |
+| **Dagna Młotodzierżca** | przywódczyni rewizjonistów — werbuje do sprawy Hutmana | Kamienny Gród |
+| **Torvin** | mistrz Wielkiej Kuźni — crafting, questy o żelazie i soli | Wielka Kuźnia |
+| **Grimm Rdzawy** | karczmarz „Pod Rdzawym Młotem" — plotki, pierwsze schronienie | szynk |
+| **Helga Solnobroda** | kupcowa solna — handel, ekonomia soli, karawany | Targ |
+| **Hadmar** | stary obserwator Echo-Wieży — wiedza o stukaniu i Rdzeniu | Kamienny Gród / Echo-Wieża |
+| **Brat Elias** | pustelnik-strażnik sanktuarium (człowiek) — jedyny żywy na lodowcu | Sanktuarium Pielgrzymki |
+| **Kettil** | wódz Wygnańców Lodu — handel po cichu, wiedza o lodowcu | Obóz Wygnańców |
+
+Rody: **Siwotarczy** (starszyzna) · **Młotodzierżcy** · **Solnobrodzi** · **Srebrnożylni** · ród wymazany (Wygnańcy). Wyssane Hołdy: **Grauhold, Silberhold, Frosthold, Kohlgrund**.
+
+## 9. Start kampanii krasnoluda
+
+Mechanika (stan silnika): każdy szablon kampanii ma własny alokowany start-hex, a plan LLM osadza lokację startową (`template_start_anchor.py`) — start NIE jest technicznie przybity do jednego punktu świata.
+
+Model dla krainy: **rasa determinuje KRAINĘ startu, plan może wybrać miejsce z whitelisty startowej krainy**:
+- **Default (onboarding):** szynk „Pod Rdzawym Młotem", Kamienny Gród — lustro „Pod Złamanym Rogiem".
+- **Warianty dla LLM:** Karawanseraj na trakcie · Wyrobisko Srebrnej Żyły (miejsca cywilizowane; lodowiec/tundra/ruiny NIE są startami).
+Pierwsze haki: Dagna werbuje do sprawy Hutmana, Balrik płaci za coś przeciwnego.
 
 ---
 
