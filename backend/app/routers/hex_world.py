@@ -32,6 +32,48 @@ def _require_admin(authorization: str | None = Header(default=None)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+# ── #1482: ochrona ręcznie budowanej mapy świata ──────────────────────────────
+# Świat Kresów powstaje ręcznie (heks po heksie), a źródłem prawdy są pliki
+# data/regions/region_<klucz>.json w gicie. Każda operacja kasująca CAŁE
+# map_level=0 jednym ruchem może w sekundę skasować godziny pracy, więc jest
+# zablokowana dopóki mapa nie jest pusta. Pojedyncze PATCH/DELETE hexa, malowanie
+# i generate-local (podmapy osad) nie są objęte guardem.
+
+def _map_level0_counts(conn) -> list[tuple[str, int, str]]:
+    """(region, liczba heksów map_level=0, status krainy) — malejąco po liczbie."""
+    try:
+        rows = conn.execute(
+            "SELECT h.region AS region, COUNT(*) AS n, "
+            "       COALESCE(r.status, 'unknown') AS status "
+            "FROM world_hexes h "
+            "LEFT JOIN world_regions r ON r.key = h.region "
+            "WHERE h.map_level = 0 "
+            "GROUP BY h.region ORDER BY n DESC"
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [(r["region"] or "?", int(r["n"]), r["status"]) for r in rows]
+
+
+def _guard_bulk_wipe(conn, what: str) -> None:
+    """403, gdy operacja masowa skasowałaby/nadpisała istniejącą mapę świata (#1482)."""
+    counts = _map_level0_counts(conn)
+    total = sum(n for _, n, _ in counts)
+    if total == 0:
+        return  # pusta mapa (świeża baza) — odtworzenie musi być możliwe
+    listing = ", ".join(f"{reg} — {n} heksów [{st}]" for reg, n, st in counts)
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            f"Zablokowane (#1482): {what} skasowałoby ręcznie budowaną mapę świata "
+            f"({total} heksów: {listing}). Mapę budujemy ręcznie, a źródłem prawdy są "
+            "pliki data/regions/region_<klucz>.json w gicie. Użyj operacji per-kraina "
+            "(POST /api/admin/world/map/restore?region=<klucz>) albo skryptu "
+            "scripts/seed_world_map.py na serwerze."
+        ),
+    )
+
+
 # ── Request models ────────────────────────────────────────────────────────────
 
 class HexCreate(BaseModel):
@@ -296,6 +338,14 @@ def restore_world_map(
     if not hexes:
         raise HTTPException(status_code=409, detail="Plik kanon nie zawiera heksów.")
     conn = _get_db()
+    # #1482 — legacy restore kasuje WSZYSTKIE krainy i wstawia je z powrotem
+    # jako 'kresy'; na wielokrainowej mapie to cichy wipe Siwych Grani itd.
+    # Guard PRZED BEGIN — inaczej except-ROLLBACK strzela w nieistniejącą transakcję.
+    try:
+        _guard_bulk_wipe(conn, "pełne odtworzenie mapy z legacy world_map_seed.json")
+    except HTTPException:
+        conn.close()
+        raise
     try:
         conn.execute("BEGIN")
         conn.execute("DELETE FROM world_hexes WHERE map_level = 0")
@@ -566,155 +616,6 @@ def _generate_biome_map(
     return result
 
 
-# ── Placement-aware generation helpers (#507) ──────────────────────────────────
-
-# Axial hex directions (pointy-top), used for line drawing and path walks.
-_HEX_DIRS = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
-
-
-def _cube_round(x: float, y: float, z: float) -> tuple[int, int]:
-    """Round fractional cube coords to the nearest hex, return axial (q, r)."""
-    rx, ry, rz = round(x), round(y), round(z)
-    dx, dy, dz = abs(rx - x), abs(ry - y), abs(rz - z)
-    if dx > dy and dx > dz:
-        rx = -ry - rz
-    elif dy > dz:
-        ry = -rx - rz
-    else:
-        rz = -rx - ry
-    return int(rx), int(rz)
-
-
-def _hex_line(q1: int, r1: int, q2: int, r2: int) -> list[tuple[int, int]]:
-    """Hexes along the straight line between two hexes (inclusive of both ends)."""
-    n = int(_hex_dist(q1, r1, q2, r2))
-    if n == 0:
-        return [(q1, r1)]
-    x1, z1 = q1, r1
-    y1 = -x1 - z1
-    x2, z2 = q2, r2
-    y2 = -x2 - z2
-    out: list[tuple[int, int]] = []
-    for i in range(n + 1):
-        t = i / n
-        out.append(_cube_round(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, z1 + (z2 - z1) * t))
-    return out
-
-
-def _carve_river(
-    all_set: set[tuple[int, int]],
-    rng: random.Random,
-    start: tuple[int, int],
-    max_len: int,
-) -> list[tuple[int, int]]:
-    """Momentum random-walk from `start` toward the map edge.
-
-    Prefers continuing straight (weight 3) over a ±1 direction turn (weight 1),
-    producing a meandering line rather than a tight scribble. Stops when it
-    steps off the map (reaches the edge) or hits max_len.
-    """
-    path = [start]
-    cur = start
-    dir_idx = rng.randrange(6)
-    seen = {start}
-    for _ in range(max_len):
-        choices = [(dir_idx - 1) % 6, dir_idx, (dir_idx + 1) % 6]
-        dir_idx = rng.choices(choices, weights=[1, 3, 1], k=1)[0]
-        dq, dr = _HEX_DIRS[dir_idx]
-        nxt = (cur[0] + dq, cur[1] + dr)
-        if nxt not in all_set or nxt in seen:
-            break  # off the map edge, or would self-cross
-        cur = nxt
-        seen.add(cur)
-        path.append(cur)
-    return path
-
-
-def _scatter_features(
-    all_hexes: list[tuple[int, int]],
-    placements: list[tuple[str, int]],
-    occupied: set[tuple[int, int]],
-    rng: random.Random,
-) -> dict[tuple[int, int], str]:
-    """Place feature hexes as isolated points via rejection sampling.
-
-    placements — (hex_type, count) per scatter terrain.
-    occupied — hexes that must not be used (e.g. river hexes).
-    Enforces min spacing: >=3 hexes between same-type features, >=2 between any.
-    """
-    result: dict[tuple[int, int], str] = {}
-    candidates = [h for h in all_hexes if h not in occupied]
-    rng.shuffle(candidates)
-    placed_by_type: dict[str, list[tuple[int, int]]] = {}
-    for hex_type, count in placements:
-        placed_by_type.setdefault(hex_type, [])
-        added = 0
-        attempts = 0
-        cap = max(200, count * 40)
-        idx = 0
-        while added < count and attempts < cap and idx < len(candidates):
-            attempts += 1
-            cand = candidates[idx]
-            idx += 1
-            if cand in result:
-                continue
-            # >=2 from any feature already placed
-            if any(_hex_dist(*cand, *p) < 2 for p in result):
-                continue
-            # >=3 from same-type
-            if any(_hex_dist(*cand, *p) < 3 for p in placed_by_type[hex_type]):
-                continue
-            result[cand] = hex_type
-            placed_by_type[hex_type].append(cand)
-            added += 1
-        # restart scan from top for the next type so it can reuse skipped hexes
-    return result
-
-
-def _build_road_network(
-    nodes: list[tuple[int, int]],
-    blocked: set[tuple[int, int]],
-    rng: random.Random,
-) -> set[tuple[int, int]]:
-    """Connect every node (town/castle) into one network via a greedy MST.
-
-    Returns the set of intermediate hexes that should become roads. Node hexes
-    themselves are excluded (they keep their feature type); so are `blocked`
-    hexes (other scatter features) — roads route through but don't overwrite them.
-    Roads may cross rivers (treated as bridges).
-    """
-    if len(nodes) < 2:
-        return set()
-    connected = [nodes[0]]
-    remaining = nodes[1:]
-    road_hexes: set[tuple[int, int]] = set()
-    node_set = set(nodes)
-    while remaining:
-        best = None
-        best_d = float("inf")
-        for tgt in remaining:
-            for src in connected:
-                d = _hex_dist(*src, *tgt)
-                if d < best_d:
-                    best_d, best = d, (src, tgt)
-        src, tgt = best
-        for h in _hex_line(*src, *tgt):
-            if h not in node_set and h not in blocked:
-                road_hexes.add(h)
-        connected.append(tgt)
-        remaining.remove(tgt)
-    return road_hexes
-
-
-def _placement_mode(row: Any) -> str:
-    """Resolve a terrain row's placement_mode, defaulting NULL/unknown to 'biome'."""
-    try:
-        mode = row["placement_mode"]
-    except (KeyError, IndexError, TypeError):
-        mode = None
-    return mode if mode in ("biome", "scatter", "path") else "biome"
-
-
 def _world_hex_coords(radius: int) -> list[tuple[int, int]]:
     """Rectangular hex grid for the global world map (#589).
 
@@ -731,127 +632,36 @@ def _world_hex_coords(radius: int) -> list[tuple[int, int]]:
     return coords
 
 
-class WorldGenRequest(BaseModel):
-    seed: int = 42
-    radius: int = 25
-    # #589 — regenerate = replace. Without clearing, INSERT OR IGNORE leaves the
-    # PREVIOUS world's hexes in place (e.g. an old diamond) so the new rectangle
-    # never fully shows. Default True wipes top-level hexes first.
-    clear_existing: bool = True
-
-
 @router.post("/generate")
-def generate_world(body: WorldGenRequest, authorization: str | None = Header(default=None)):
-    """Procedurally generate a hex world grid using Voronoi biome clustering."""
+def generate_world(authorization: str | None = Header(default=None)):
+    """USUNIĘTY (#1482) — proceduralny generator całego świata.
+
+    Świat Kresów budujemy ręcznie (Piotr + Claude); jedno kliknięcie generatora
+    nadpisywało godziny ręcznej pracy. Odtworzenie mapy: per-kraina z gita.
+    """
     _require_admin(authorization)
-    if body.radius > 50:
-        raise HTTPException(status_code=400, detail="Max radius: 50")
-
-    conn = _get_db()
-    try:
-        terrain_rows = conn.execute(
-            "SELECT hex_type, spawn_weight, encounter_base_chance, placement_mode "
-            "FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
-        ).fetchall()
-        if not terrain_rows:
-            raise HTTPException(status_code=400, detail="No terrain types with spawn_weight > 0 configured")
-
-        encounter_chances = {r["hex_type"]: r["encounter_base_chance"] for r in terrain_rows}
-        weight_by_type = {r["hex_type"]: r["spawn_weight"] for r in terrain_rows}
-
-        # Partition terrain types by how they should be placed (#507).
-        biome_types: list[str] = []
-        biome_weights: list[int] = []
-        scatter: list[tuple[str, int]] = []   # (hex_type, weight)
-        river_types: list[str] = []
-        road_types: list[str] = []
-        for r in terrain_rows:
-            mode = _placement_mode(r)
-            ht, w = r["hex_type"], r["spawn_weight"]
-            if mode == "scatter":
-                scatter.append((ht, w))
-            elif mode == "path":
-                (road_types if ht == "road" else river_types).append(ht)
-            else:
-                biome_types.append(ht)
-                biome_weights.append(w)
-
-        if not biome_types:
-            raise HTTPException(status_code=400, detail="No biome terrain types configured (placement_mode='biome')")
-
-        rng = random.Random(body.seed)
-
-        # Build all hex coordinates (full square grid — #589)
-        all_hexes = _world_hex_coords(body.radius)
-        all_set = set(all_hexes)
-        total = len(all_hexes)
-
-        # 1) Base biome layer — Voronoi clustering over biome types only.
-        biome_map = _generate_biome_map(all_hexes, biome_types, biome_weights, rng)
-
-        # 2) Rivers — momentum walks toward the map edge, overwrite biome.
-        mountain_hexes = [h for h, t in biome_map.items() if t == "mountains"] or all_hexes
-        for river_type in river_types:
-            n_rivers = max(1, weight_by_type.get(river_type, 0) // 5)
-            for _ in range(n_rivers):
-                start = rng.choice(mountain_hexes)
-                for h in _carve_river(all_set, rng, start, max_len=body.radius * 3):
-                    biome_map[h] = river_type
-        river_set = {h for h, t in biome_map.items() if t in river_types}
-
-        # 3) Scatter features — isolated points, never on a river.
-        scatter_counts = [
-            (ht, max(1, round(w * total / 1200)))
-            for ht, w in scatter
-        ]
-        feature_map = _scatter_features(all_hexes, scatter_counts, river_set, rng)
-        for h, t in feature_map.items():
-            biome_map[h] = t
-
-        # 4) Road network — connect towns + castles via greedy MST.
-        if road_types:
-            road_type = road_types[0]
-            nodes = [h for h, t in feature_map.items() if t in ("town", "castle")]
-            blocked = set(feature_map.keys())  # don't overwrite other features
-            for h in _build_road_network(nodes, blocked, rng):
-                biome_map[h] = road_type
-
-        # #589 — replace the previous top-level world so the new shape is exact
-        # (old hexes outside the new set would otherwise remain and distort the map).
-        if body.clear_existing:
-            conn.execute(
-                "DELETE FROM world_hexes WHERE map_level = 0 AND parent_hex_id IS NULL"
-            )
-
-        hexes_created = 0
-        counts: dict[str, int] = {}
-        for (q, r), hex_type in biome_map.items():
-            enc = encounter_chances.get(hex_type, 0.15)
-            try:
-                conn.execute(
-                    """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool, is_active)
-                       VALUES (?, ?, ?, ?, '[]', 1)
-                       ON CONFLICT DO NOTHING""",
-                    (q, r, hex_type, enc),
-                )
-                if conn.execute("SELECT changes()").fetchone()[0]:
-                    hexes_created += 1
-                    counts[hex_type] = counts.get(hex_type, 0) + 1
-            except Exception:
-                pass
-
-        conn.commit()
-        return {"hexes_created": hexes_created, "counts": counts, "seed": body.seed, "radius": body.radius}
-    finally:
-        conn.close()
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Generator świata został usunięty (#1482). Mapa Kresów jest budowana ręcznie, "
+            "a źródłem prawdy są pliki data/regions/region_<klucz>.json w gicie. "
+            "Odtworzenie krainy: POST /api/admin/world/map/restore?region=<klucz> "
+            "albo scripts/seed_world_map.py na serwerze. Podmapy osad generuje nadal "
+            "POST /api/admin/world/generate-local."
+        ),
+    )
 
 
 @router.delete("/clear")
 def clear_world(authorization: str | None = Header(default=None)):
-    """Delete all top-level world hexes (map_level=0, no parent)."""
+    """Delete all top-level world hexes (map_level=0, no parent).
+
+    #1482 — dozwolone tylko na PUSTEJ mapie; niepusta = 403 (ręczna praca).
+    """
     _require_admin(authorization)
     conn = _get_db()
     try:
+        _guard_bulk_wipe(conn, "wyczyszczenie całej mapy świata")
         deleted = conn.execute(
             "DELETE FROM world_hexes WHERE map_level = 0 AND parent_hex_id IS NULL"
         )

@@ -1,4 +1,7 @@
-"""TDD: Issue #415 — Map endpoints: hex-terrain-config, generate, clear, locations-map."""
+"""TDD: Issue #415 — Map endpoints: hex-terrain-config, generate, clear, locations-map.
+
+#1482: /generate usunięty (410), /clear chroniony guardem (403 na niepustej mapie).
+"""
 import hashlib
 import sqlite3
 import sys
@@ -103,48 +106,29 @@ def test_locations_map_returns_data():
     assert isinstance(data["pending_count"], int)
 
 
-def test_world_generate_returns_valid_response():
-    """POST /generate → 200 z hexes_created, counts, seed."""
-    if not _has_spawn_terrain():
-        pytest.skip("No terrain types with spawn_weight > 0 — cannot test world generation")
+def test_world_generate_is_gone():
+    """#1482: generator świata usunięty — /generate zwraca 410 Gone."""
     resp = client.post(
         "/api/admin/world/generate",
         json={"seed": 999415, "radius": 2},
         headers=_headers(),
     )
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-    data = resp.json()
-    assert "hexes_created" in data, f"Missing hexes_created: {data}"
-    assert "counts" in data, f"Missing counts: {data}"
-    assert "seed" in data, f"Missing seed: {data}"
-    assert isinstance(data["hexes_created"], int)
-    assert data["seed"] == 999415
+    assert resp.status_code == 410, f"Expected 410 (usunięty generator, #1482), got {resp.status_code}: {resp.text}"
 
 
-def test_world_generate_radius_limit():
-    """POST /generate z radius > 50 → 400."""
-    resp = client.post(
-        "/api/admin/world/generate",
-        json={"seed": 1, "radius": 51},
-        headers=_headers(),
-    )
-    assert resp.status_code == 400, f"Expected 400 for radius > 50, got {resp.status_code}"
-
-
-def test_world_clear_returns_deleted_count():
-    """DELETE /clear → 200 z 'hexes_deleted'."""
-    if _has_spawn_terrain():
-        # Generate a tiny world first so there's something to clear
-        client.post(
-            "/api/admin/world/generate",
-            json={"seed": 12345415, "radius": 1},
-            headers=_headers(),
-        )
+def test_world_clear_blocked_on_non_empty_map():
+    """#1482: DELETE /clear na niepustej mapie → 403 (ochrona ręcznej pracy)."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM world_hexes WHERE map_level = 0").fetchone()[0]
+    finally:
+        conn.close()
     resp = client.delete("/api/admin/world/clear", headers=_headers())
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-    data = resp.json()
-    assert "hexes_deleted" in data, f"Missing hexes_deleted: {data}"
-    assert isinstance(data["hexes_deleted"], int)
+    if n > 0:
+        assert resp.status_code == 403, f"Expected 403 (guard #1482), got {resp.status_code}: {resp.text}"
+    else:
+        assert resp.status_code == 200, f"Pusta mapa: expected 200, got {resp.status_code}"
+        assert "hexes_deleted" in resp.json()
 
 
 # ─── Backward compatibility ───────────────────────────────────────────────────

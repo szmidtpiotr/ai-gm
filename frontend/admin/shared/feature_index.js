@@ -71,7 +71,7 @@ export const FEATURE_INDEX = [
 
   // ── Mapa ────────────────────────────────────────────────────────────────────
   { section:'map', sectionLabel:'Mapa', tab:'builder', title:'Budowniczy mapy (hex)', desc:'Edytor mapy heksagonalnej: malowanie terenu, cofanie, zapis/wczytanie kanonu.', keywords:'mapa map hex heksy budowniczy edytor teren malowanie kanon' },
-  { section:'map', sectionLabel:'Mapa', tab:'generate', title:'Generuj świat', desc:'Proceduralne generowanie świata heksowego: seed, promień, bąbel wiedzy/FOW.', keywords:'generuj swiat generate seed proceduralne fow mgla' },
+  { section:'map', sectionLabel:'Mapa', tab:'generate', title:'Ustawienia mapy', desc:'Licznik heksów świata i zasięg mgły wojny (bąbel wiedzy). Generator świata usunięty (#1482).', keywords:'ustawienia mapy fow mgla wojny babel wiedzy zasieg heksy licznik' },
   { section:'map', sectionLabel:'Mapa', tab:'locations', title:'Lokacje', desc:'Drzewo lokacji rodzic/dziecko: filtry, usuwanie, przypisywanie NPC/wrogów, obrazy.', keywords:'lokacje locations miejsca osady drzewo hierarchia' },
   { section:'map', sectionLabel:'Mapa', tab:'floating', title:'Floating (niezakotwiczone lokacje)', desc:'Lokacje w bazie nieumieszczone na hexach — ręczne osadzanie na q,r.', keywords:'floating niezakotwiczone kotwica osadz hex qr wiszace' },
   { section:'map', sectionLabel:'Mapa', tab:'terrain', title:'Typy terenu', desc:'Tabela terenów: waga spawnu, czas podróży, szansa spotkań, podmapa.', keywords:'teren terrain typy podroz spotkania biom' },

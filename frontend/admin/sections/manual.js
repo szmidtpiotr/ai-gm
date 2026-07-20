@@ -348,14 +348,26 @@ etykieta, atmosfera, szansa spotkania, przypięta lokacja).</li>
 <h4>💾 Zapisz mapę (kanon) / 📂 Wczytaj mapę (z kanonu)</h4>
 <p><b>To jest inny „kanon" niż przycisk ★ Kanon przy lokacji</b> — wspólna jest tylko nazwa.</p>
 <ul>
-<li><b>💾 Zapisz mapę (kanon)</b> — robi zrzut CAŁEJ siatki hexów (teren, etykiety, krainy)
-do pliku wzorcowego. Ten zapis przeżywa reset bazy. Rób go po każdej większej ręcznej
-edycji mapy, z której jesteś zadowolony.</li>
-<li><b>📂 Wczytaj mapę (z kanonu)</b> — przywraca mapę z ostatniego zapisu,
-<b>nadpisując bieżącą siatkę</b>.</li>
+<li><b>💾 Zapisz mapę (kanon)</b> — robi zrzut siatki hexów (teren, etykiety, krainy)
+do pliku wzorcowego. Gdy masz wybraną krainę, zapisuje TYLKO ją. Ten zapis przeżywa reset
+bazy. Rób go po każdej większej ręcznej edycji mapy, z której jesteś zadowolony.</li>
+<li><b>📂 Wczytaj mapę (z kanonu)</b> — przywraca <b>wybraną krainę</b> z pliku wzorcowego,
+nadpisując jej heksy. Bez wybranej krainy przycisk poprosi o jej wskazanie — od #1482 nie
+da się jednym kliknięciem nadpisać wszystkich krain naraz.</li>
 <li>System odmówi zapisu, gdy mapa wygląda na pustą — ochrona przed nadpisaniem dobrego
 wzorca śmieciem.</li>
 </ul>
+
+<h4>Dlaczego nie ma już „🌍 Generuj świat" (#1482)</h4>
+<p>Świat Kresów budujemy ręcznie, heks po heksie. Proceduralny generator całego świata
+i przycisk „🗑 Wyczyść mapę świata" zostały usunięte — jedno kliknięcie potrafiło skasować
+godziny pracy. Zakładka nazywa się teraz <b>⚙ Ustawienia mapy</b> i trzyma licznik heksów
+oraz zasięg mgły wojny.</p>
+<p>Gdyby coś próbowało masowo skasować mapę (skrypt, stary przycisk, pomyłka w API),
+serwer odmawia z komunikatem i podpowiada właściwą drogę: odtworzenie <b>per kraina</b>
+z plików w gicie (<code>data/regions/region_&lt;klucz&gt;.json</code>). Nie dotyczy to
+edycji pojedynczego hexa, malowania terenu ani <b>🏘 Generuj</b> dla podmap osad — te działają
+normalnie.</p>
 <p>Dla porównania: <b>★ Kanon</b> (w <b>Do zatwierdzenia</b>) oznacza JEDNĄ lokację jako
 kanoniczną (drogowskaz, pula startów). <b>💾 Zapisz mapę (kanon)</b> zabezpiecza CAŁY teren świata.</p>`,
       },

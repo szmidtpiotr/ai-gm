@@ -352,60 +352,7 @@ const _ROW_REGISTRY = {
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('Map tab failed:', tab, err.message); });
   }
 
-  // ── Hexmap tab ───────────────────────────────────────────
-  async function hexmapGenerate() {
-    const btn = document.getElementById('hexmap-gen-btn');
-    const seed = parseInt(document.getElementById('hexmap-seed').value) || 42;
-    const radius = parseInt(document.getElementById('hexmap-radius').value) || 25;
-    if (radius > 50) { _showToast('Maks promień: 50', 'warn'); return; }
-    btn.disabled = true;
-    btn.textContent = '⏳ Generowanie…';
-    const resEl = document.getElementById('hexmap-result');
-    resEl.style.display = 'none';
-    try {
-      const d = await apiFetch('/api/admin/world/generate', {
-        method: 'POST',
-        body: JSON.stringify({ seed, radius }),
-      });
-      resEl.style.display = 'block';
-      const counts = d.counts || {};
-      const rows = Object.entries(counts).sort((a,b)=>b[1]-a[1])
-        .map(([t,n]) => `<tr><td style="color:var(--t2)">${_esc(t)}</td><td style="text-align:right;font-weight:600">${n}</td></tr>`).join('');
-      resEl.innerHTML = `
-        <div class="card" style="padding:14px;border-color:var(--green)">
-          <div style="color:var(--green);font-weight:600;margin-bottom:10px">✓ Wygenerowano ${d.hexes_created} heksów (seed: ${seed})</div>
-          <table style="width:100%;font-size:0.82rem">${rows}</table>
-          <div style="margin-top:12px">
-            <button class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-mtap=builder]')?.click()">🗺 Przejdź do budowniczego →</button>
-          </div>
-        </div>`;
-      _hexmapLoadStats();
-    } catch(e) {
-      resEl.style.display = 'block';
-      resEl.innerHTML = `<div style="color:var(--red);padding:10px">${_esc(e.message)}</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '🌍 Generuj świat';
-    }
-  }
-
-  async function hexmapClearWorld() {
-    const word = prompt('Wpisz DELETE aby potwierdzić wyczyszczenie całej mapy świata:');
-    if (word !== 'DELETE') { _showToast('Anulowano.', 'info'); return; }
-    try {
-      const d = await apiFetch('/api/admin/world/clear', { method: 'DELETE' });
-      _showToast(`Usunięto ${d.hexes_deleted} heksów. Mapa wyczyszczona.`, 'success');
-      _worldLoaded.delete('generate');
-      _worldLoaded.delete('builder');
-      // Clear builder SVG immediately so stale map is not visible
-      const svg = document.getElementById('wb-svg');
-      if (svg) svg.innerHTML = '';
-      await _hexmapLoadStats();
-    } catch(e) {
-      _showToast(e.message || 'Błąd czyszczenia.', 'error');
-    }
-  }
-
+  // ── Ustawienia mapy (#1482: generator świata i masowe czyszczenie usunięte) ──
   async function _hexmapLoadStats() {
     try {
       const d = await apiFetch('/api/admin/world/map');
@@ -2046,10 +1993,13 @@ const _ROW_REGISTRY = {
     if (undoBtn) { undoBtn.onclick = _wbUndo; _wbUpdateUndoBtn(); }
     const saveBtn = document.getElementById('wb-save-canon');
     if (saveBtn) saveBtn.onclick = async () => {
-      if (!confirm('Zapisać bieżącą mapę jako KANON?\n\nStanie się bazą odtwarzaną po każdym resecie/wipe DB. Nadpisze poprzedni zapis.')) return;
+      // #1482: przy wybranej krainie zapisujemy TYLKO ją — nie mieszamy krain w jednym pliku.
+      const rq = _wbActiveRegion ? `?region=${encodeURIComponent(_wbActiveRegion)}` : '';
+      const scope = _wbActiveRegion ? `krainę „${_wbActiveRegion}"` : 'WSZYSTKIE krainy';
+      if (!confirm(`Zapisać ${scope} jako KANON?\n\nStanie się bazą odtwarzaną po każdym resecie/wipe DB. Nadpisze poprzedni zapis.`)) return;
       const orig = saveBtn.textContent; saveBtn.disabled = true; saveBtn.textContent = '💾 Zapisuję…';
       try {
-        const res = await apiFetch('/api/admin/world/map/snapshot', { method: 'POST' });
+        const res = await apiFetch(`/api/admin/world/map/snapshot${rq}`, { method: 'POST' });
         _showToast(`Mapa zapisana jako kanon (${res.count} heksów). Przeżyje reset DB.`, 'success');
       } catch (e) {
         _showToast('Błąd zapisu mapy: ' + (e && e.message ? e.message : e), 'error');
@@ -2057,10 +2007,15 @@ const _ROW_REGISTRY = {
     };
     const restoreBtn = document.getElementById('wb-restore-canon');
     if (restoreBtn) restoreBtn.onclick = async () => {
-      if (!confirm('Wczytać mapę z KANONU?\n\nNadpisze bieżącą mapę świata wersją ostatnio zapisaną jako kanon. Tej operacji nie można cofnąć.')) return;
+      // #1482: bez wybranej krainy backend odmówi (403) — pełny restore kasował wszystkie krainy.
+      if (!_wbActiveRegion) {
+        _showToast('Wybierz krainę na liście po lewej — odtwarzamy mapę per kraina (#1482).', 'warn');
+        return;
+      }
+      if (!confirm(`Wczytać krainę „${_wbActiveRegion}" z KANONU?\n\nNadpisze heksy TEJ krainy wersją z pliku data/regions/. Tej operacji nie można cofnąć.`)) return;
       const orig = restoreBtn.textContent; restoreBtn.disabled = true; restoreBtn.textContent = '📂 Wczytuję…';
       try {
-        const res = await apiFetch('/api/admin/world/map/restore', { method: 'POST' });
+        const res = await apiFetch(`/api/admin/world/map/restore?region=${encodeURIComponent(_wbActiveRegion)}`, { method: 'POST' });
         _showToast(`Mapa odtworzona z kanonu (${res.count} heksów).`, 'success');
         await _wbLoadHexes();
         _wbRender();
@@ -2627,7 +2582,7 @@ function _sectionHtml() {
       <div class="card">
         <div class="section-tabs" id="map-tabs">
           <button class="stab active" data-mtap="builder">Mapa</button>
-          <button class="stab" data-mtap="generate">🌍 Generuj świat</button>
+          <button class="stab" data-mtap="generate">⚙ Ustawienia mapy</button>
           <button class="stab" data-mtap="locations">Lokacje</button>
           <button class="stab" data-mtap="floating">⚓ Floating</button>
           <button class="stab" data-mtap="terrain">Teren</button>
@@ -2741,7 +2696,7 @@ function _sectionHtml() {
           </div>
         </div>
 
-        <!-- Generuj świat -->
+        <!-- Ustawienia mapy (#1482) -->
         <div class="stab-panel" id="wtab-generate">
           <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
             <!-- Nav shortcut -->
@@ -2758,24 +2713,17 @@ function _sectionHtml() {
                 <div style="font-size:0.78rem;color:var(--t3)">Ładowanie…</div>
               </div>
             </div>
-            <!-- Generate form -->
-            <div class="card" style="padding:16px">
-              <div style="font-weight:600;margin-bottom:12px">Generuj proceduralnie świat</div>
-              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-                <div>
-                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Seed (liczba całkowita)</label>
-                  <input type="number" id="hexmap-seed" class="form-input" value="42" style="width:120px">
-                </div>
-                <div>
-                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Promień (heksów)</label>
-                  <input type="number" id="hexmap-radius" class="form-input" value="25" min="5" max="50" style="width:90px">
-                </div>
-                <button class="btn btn-primary" id="hexmap-gen-btn" onclick="hexmapGenerate()">🌍 Generuj świat</button>
+            <!-- #1482: generator świata usunięty -->
+            <div class="card" style="padding:14px 16px;border-color:#c9a54a">
+              <div style="font-weight:600;margin-bottom:6px;color:#c9a54a">Mapa świata jest budowana ręcznie</div>
+              <div style="font-size:0.78rem;color:var(--t3);line-height:1.5">
+                Proceduralny generator świata i masowe czyszczenie mapy zostały usunięte —
+                jedno kliknięcie potrafiło nadpisać godziny ręcznej pracy. Teren malujesz w
+                zakładce <b>Mapa</b>, a kopię wzorcową robisz przyciskiem
+                <b>💾 Zapisz mapę (kanon)</b>. Odtworzenie krainy: <b>📂 Wczytaj mapę (z kanonu)</b>
+                przy wybranej krainie. Podmapy osad (<b>🏘 Generuj</b>) działają bez zmian.
               </div>
-              <div style="font-size:0.72rem;color:var(--t3);margin-top:8px">Wygeneruje (2×promień)² heksów. Istniejące dane kampanii (campaign_hex_data) zostaną zachowane.</div>
             </div>
-            <!-- Result -->
-            <div id="hexmap-result" style="display:none"></div>
             <!-- PM7 (#1226): globalny promień bąbla wiedzy (FOW) -->
             <div class="card" style="padding:16px">
               <div style="font-weight:600;margin-bottom:6px">Zasięg wiedzy gracza (mgła wojny)</div>
@@ -2787,12 +2735,6 @@ function _sectionHtml() {
                 </div>
                 <button class="btn btn-primary" id="kbr-save-btn" onclick="saveKnowledgeBubble()">💾 Zapisz zasięg</button>
               </div>
-            </div>
-            <!-- Danger zone -->
-            <div class="card" style="padding:16px;border:1px solid var(--red,#dc2626)">
-              <div style="font-weight:600;margin-bottom:8px;color:var(--red,#dc2626)">⚠ Strefa niebezpieczna</div>
-              <div style="font-size:0.78rem;color:var(--t3);margin-bottom:12px">Usuwa wszystkie heksy świata globalnego, odkrycia kampanii oraz pozycje graczy na mapie. Akcja nieodwracalna.</div>
-              <button class="btn btn-sm" style="background:#7f1d1d;color:#fca5a5;border:1px solid #dc2626" onclick="hexmapClearWorld()">🗑 Wyczyść mapę świata</button>
             </div>
           </div>
         </div>
@@ -2848,9 +2790,9 @@ export async function init(panel) {
 
   // Expose globals for inline onclick/onchange strings (port 1:1 zachowuje nazwy bare).
   Object.assign(window, {
-    filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal, hexmapGenerate,
+    filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal,
     saveKnowledgeBubble,
-    hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
+    wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
     openLocDetailModal, wbFilterRegion, wbToggleRegionStatus,

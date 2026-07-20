@@ -16,7 +16,7 @@
  * Dopasowanie odporne na brak polskich znaków (admini na telefonie piszą bez
  * ogonków). GOTCHA: NFD nie rozkłada "ł" — trzeba podmienić ręcznie.
  */
-import { FEATURE_INDEX } from './feature_index.js?v=1';
+import { FEATURE_INDEX } from './feature_index.js?v=2';
 
 // ── Normalizacja PL (mirror app/core/text_utils.strip_pl_diacritics) ──────────
 function normPl(s) {

@@ -31,16 +31,24 @@ def admin_token():
 
 # ── Test główny ────────────────────────────────────────────────────────────────
 
-def test_restore_endpoint_exists_and_returns_ok(admin_token):
-    """POST /map/restore zwraca 200 z ok=True i count > 0."""
+def test_restore_endpoint_exists_and_is_guarded(admin_token):
+    """POST /map/restore istnieje; na niepustej mapie wariant BEZ ?region= → 403 (#1482).
+
+    Legacy pełny restore kasował wszystkie krainy i wstawiał je jako 'kresy'.
+    Od #1482 odtwarzamy per-krainę (?region=<klucz>); pełny wariant działa tylko
+    na pustej mapie.
+    """
     r = client.post(
         "/api/admin/world/map/restore",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
-    body = r.json()
-    assert body.get("ok") is True, f"Expected ok=True, got: {body}"
-    assert isinstance(body.get("count"), int) and body["count"] > 0, f"Expected count>0, got: {body}"
+    assert r.status_code in (200, 403), f"Expected 200 (pusta mapa) lub 403 (guard), got {r.status_code}: {r.text}"
+    if r.status_code == 403:
+        assert "region" in r.json().get("detail", "").lower(), "403 musi kierować na wariant per-kraina"
+    else:
+        body = r.json()
+        assert body.get("ok") is True, f"Expected ok=True, got: {body}"
+        assert isinstance(body.get("count"), int) and body["count"] > 0, f"Expected count>0, got: {body}"
 
 
 def test_restore_requires_admin_auth():

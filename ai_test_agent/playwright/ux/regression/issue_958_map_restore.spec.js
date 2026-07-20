@@ -25,7 +25,7 @@ test("REGRESSION #958 — map/snapshot nadal działa (backward compat)", async (
   expect(body.count, "snapshot count = 0").toBeGreaterThan(0);
 });
 
-test("REGRESSION #958 — map/restore zwraca ok=true i count>0 z tokenem", async ({ page }) => {
+test("REGRESSION #958/#1482 — map/restore bez ?region= jest chroniony na niepustej mapie", async ({ page }) => {
   const login = await page.request.post("/api/admin/dev-login", {
     data: { username: "demo", password: "demo" },
   });
@@ -35,8 +35,13 @@ test("REGRESSION #958 — map/restore zwraca ok=true i count>0 z tokenem", async
   const r = await page.request.post("/api/admin/world/map/restore", {
     headers: { Authorization: `Bearer ${token}` },
   });
-  expect(r.status(), `restore failed: ${r.status()}`).toBe(200);
+  // #1482: pełny restore nadpisywał wszystkie krainy jako 'kresy' → 403 dopóki mapa niepusta.
+  expect([200, 403].includes(r.status()), `nieoczekiwany status: ${r.status()}`).toBeTruthy();
   const body = await r.json();
-  expect(body.ok, "restore ok nie true (#958)").toBe(true);
-  expect(body.count, "restore count = 0 (#958)").toBeGreaterThan(0);
+  if (r.status() === 403) {
+    expect(String(body.detail || ""), "403 musi kierować na wariant per-kraina (#1482)").toContain("region");
+  } else {
+    expect(body.ok, "restore ok nie true (#958)").toBe(true);
+    expect(body.count, "restore count = 0 (#958)").toBeGreaterThan(0);
+  }
 });
