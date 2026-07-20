@@ -1386,14 +1386,50 @@ const _ROW_REGISTRY = {
     const warn = (active && active.status !== 'live')
       ? `<span style="font-size:0.65rem;color:#f59e0b;margin-left:6px">⚠ niedostępna dla graczy</span>`
       : '';
+    // #1039 — przełącznik dostępności: admin widzi każdą krainę, gracz tylko 'live'.
+    const toggle = active
+      ? `<button onclick="wbToggleRegionStatus('${_esc(active.key)}')"
+           style="margin-left:auto;background:${active.status === 'live' ? '#3a2a2a' : '#1e3a24'};
+           border:1px solid ${active.status === 'live' ? '#6b3030' : '#2f6b3d'};
+           color:${active.status === 'live' ? '#ff9f9f' : '#8de89f'};font-size:0.66rem;
+           padding:3px 9px;border-radius:4px;cursor:pointer;font-weight:600">
+           ${active.status === 'live' ? '🚫 Ukryj graczom' : '✅ Udostępnij graczom'}</button>`
+      : '';
     bar.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:#0d0d18;border-bottom:2px solid ${dotColor}33">
       <span style="font-size:0.68rem;color:var(--t3)">Kraina:</span>
       <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
       <select id="wb-region-select" onchange="wbFilterRegion(this.value)" style="background:#111;border:1px solid #2a2a3a;color:#c8c0a8;font-size:0.72rem;padding:2px 6px;border-radius:4px;cursor:pointer">
         <option value="">Wszystkie (live)</option>${opts}
       </select>
-      ${badge}${warn}
+      ${badge}${warn}${toggle}
     </div>`;
+  }
+
+  /** #1039 — flip live↔coming; zmiana natychmiast gatuje travel graczy. */
+  async function wbToggleRegionStatus(key) {
+    const reg = _wbRegions.find(r => r.key === key);
+    if (!reg) return;
+    const next = reg.status === 'live' ? 'coming' : 'live';
+    const q = next === 'live'
+      ? `Udostępnić krainę „${reg.label}" graczom? Od tej chwili będą mogli do niej podróżować.`
+      : `Ukryć krainę „${reg.label}" przed graczami? Próba wejścia zostanie zablokowana.`;
+    if (!confirm(q)) return;
+    try {
+      const res = await apiFetch(`/api/admin/regions/${encodeURIComponent(key)}/status`, {
+        method: 'PATCH', body: JSON.stringify({ status: next }),
+      });
+      reg.status = res.status || next;
+      reg.status_override = res.status || next;
+      _wbRenderRegionBar();
+      showToast(
+        next === 'live'
+          ? `✅ ${reg.label} — udostępniona graczom`
+          : `🚫 ${reg.label} — ukryta przed graczami`,
+        'success',
+      );
+    } catch (e) {
+      showToast(`Nie udało się zmienić statusu: ${e.message || e}`, 'error');
+    }
   }
 
   async function wbFilterRegion(key) {
@@ -2817,7 +2853,7 @@ export async function init(panel) {
     hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
-    openLocDetailModal, wbFilterRegion,
+    openLocDetailModal, wbFilterRegion, wbToggleRegionStatus,
   });
 
   // Wire tab switching (data-mtap)

@@ -877,18 +877,15 @@ def resolve_chain_travel(
         pass
 
     if to_hex not in hexes:
-        # Check if destination exists in a non-live region (coming/locked)
-        blocked_row = conn.execute(
-            "SELECT wh.region, wr.status, wr.label FROM world_hexes wh "
-            "LEFT JOIN world_regions wr ON wr.key = wh.region "
-            "WHERE wh.q = ? AND wh.r = ? AND wh.map_level = 0 AND wh.is_active = 1 LIMIT 1",
-            (to_hex[0], to_hex[1]),
-        ).fetchone()
-        if blocked_row and blocked_row["status"] in ("coming", "locked"):
-            region_label = blocked_row["label"] or blocked_row["region"]
+        # Check if destination exists in a non-live region (coming/locked).
+        # #1039: wspólny helper — payload niesie error_code/region_label, żeby ŻAR
+        # pokazał dedykowany modal zamiast po cichu zignorować ok:false.
+        from app.services.world_region_service import region_block_for_hex
+        _region_block = region_block_for_hex(conn, to_hex[0], to_hex[1])
+        if _region_block:
             return {
                 "ok": False,
-                "error": f"Kraina niedostępna — {region_label} jest za zamkniętą granicą.",
+                **_region_block,
                 "path": [], "total_hours": 0,
                 "arrived_hex": {"q": from_hex[0], "r": from_hex[1]}, "encounter": None, "encounter_hex": None,
                 "hex_data": {}, "teleport_used": None, "item_blocked": None,

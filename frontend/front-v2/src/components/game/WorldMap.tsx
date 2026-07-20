@@ -35,6 +35,7 @@ import {
   estimateTravel,
   hexPoints,
   hexToPixel,
+  regionBlockFrom,
   terrainIcon,
 } from "@/lib/worldmap";
 import type { WorldHex, MarchBudget, TravelResult } from "@/lib/types";
@@ -109,6 +110,7 @@ export function WorldMap({
   const clock = useCampaignClock(campaignId);
   const character = useCharacter(characterId);
   const travel = useTravel(campaignId);
+  const setRegionBlock = useAppStore((s) => s.setRegionBlock);
   // Kontekstowe akcje bieżącego heksa — z bieżących suggested_actions.
   const suggested = useSuggestedActions(campaignId, characterId, true);
   const restAction = suggested.data?.suggested_actions?.find(
@@ -282,6 +284,11 @@ export function WorldMap({
       { characterId, q: destQ, r: destR, deferMap: true },
       {
         onSuccess: (res) => {
+          // #1039 — odmowa wejścia do krainy coming/locked: modal blokady zamiast
+          // cichego no-opa; nie animujemy i nie zamykamy panelu podróży.
+          const blocked = regionBlockFrom(res);
+          if (blocked) { setRegionBlock(blocked); return; }
+          if (res.ok === false) return;
           const fullPath = Array.isArray(res.path) ? res.path : [];
           const fh = res.ford_hazard;
           // #1417 — PORWANIE z przeniesieniem: 2-etapowa animacja. Etap 1: dojdź DO brodu

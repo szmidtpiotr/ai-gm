@@ -100,6 +100,8 @@ export interface AppState {
   /** #1196 — wymuszenie mapy ŚWIATA (nie lokalnej osady) po kliknięciu „Użyj" na
    *  mapie skarbu. Czytane wprost w renderze — niezależne od efektu forceWorldMap. */
   mapView: "auto" | "world";
+  /** #1039 — odrzucona podróż do niedostępnej krainy → modal blokady. Null = brak. */
+  regionBlock: { label: string; status: string; message: string } | null;
   /** FE12 (#1261) — otwarty sklep (overlay) albo null. */
   shop: ShopContext | null;
   /** #1292 — otwarty modal Usług (klucz lokacji) albo null. Mechaniczny, omija LLM. */
@@ -141,6 +143,7 @@ export interface AppState {
   clearMapReveal: () => void;
   /** #1196 — wymuś/zwolnij mapę świata. */
   setMapView: (v: "auto" | "world") => void;
+  setRegionBlock: (b: { label: string; status: string; message: string } | null) => void;
   openShop: (ctx: ShopContext) => void;
   closeShop: () => void;
   openServices: (locationKey: string) => void;
@@ -206,6 +209,7 @@ export const useAppStore = create<AppState>((set) => ({
   mapReveal: null,
   travelAnimating: false,
   mapView: "auto",
+  regionBlock: null,
   shop: null,
   services: null,
   crafting: null,
@@ -228,13 +232,14 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", shop: null, services: null, crafting: null, companions: null, gameMenuOpen: false, finishFlow: "idle" },
+        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", regionBlock: null, shop: null, services: null, crafting: null, companions: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
   setTravelAnimating: (v) => set({ travelAnimating: v }),
   clearMapReveal: () => set({ mapReveal: null }),
   setMapView: (mapView) => set({ mapView }),
+  setRegionBlock: (regionBlock) => set({ regionBlock }),
   openShop: (shop) => set({ shop }),
   closeShop: () => set({ shop: null }),
   openServices: (locationKey) => set({ services: locationKey }),

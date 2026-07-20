@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { CircleNotch, Hourglass, MoonStars, Path, Warning } from "@phosphor-icons/react";
 import { arcPoint, arcProgress, phaseTheme, SEASON_ICON, SEASON_PL } from "@/lib/worldClock";
 import { cn } from "@/lib/utils";
+import { regionBlockFrom } from "@/lib/worldmap";
 import {
   useBuildCamp,
   useCampaignClock,
@@ -93,7 +94,9 @@ export default function Game() {
   const openCompanions = useAppStore((s) => s.openCompanions);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
   const openWait = useAppStore((s) => s.openWait);
-  const closeWait = useAppStore((s) => s.closeWait);
+  const regionBlock = useAppStore((s) => s.regionBlock);
+const setRegionBlock = useAppStore((s) => s.setRegionBlock);
+const closeWait = useAppStore((s) => s.closeWait);
   const waitOpen = useAppStore((s) => s.waitOpen);
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
 
@@ -578,7 +581,18 @@ export default function Game() {
       const qq = Number(q);
       const rr = Number(r);
       if (Number.isFinite(qq) && Number.isFinite(rr)) {
-        travel.mutate({ characterId, q: qq, r: rr }, { onSuccess: () => setChips([]), onError: chipError });
+        travel.mutate(
+          { characterId, q: qq, r: rr },
+          {
+            // #1039 — chip TRAVEL do niedostępnej krainy: modal blokady.
+            onSuccess: (res) => {
+              const blocked = regionBlockFrom(res);
+              if (blocked) { setRegionBlock(blocked); return; }
+              setChips([]);
+            },
+            onError: chipError,
+          },
+        );
         return;
       }
     }
@@ -835,6 +849,11 @@ export default function Game() {
           onPick={(act) => { closeWait(); onChip({ label: "Czekaj", text: act, action: act }, shownChips); }}
           onClose={closeWait}
         />
+      )}
+
+      {/* #1039: kraina jeszcze nie udostępniona przez admina — modal, nie cichy no-op. */}
+      {regionBlock && (
+        <RegionLockedModal block={regionBlock} onClose={() => setRegionBlock(null)} />
       )}
 
       {/* PT7/F-80: fokalny modal przerwania podróży (zmierzch / padasz z sił). */}
@@ -1241,6 +1260,52 @@ function waitTargetHour(action: string, cur: number): number {
 // (gracz nie musi widzieć zegara topbaru, który modal przysłaniał), a po wyborze
 // czasu animuje słońce/księżyc wędrujące po horyzoncie do docelowej pory, po czym
 // wykonuje akcję. Overlay lżejszy (bg-black/50), by tło nie gasło całkiem.
+/** #1039 — próba wejścia do krainy, której admin jeszcze nie udostępnił. */
+function RegionLockedModal({
+  block,
+  onClose,
+}: {
+  block: { label: string; status: string; message: string };
+  onClose: () => void;
+}) {
+  const soon = block.status === "coming";
+  return (
+    <div
+      className="fixed inset-0 z-[58] flex items-center justify-center p-6"
+      data-testid="region-locked-modal"
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-[2] w-full max-w-[380px] overflow-hidden rounded-xl border border-line-ember bg-surface shadow-2xl">
+        <div className="flex items-center gap-2.5 border-b border-line bg-ember/[0.08] px-4 py-3">
+          <span className="text-lg" aria-hidden>
+            ⛔
+          </span>
+          <div className="font-serif text-title font-semibold text-text">
+            Kraina niedostępna
+          </div>
+        </div>
+        <div className="px-4 py-4 text-center">
+          <div className="font-serif text-body text-text">{block.label}</div>
+          <p className="mt-2 font-ui text-label text-text-2">{block.message}</p>
+          <p className="mt-3 font-ui text-micro text-text-3">
+            {soon
+              ? "Granica jest jeszcze zamknięta — te ziemie otworzą się w swoim czasie."
+              : "Te ziemie pozostają zamknięte dla podróżnych."}
+          </p>
+        </div>
+        <div className="border-t border-line p-3">
+          <button
+            onClick={onClose}
+            className="w-full rounded-lg border border-line-ember bg-[rgba(255,122,61,.12)] px-4 py-2.5 font-ui text-label font-semibold text-ember-glow"
+          >
+            Zawróć
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WaitModal({
   clock,
   onPick,

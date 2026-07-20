@@ -4428,6 +4428,52 @@ def admin_delete_dungeon(dungeon_key: str, _: None = Depends(require_admin_token
         conn.close()
 
 
+# ── Admin: Region availability (#1039) ────────────────────────────────────────
+
+class RegionStatusPatchReq(BaseModel):
+    status: str | None = None  # live | coming | locked; null = reset do kanonu pliku
+
+
+@router.get("/admin/regions")
+def admin_list_regions(_: None = Depends(require_admin_token)):
+    """Wszystkie krainy ze statusem — admin widzi też coming/locked (gracz tylko live)."""
+    from app.services.world_region_service import list_region_rows
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"regions": list_region_rows(conn)}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/regions/{key}/status")
+def admin_set_region_status(
+    key: str,
+    payload: RegionStatusPatchReq,
+    _: None = Depends(require_admin_token),
+):
+    """Flip dostępności krainy (live↔coming↔locked) — natychmiast gatuje graczy.
+
+    Zapis jako `status_override` w DB: pliki kanonu `data/regions/*.json` są
+    git-committed i zamontowane read-only, więc decyzja admina żyje w bazie i
+    jest respektowana przez migrację startową (R1 #1241 + #1039).
+    `status=null` w payloadzie = zdejmij override, wróć pod kanon pliku.
+    """
+    from app.services.world_region_service import reset_region_status, set_region_status
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if payload.status is None:
+            return {"ok": True, **reset_region_status(conn, key)}
+        return {"ok": True, **set_region_status(conn, key, payload.status)}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
+
+
 # ── Admin: Campaign Hex Map ───────────────────────────────────────────────────
 
 @router.get("/admin/campaigns/{campaign_id}/hex-map")

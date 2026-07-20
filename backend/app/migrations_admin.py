@@ -6309,6 +6309,15 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
     """)
     conn.commit()
 
+    # #1039 — decyzja admina o dostępności krainy (live/coming/locked). NULL = brak
+    # override'u, status podąża za kanonem z data/regions/region_<key>.json.
+    try:
+        conn.execute("ALTER TABLE world_regions ADD COLUMN status_override TEXT DEFAULT NULL")
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
     REGIONS = [
         ("kresy",            "Kresy",             "#7ab648", "live",   25, 25, 1, "Startowa kraina — istniejąca mapa 50×50"),
         ("koronne_niziny",   "Koronne Niziny",     "#e8c96a", "coming", None, None, 2, "Vilnograd, Volhynia, Klasztor Iskry"),
@@ -6356,6 +6365,10 @@ def _align_region_status_to_files(conn: sqlite3.Connection, regions_dir: str = "
     prawdy). Idempotentne: aktualizuje wiersz tylko gdy status się różni; nigdy nie
     wstawia (INSERT robi _ensure_region_schema), nigdy nie dotyka world_hexes.
     Brak katalogu (świeży clone) → no-op, zostają domyślne statusy z seeda.
+
+    #1039: kraina z ``status_override`` (admin świadomie udostępnił/ukrył ją z
+    panelu Mapa) jest pomijana — inaczej restart cofałby decyzję admina. Kanon
+    plików pozostaje domyślną wartością dla krain bez override'u.
     """
     import glob
     for path in sorted(glob.glob(os.path.join(regions_dir, "region_*.json"))):
@@ -6369,7 +6382,8 @@ def _align_region_status_to_files(conn: sqlite3.Connection, regions_dir: str = "
         if not key or status not in ("live", "coming", "locked"):
             continue
         conn.execute(
-            "UPDATE world_regions SET status = ? WHERE key = ? AND status != ?",
+            "UPDATE world_regions SET status = ? "
+            "WHERE key = ? AND status != ? AND status_override IS NULL",
             (status, key, status),
         )
     conn.commit()

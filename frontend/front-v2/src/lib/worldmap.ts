@@ -190,3 +190,18 @@ export function estimateTravel(
     encounterWarn,
   };
 }
+
+/** #1039 — odpowiedź travel odrzucona przez bramkę krainy (coming/locked).
+ *  Zwraca dane pod modal blokady albo null (podróż normalna).
+ *  Wołane w miejscach wywołania mutacji, celowo NIE w useGameData: import store'u
+ *  do modułu hooków rozbijał graf chunków Vite (React error #310 na ekranie gry). */
+export function regionBlockFrom(
+  res: { ok?: boolean; error?: string; error_code?: string; region_label?: string; region_status?: string },
+): { label: string; status: string; message: string } | null {
+  if (res?.ok !== false || res.error_code !== "region_locked") return null;
+  return {
+    label: res.region_label || "Nieznana kraina",
+    status: res.region_status || "coming",
+    message: res.error || "Kraina niedostępna — za zamkniętą granicą.",
+  };
+}

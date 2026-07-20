@@ -324,6 +324,14 @@ export interface WorldMapResponse {
 
 // Odpowiedź POST /campaigns/{id}/travel (podzbiór — cinematyka + advance).
 export interface TravelResult {
+  /** #1039 — false gdy podróż odrzucona (np. kraina niedostępna). Brak = sukces. */
+  ok?: boolean;
+  error?: string;
+  /** #1039 — 'region_locked' → modal „Kraina niedostępna" zamiast cichego no-opa. */
+  error_code?: string;
+  region?: string;
+  region_label?: string;
+  region_status?: "live" | "coming" | "locked";
   total_hours?: number;
   clock?: ClockState | null;
   arrived_hex?: { q: number; r: number } | null;
