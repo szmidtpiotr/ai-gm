@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import zlib
 from typing import Any
 
 from app.services.dice import parse_character_sheet
@@ -478,36 +479,189 @@ _HEALER_KEYWORDS = (
     "uzdrowiciel", "zielarka", "aptek", "chirurg", "medyk", "znachor",
     "apothecary", "healer", "herbalist", "alchem",
 )
+# SG-5c: an innkeeper is not a general trader — a tavern back room holds travel
+# sundries and hangover cures, never swords.
+_TAVERN_KEYWORDS = (
+    "karczmarz", "karczmark", "szynkarz", "oberżyst", "oberzyst", "gospodarz gospody",
+    "innkeep", "barkeep", "tavern", "karczma", "szynk",
+)
+
+# SG-5c: role → how many catalog picks of each kind. Replaces the old flat
+# "4 weapons + 3 armor / 6 consumables / 3+3+1" split.
+_STOCK_PROFILES: dict[str, tuple[tuple[str, int], ...]] = {
+    "smith": (("weapon", 6), ("armor", 5), ("item", 2)),
+    # Kept consumable-only on purpose: the healer contract from #579 (a herbalist
+    # never sells hardware) is part of the game's shop vocabulary.
+    "healer": (("consumable", 8),),
+    "tavern": (("consumable", 4), ("item", 4)),
+    "general": (("item", 5), ("consumable", 4), ("weapon", 2), ("armor", 2)),
+}
+
+# SG-5c: price ceiling per settlement tier. A hamlet does not stock plate armour;
+# a tier-3 city does. STARTING values, Sandbox-tunable.
+_TIER_PRICE_CAP: dict[int, int] = {1: 30, 2: 120, 3: 400, 4: 1200}
+_TIER_PRICE_CAP_DEFAULT = 30
+
+# Catalog rows that must never reach a shop window regardless of price/kind.
+_STOCK_KEY_BLOCKLIST_PREFIXES = ("test_", "[test]", "debug_")
+# `game_items.item_data.item_type` values that are story/loot payloads, not
+# merchandise: quest tokens (Złoty bożek, Czaszka demona) and relics (#1302,
+# passive-effect gear that is meant to be FOUND). A default merchant must not
+# put them on the shelf; an admin can still list one explicitly.
+_STOCK_ITEM_TYPE_BLOCKLIST = ("quest", "relic")
+# Ammunition is a consumable in the catalog, so a herbalist/innkeeper drawing the
+# cheapest consumables ended up selling arrows. Armourers and general traders may.
+_AMMO_KEYS = ("arrows", "bolts", "strzaly", "belty")
+_PROFILE_KEY_BLOCKLIST: dict[str, tuple[str, ...]] = {
+    "healer": _AMMO_KEYS,
+    "tavern": _AMMO_KEYS,
+}
 
 
-def _pick_catalog_keys(conn: sqlite3.Connection, kind: str, limit: int) -> list[str]:
-    """Cheapest `limit` active catalog keys of a given kind (deterministic order)."""
-    rows = conn.execute(
+def _stable_offset(seed: str, modulo: int) -> int:
+    """Deterministic 0..modulo-1 from a string.
+
+    zlib.crc32, NOT hash() — Python randomises string hashing per process, which
+    would make a shop's stock change on every backend restart (and, worse, differ
+    between the shop-view request and the buy request → 'item_not_in_shop').
+    """
+    if modulo <= 1:
+        return 0
+    return zlib.crc32(seed.encode("utf-8")) % modulo
+
+
+def _npc_home_tier(conn: sqlite3.Connection, npc: sqlite3.Row) -> int:
+    """Settlement tier of where this merchant stands (1 when unknown).
+
+    Deliberately keyed off the MERCHANT's own location, not the shopper's: stock is
+    a property of the shop, so the view path and the buy path (which never receives
+    a location argument) always compute the exact same list.
+    """
+    npc_key = str(npc["key"] or "")
+    npc_id = int(npc["id"]) if "id" in npc.keys() and npc["id"] is not None else None
+    tiers: list[int] = []
+    try:
+        rows = conn.execute(
+            "SELECT COALESCE(gl.tier, 1) AS t FROM location_npc_assignments a "
+            "JOIN game_locations gl ON gl.key = a.location_key "
+            "WHERE a.npc_key = ? AND COALESCE(a.is_active, 1) = 1",
+            (npc_key,),
+        ).fetchall()
+        tiers += [int(r[0]) for r in rows]
+    except sqlite3.OperationalError:
+        pass
+    if npc_id is not None:
+        try:
+            rows = conn.execute(
+                "SELECT COALESCE(gl.tier, 1) AS t FROM npc_locations nl "
+                "JOIN game_locations gl ON gl.key = nl.location_key "
+                "WHERE nl.npc_id = ?",
+                (npc_id,),
+            ).fetchall()
+            tiers += [int(r[0]) for r in rows]
+        except sqlite3.OperationalError:
+            pass
+    return max(tiers) if tiers else 1
+
+
+def _shop_profile_for_npc(npc: sqlite3.Row) -> str:
+    key = str(npc["key"] or "").lower()
+    label = str(npc["label"] or "").lower()
+    npc_type = str(npc["npc_type"] or "").lower() if "npc_type" in npc.keys() else ""
+    crafter_type = str(npc["crafter_type"] or "").lower() if "crafter_type" in npc.keys() else ""
+    hay = f"{key} {label} {npc_type} {crafter_type}"
+    if ("is_crafter" in npc.keys() and int(npc["is_crafter"] or 0) == 1) or "smith" in hay:
+        return "smith"
+    if any(w in hay for w in _HEALER_KEYWORDS):
+        return "healer"
+    if any(w in hay for w in _TAVERN_KEYWORDS):
+        return "tavern"
+    return "general"
+
+
+def _pick_catalog_keys(
+    conn: sqlite3.Connection,
+    kind: str,
+    limit: int,
+    *,
+    price_cap: int | None = None,
+    seed: str = "",
+    exclude_keys: tuple[str, ...] = (),
+) -> list[str]:
+    """`limit` catalog keys of a kind, SPREAD across the affordable price range.
+
+    The old version took the `limit` CHEAPEST rows, which is why every smith in the
+    game offered a staff, a quarterstaff, a wooden shield and a dagger — the four
+    cheapest weapons in the catalog — and every general trader the same three 1 gp
+    trinkets. Picking evenly spaced entries from the price-sorted, tier-capped list
+    gives each shop a low/mid/high spread instead, and a per-NPC offset keeps two
+    smiths in the same town from being carbon copies.
+    """
+    params = (kind, int(price_cap if price_cap is not None else 10**9))
+    base_sql = (
         "SELECT key FROM game_items "
         "WHERE kind = ? AND is_active = 1 AND COALESCE(price_gp, 0) > 0 "
-        "ORDER BY price_gp ASC, key ASC LIMIT ?",
-        (kind, int(limit)),
-    ).fetchall()
-    return [(r["key"] if isinstance(r, sqlite3.Row) else r[0]) for r in rows]
+        "AND COALESCE(price_gp, 0) <= ? "
+    )
+    try:
+        rows = conn.execute(
+            base_sql
+            + "AND COALESCE(json_extract(item_data, '$.item_type'), '') NOT IN "
+            + "(" + ",".join("?" * len(_STOCK_ITEM_TYPE_BLOCKLIST)) + ") "
+            + "ORDER BY price_gp ASC, key ASC",
+            params + _STOCK_ITEM_TYPE_BLOCKLIST,
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # Minimal/legacy catalog without item_data — price/kind filtering only.
+        rows = conn.execute(base_sql + "ORDER BY price_gp ASC, key ASC", params).fetchall()
+    blocked = {str(k).lower() for k in exclude_keys}
+    pool = []
+    for r in rows:
+        k = str((r["key"] if isinstance(r, sqlite3.Row) else r[0]) or "")
+        if k.lower().startswith(_STOCK_KEY_BLOCKLIST_PREFIXES) or k.lower() in blocked:
+            continue
+        pool.append(k)
+    n = int(limit)
+    if n <= 0 or not pool:
+        return []
+    if len(pool) <= n:
+        return pool
+    step = len(pool) / n
+    offset = _stable_offset(f"{seed}|{kind}", max(1, int(step)))
+    picked: list[str] = []
+    for i in range(n):
+        idx = min(len(pool) - 1, int(i * step) + offset)
+        k = pool[idx]
+        if k not in picked:
+            picked.append(k)
+    # Offset collisions can shrink the list; backfill from the untouched pool so a
+    # shop always shows the promised number of goods.
+    for k in pool:
+        if len(picked) >= n:
+            break
+        if k not in picked:
+            picked.append(k)
+    return picked
 
 
 def _default_stock_for_npc(conn: sqlite3.Connection, npc: sqlite3.Row) -> list[dict[str, str]]:
-    """Role-based default shop stock when an NPC has no explicit shop_inventory_json."""
-    key = str(npc["key"] or "").lower()
-    label = str(npc["label"] or "").lower()
-    is_crafter = "is_crafter" in npc.keys() and int(npc["is_crafter"] or 0) == 1
-    is_healer = any(w in key or w in label for w in _HEALER_KEYWORDS)
+    """Role- AND tier-based default stock when an NPC has no explicit inventory.
 
+    Explicit `shop_inventory_json` still wins (see `_effective_shop_entries`); this
+    is what the other ~29 of 31 merchants fall back on.
+    """
+    profile = _shop_profile_for_npc(npc)
+    cap = _TIER_PRICE_CAP.get(_npc_home_tier(conn, npc), _TIER_PRICE_CAP_DEFAULT)
+    seed = str(npc["key"] or npc["label"] or "shop")
     entries: list[dict[str, str]] = []
-    if is_crafter:  # smith — basic weapons + armor
-        entries += [{"type": "weapon", "key": k} for k in _pick_catalog_keys(conn, "weapon", 4)]
-        entries += [{"type": "armor", "key": k} for k in _pick_catalog_keys(conn, "armor", 3)]
-    elif is_healer:  # apothecary/herbalist — consumables
-        entries += [{"type": "consumable", "key": k} for k in _pick_catalog_keys(conn, "consumable", 6)]
-    else:  # general merchant — a bit of everything
-        entries += [{"type": "consumable", "key": k} for k in _pick_catalog_keys(conn, "consumable", 3)]
-        entries += [{"type": "item", "key": k} for k in _pick_catalog_keys(conn, "item", 3)]
-        entries += [{"type": "weapon", "key": k} for k in _pick_catalog_keys(conn, "weapon", 1)]
+    excluded = _PROFILE_KEY_BLOCKLIST.get(profile, ())
+    for kind, count in _STOCK_PROFILES[profile]:
+        entries += [
+            {"type": kind, "key": k}
+            for k in _pick_catalog_keys(
+                conn, kind, count, price_cap=cap, seed=seed, exclude_keys=excluded
+            )
+        ]
     return entries
 
 

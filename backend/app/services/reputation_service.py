@@ -259,13 +259,64 @@ def reputation_context_line(value: int, region: str = REGION_DEFAULT) -> str:
     )
 
 
-# ─── Region resolution (defensive — region column NYI, #917) ─────────────────
+# ─── Region resolution ───────────────────────────────────────────────────────
 
 def resolve_region(conn: sqlite3.Connection, campaign_id: int) -> str:
-    """Region key of a campaign's current location. Until FAZA RM adds the
-    `region` column everything is 'kresy'; any lookup failure falls back to it."""
+    """Region key of a campaign's current location.
+
+    SG-5c: the old implementation resolved the region ONLY through the world-hex
+    join (`game_locations.world_hex_q/r` → `world_hexes.region`). Sub-locations
+    (tavern/forge/market inside a settlement, #1212) carry no hex of their own, so
+    standing inside one silently fell back to 'kresy' — 181 of 231 active locations
+    on DEV, i.e. every settlement interior in every region outside Kresy. That
+    misrouted regional reputation, regional rumours (#1190), world events (#1193),
+    disease and loot modifiers to the wrong region.
+
+    Resolution order (first hit wins):
+      1. `game_locations.region` on the current location — works for hexless subs,
+      2. the parent settlement's region (`parent_key`) — sub seeded without region,
+      3. the world-hex join — legacy path, and the only one on DBs predating the
+         `region` column,
+      4. REGION_DEFAULT.
+
+    Verified on the DEV world before switching the order: of the 50 active locations
+    that DO have a hex, 0 disagreed between `game_locations.region` and
+    `world_hexes.region`, so promoting the column above the join changes nothing for
+    hex-anchored locations and only fixes the hexless ones.
+    """
+    row = None
     try:
         row = conn.execute(
+            """
+            SELECT gl.region AS region, gl.parent_key AS parent_key
+            FROM game_sessions gs
+            JOIN game_locations gl ON gl.id = gs.current_location_id
+            WHERE gs.campaign_id = ?
+            LIMIT 1
+            """,
+            (int(campaign_id),),
+        ).fetchone()
+    except Exception:
+        # Older/minimal DB without the `region` (or parent_key) column — fall through
+        # to the legacy hex join below.
+        row = None
+
+    if row is not None:
+        if row["region"]:
+            return str(row["region"])
+        if row["parent_key"]:
+            try:
+                prow = conn.execute(
+                    "SELECT region FROM game_locations WHERE key = ? LIMIT 1",
+                    (str(row["parent_key"]),),
+                ).fetchone()
+                if prow and prow["region"]:
+                    return str(prow["region"])
+            except Exception:
+                pass
+
+    try:
+        hrow = conn.execute(
             """
             SELECT wh.region AS region
             FROM game_sessions gs
@@ -276,10 +327,9 @@ def resolve_region(conn: sqlite3.Connection, campaign_id: int) -> str:
             """,
             (int(campaign_id),),
         ).fetchone()
-        if row and row["region"]:
-            return str(row["region"])
+        if hrow and hrow["region"]:
+            return str(hrow["region"])
     except Exception:
-        # region column / tables not present yet -> default region
         pass
     return REGION_DEFAULT
 
