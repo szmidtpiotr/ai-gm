@@ -925,7 +925,10 @@ def build_narrative_messages(
                 _is_sys = isinstance(first, dict) and first.get("role") == "system"
 
                 # Autopilot: keep an automated [TEST] playthrough alive.
-                if _pts.is_autopilot_active():
+                # #1493 — dyrektywa skracająca narrację MUSI być gated na [TEST] hero.
+                # Bez tego każda tura na DEV (AI_TEST_MODE=1) dostawała „narracja 1-2
+                # zdania", więc Piotr i testerzy oceniali celowo okrojoną grę.
+                if _pts.is_autopilot_active() and _pts.is_test_hero(character):
                     _pts.protect_test_hero_from_death(conn, character)
                     _ap_dir = _pts.build_autopilot_narration_directive()
                     if _is_sys and _ap_dir:

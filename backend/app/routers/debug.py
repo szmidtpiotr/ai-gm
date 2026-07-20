@@ -818,7 +818,7 @@ def service_price(key: str = Query(...)):
 
 
 @router.post("/stub_llm")
-def stub_llm(body: dict = Body(...)):
+def stub_llm(body: dict = Body(...), authorization: str | None = Header(default=None)):
     """AI_TEST_MODE only: set or clear the in-process LLM stub for Playwright tests.
 
     POST {"text": "..."}  — enables AI_TEST_STUB_LLM=1 with the given stub text.
@@ -826,9 +826,15 @@ def stub_llm(body: dict = Body(...)):
 
     Used by issue #772 regression spec to inject a deterministic LLM response
     containing [COMBAT_START:invented_key] without hitting the real LLM.
+
+    #1493 — wymaga admina. Ten endpoint podmienia odpowiedzi GM dla CAŁEGO procesu,
+    więc bez logowania każdy mógł podstawić własny tekst wszystkim graczom DEV.
     """
     if os.getenv("AI_TEST_MODE") != "1":
         raise HTTPException(status_code=404, detail="Not found")
+    from app.core.jwt_auth import require_admin_role
+
+    require_admin_role(authorization)
     text = body.get("text")
     if text is None:
         os.environ.pop("AI_TEST_STUB_LLM", None)
