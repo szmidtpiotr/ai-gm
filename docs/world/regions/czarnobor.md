@@ -1,6 +1,6 @@
 # CZARNOBÓR — rozdział krainy (baza wiedzy świata)
 
-> **Status:** design w trakcie domykania (dyskusja z Piotrem 2026-07-20). Zatwierdzone: oś „Bór milknie", hub **Szept Koron**, smaczki (próchno+dziegieć), konflikt drwali. Otwarte: **[DO WYBORU]** imiona elfów, **[DO AKCEPTACJI]** doprecyzowane Czarne Serce.
+> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20; imiona elfów i Czarne Serce domknięte).
 > Rozwija LORE_v1_KANON.md (sekcja 3C). Kraina rasy: **elf leśny** (#1474 — mechanika NIEwdrożona; seedowanie krainy i wdrożenie rasy pójdą w przybliżeniu równolegle, gdy przyjdzie etap wykonawczy; teraz TYLKO planowanie).
 
 ---
@@ -67,7 +67,7 @@ Pasy: **zachód** = zwykły las + trakt z Kresów + Ostęp Graniczny/drwale; **p
 
 Ekonomia regionu: **dziegieć + futra + drewno** (lustro soli i srebra Grań). Przy implementacji: wpis do **Księgi Zasad** i **wizytówki** (dział Świat) — jak sól.
 
-## 7. Czarne Serce **[DO AKCEPTACJI — doprecyzowane]**
+## 7. Czarne Serce **[ZATWIERDZONE]**
 
 **Czym jest:** miejsce, gdzie rosło **Pradrzewo** — pierwsze i najgłębiej nastrojone stróżowe drzewo, kotwica całej sieci. Gdy zgasło (pokolenia temu), sczerniał cały okręg wokół — tak powstał Bór Zmarłych. Pod martwymi korzeniami Pradrzewa zieje największe pęknięcie Rdzenia w krainie.
 
@@ -84,21 +84,21 @@ Ekonomia regionu: **dziegieć + futra + drewno** (lustro soli i srebra Grań). P
 
 Ludzie **[ZATWIERDZENI]**: **Bartel** (kupiec, Ostęp Graniczny) · **Hagen** (starosta drwali — antagonista-nie-złoczyńca) · **Wolfram** (łowca, Stanica Wilcza).
 
-Elfy **[DO WYBORU — styl Władcy Pierścieni]**: brzmienia miękkie, śpiewne (ae/th/-ion/-el/-wen), wymawialne po polsku, bez kopiowania imion Tolkiena:
+Elfy **[ZATWIERDZONE — styl Władcy Pierścieni]** (brzmienia miękkie, śpiewne, wymawialne po polsku, bez kopiowania imion Tolkiena):
 
-| Rola | Propozycja | Alternatywy |
-|---|---|---|
-| Starsza Kręgu (twarz zamknięcia) | **Elowen** | Nimriel, Aerlin |
-| Przywódca zwiadowców (twarz otwarcia) | **Thalion** | Cathel, Sylvar |
-| Mistrzyni strojenia, opiekunka wardów | **Loriel** | Erethil, Aerlin |
-| Łukmistrz Łukodzielni | **Faelor** | Cathel, Sylvar |
-| Wygnaniec na skraju boru (szary informator o mrocznych elfach) | **Morvael** | Erethil |
+| Rola | Imię |
+|---|---|
+| Starsza Kręgu (twarz zamknięcia) | **Nimriel** |
+| Przywódca zwiadowców (twarz otwarcia) | **Cathel** |
+| Mistrzyni strojenia, opiekunka wardów | **Aerlin** |
+| Łukmistrz Łukodzielni | **Sylvar** |
+| Wygnaniec na skraju boru (szary informator o mrocznych elfach) | **Erethil** |
 
 Nazwy miejsc elfich: elfy mają własne (niezapisywane) nazwy; ludzkie nazwy na mapie („Szept Koron") to tłumaczenia — smaczek narracyjny.
 
 ## 9. Start elfa (po wdrożeniu #1474)
 
-Whitelist startowa krainy: default **Gościnne Drzewo** (Szept Koron); wariant: Ostęp Graniczny. Haki startowe: Loriel — „kolejne drzewo zgasło, zbadaj"; Thalion vs Elowen — dwie strony werbują gracza do swojej wizji. Do tego czasu Czarnobór działa jako zwykła kraina dla wszystkich ras (elf startuje po swojej fali wdrożeniowej).
+Whitelist startowa krainy: default **Gościnne Drzewo** (Szept Koron); wariant: Ostęp Graniczny. Haki startowe: Aerlin — „kolejne drzewo zgasło, zbadaj"; Cathel vs Nimriel — dwie strony werbują gracza do swojej wizji. Do tego czasu Czarnobór działa jako zwykła kraina dla wszystkich ras (elf startuje po swojej fali wdrożeniowej).
 
 ---
 
