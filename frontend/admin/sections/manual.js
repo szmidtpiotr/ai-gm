@@ -297,6 +297,33 @@ usunięta</b> przy scalaniu. Jeśli chcesz się jej pozbyć: wybierz ją jako za
 znajdziesz je wyłącznie w kuble <b>💤 Nieaktywne</b>.</p>`,
       },
       {
+        id: 'dostepnosc-krain',
+        title: 'Udostępnianie krain graczom',
+        body: `
+<p>Świat ma sześć krain, ale gracze mają widzieć tylko te, które sam otworzysz.
+Każda kraina ma jeden z trzech stanów:</p>
+<ul>
+<li><b>live</b> — otwarta, gracze mogą tam podróżować.</li>
+<li><b>coming</b> — poczekalnia. Gracz odbija się z komunikatem „Kraina niedostępna",
+ale konto z flagą <b>Tester</b> może tam wejść i sprawdzić krainę przed premierą.</li>
+<li><b>locked</b> — zamknięta na głucho. Nie wchodzi nikt, także tester.</li>
+</ul>
+<h4>Gdzie to przełączyć</h4>
+<p><b>Mapa → zakładka Mapa</b> → w pasku nad kanwą wybierz krainę z listy rozwijanej.
+Dopiero wtedy pojawi się przycisk <b>✅ Udostępnij graczom</b> / <b>🚫 Ukryj graczom</b>.
+Przy „Wszystkie (live)" przycisku nie ma — nie wiadomo, której krainy miałby dotyczyć.</p>
+<p>Zmiana działa <b>natychmiast</b>: gracz w trakcie sesji od razu przestaje (albo zaczyna)
+przechodzić granicę. Decyzja jest trwała — przeżywa restart serwera.</p>
+<h4>Co jeszcze się zmienia</h4>
+<p>Rasy są przypisane do krain ojczystych (krasnolud → <b>Siwe Granie</b>). Gdy zamkniesz
+taką krainę, karta tej rasy w kreatorze bohatera <b>wyszarza się</b> z powodem
+(„te ziemie są jeszcze zamknięte") — nie znika, więc gracz wie, że coś nadejdzie.
+Człowiek nie ma kotwicy i jest dostępny zawsze. Istniejący bohaterowie grają dalej
+bez zmian.</p>
+<p><b>Flagę Tester</b> nadajesz w <b>Gracze</b> → konto → „Tester (może zgłaszać błędy)".
+Tester dostaje też rasy krain w stanie <b>coming</b> — skoro może tam wejść, może nimi grać.</p>`,
+      },
+      {
         id: 'budowniczy',
         title: 'Zakładka Mapa (budowniczy świata)',
         body: `

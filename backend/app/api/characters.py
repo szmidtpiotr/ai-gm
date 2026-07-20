@@ -1303,6 +1303,45 @@ def get_character_treasure_maps(character_id: int):
         conn.close()
 
 
+# ── #1479: dostępność ras zależna od otwartych krain ─────────────────────────
+
+def _assert_race_region_open(race: str, user_id: int | None) -> None:
+    """Odrzuć zapis postaci rasy, której kraina ojczysta jest zamknięta.
+
+    Tester (#1478) wchodzi do krain `coming`, więc może też nimi grać.
+    Brak danych o krainie nie blokuje — kreator nie może paść przez pusty seed.
+    """
+    from app.services.world_region_service import RaceUnavailable, assert_race_available
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        assert_race_available(conn, race, user_id=user_id)
+    except RaceUnavailable as e:
+        raise HTTPException(status_code=409, detail=e.reason) from None
+    finally:
+        conn.close()
+
+
+@router.get("/creation/races")
+def list_creation_races(authorization: str | None = Header(None), user_id: int | None = None):
+    """Rasy do kreatora + informacja, czy da się nimi teraz zagrać (#1479).
+
+    Karta niedostępnej rasy zostaje widoczna, ale wyszarzona z powodem — gracz ma
+    wiedzieć, że coś nadejdzie, zamiast patrzeć na pustą listę.
+    """
+    from app.services.world_region_service import race_availability, user_is_tester
+    try:
+        uid = resolve_authed_user_id(authorization, user_id)
+    except HTTPException:
+        uid = None
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"races": race_availability(conn, include_coming=user_is_tester(conn, uid))}
+    finally:
+        conn.close()
+
+
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...), authorization: str | None = Header(None)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.
@@ -1326,6 +1365,10 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
     race = str(req.get("race", "human") or "human").strip().lower()
     if race not in ("human", "dwarf"):
         race = "human"
+
+    # #1479 — rasa zakotwiczona w krainie (krasnolud → Siwe Granie) wymaga, by ta
+    # kraina była otwarta. UI wyszarza kartę; backend nie ufa UI i odrzuca zapis.
+    _assert_race_region_open(race, user_id)
 
     # Roll stats and skills exactly as the campaign-scoped endpoint does
     base_sheet["archetype"] = archetype
@@ -3113,6 +3156,9 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     _race = str(req.race or "human").strip().lower()
     if _race not in ("human", "dwarf"):
         _race = "human"
+
+    # #1479 — kraina ojczysta rasy musi być otwarta (patrz hero-first wyżej).
+    _assert_race_region_open(_race, req.user_id)
 
     cur.execute(
         """

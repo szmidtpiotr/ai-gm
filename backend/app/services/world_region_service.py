@@ -26,6 +26,45 @@ REGION_STATUSES = ("live", "coming", "locked")
 BLOCKING_STATUSES = ("coming", "locked")
 
 
+#: #1479 — rasa zakotwiczona w krainie ojczystej. Brak wpisu / None = rasa bez
+#: kotwicy, dostępna zawsze (człowiek jest wszędzie). Rasy są dziś hardcode'em
+#: w dwóch miejscach (characters.py, front-v2/lib/creation.ts) — gdy trafią do
+#: `game_config_races`, ta mapa powinna zniknąć na rzecz kolumny.
+RACE_HOME_REGION: dict[str, str | None] = {
+    "human": None,
+    "dwarf": "siwe_granie",
+}
+
+#: Etykiety ras dla kreatora (kolejność = kolejność kart).
+RACE_LABELS: dict[str, str] = {
+    "human": "Człowiek",
+    "dwarf": "Krasnolud",
+}
+
+
+class RaceUnavailable(Exception):
+    """Rasa zablokowana, bo jej kraina ojczysta nie jest otwarta."""
+
+    def __init__(self, race: str, reason: str):
+        super().__init__(reason)
+        self.race = race
+        self.reason = reason
+
+
+def user_is_tester(conn: sqlite3.Connection, user_id: int | None) -> bool:
+    """#1478/#1479 — czy konto ma flagę testera. Każda niepewność → False."""
+    if user_id is None:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(is_tester, 0) AS is_tester FROM users WHERE id = ? LIMIT 1",
+            (int(user_id),),
+        ).fetchone()
+    except (sqlite3.Error, TypeError, ValueError):
+        return False
+    return bool(row and int(row["is_tester"] or 0))
+
+
 def campaign_viewer_is_tester(conn: sqlite3.Connection, campaign_id: int) -> bool:
     """#1478 — czy właściciel kampanii ma flagę testera (``users.is_tester``).
 
@@ -150,3 +189,67 @@ def region_block_for_hex(
         "region_label": label,
         "region_status": row["status"],
     }
+
+
+# ── #1479: dostępność ras zależna od krainy ojczystej ────────────────────────
+
+def race_availability(
+    conn: sqlite3.Connection,
+    include_coming: bool = False,
+) -> list[dict]:
+    """Lista ras z informacją, czy da się nimi teraz zagrać.
+
+    Rasa bez kotwicy (``RACE_HOME_REGION[...] is None``) jest dostępna zawsze.
+    Rasa z kotwicą wymaga, by jej kraina była przechodnia — `live`, a dla testera
+    (``include_coming``) także `coming`.
+
+    Brak danych NIE blokuje: nieznana kraina albo brak tabeli `world_regions`
+    (świeży clone) → rasa dostępna. Kreator postaci nie może paść przez to, że
+    ktoś nie zaseedował mapy.
+    """
+    try:
+        rows = conn.execute("SELECT key, label, status FROM world_regions").fetchall()
+        regions = {r["key"]: {"label": r["label"], "status": r["status"]} for r in rows}
+    except sqlite3.Error:
+        regions = {}
+
+    passable = ("live", "coming") if include_coming else ("live",)
+
+    out: list[dict] = []
+    for key, label in RACE_LABELS.items():
+        home = RACE_HOME_REGION.get(key)
+        region = regions.get(home) if home else None
+        available = True
+        reason = None
+        if home and region is not None and region["status"] not in passable:
+            available = False
+            reason = f"{region['label']} — te ziemie są jeszcze zamknięte."
+        out.append({
+            "key": key,
+            "label": label,
+            "available": available,
+            "reason": reason,
+            "home_region": home,
+        })
+    return out
+
+
+def assert_race_available(
+    conn: sqlite3.Connection,
+    race: str,
+    user_id: int | None = None,
+) -> None:
+    """Bramka po stronie zapisu — UI wyszarza kartę, backend nie ufa UI.
+
+    Raises:
+        RaceUnavailable: kraina ojczysta rasy jest zamknięta dla tego konta.
+    """
+    entry = next(
+        (r for r in race_availability(conn, include_coming=user_is_tester(conn, user_id))
+         if r["key"] == race),
+        None,
+    )
+    if entry is None:
+        return  # nieznana rasa → sprawa walidacji rasy, nie bramki krain
+    if not entry["available"]:
+        raise RaceUnavailable(race, entry["reason"] or "Kraina tej rasy jest zamknięta.")

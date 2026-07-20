@@ -87,6 +87,25 @@ export function usePublicSkills(enabled = true) {
   });
 }
 
+/** #1479 — GET /creation/races: rasy do kreatora + czy kraina ojczysta jest otwarta.
+ *  Rasa niedostępna zostaje na liście (wyszarzona z powodem), nie znika. */
+export interface CreationRace {
+  key: string;
+  label: string;
+  available: boolean;
+  reason: string | null;
+  home_region: string | null;
+}
+
+export function useCreationRaces() {
+  return useQuery({
+    queryKey: ["creation-races"],
+    staleTime: 5 * 60_000,
+    queryFn: () => apiFetch<{ races: CreationRace[] }>(`/creation/races`),
+    select: (d) => d.races ?? [],
+  });
+}
+
 /** GET /characters/{id}/reputation → standing per region. */
 export function useReputation(characterId: number | undefined) {
   return useQuery({

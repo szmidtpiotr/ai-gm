@@ -22,7 +22,12 @@ import {
   useCampaigns,
 } from "@/hooks/useGameData";
 import { apiFetch } from "@/lib/api";
-import { usePublicSkills, type PublicSkill } from "@/hooks/useSheetData";
+import {
+  usePublicSkills,
+  useCreationRaces,
+  type PublicSkill,
+  type CreationRace,
+} from "@/hooks/useSheetData";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -99,6 +104,8 @@ export default function CreateCharacter() {
   // Pełny żywy katalog skilli — pula zamiany (↔) w kroku Umiejętności musi
   // oferować cały game_config_skills, nie tylko rolowaną legacy-pulę arkusza.
   const { data: skillCatalog } = usePublicSkills();
+  // #1479 — dostępność ras zależy od tego, czy ich kraina ojczysta jest otwarta.
+  const { data: raceOptions } = useCreationRaces();
 
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -301,7 +308,9 @@ export default function CreateCharacter() {
       <Stepper step={step} />
 
       <div className="mx-auto w-full max-w-xl flex-1 px-4 py-5">
-        {step === 0 && <StepRace race={race} onPick={setRace} />}
+        {step === 0 && (
+          <StepRace race={race} onPick={setRace} options={raceOptions} />
+        )}
         {step === 1 && (
           <StepIdentity
             name={name}
@@ -442,7 +451,17 @@ function Stepper({ step }: { step: number }) {
 }
 
 // ── Krok 1: Rasa ───────────────────────────────────────────────────────────
-function StepRace({ race, onPick }: { race: Race; onPick: (r: Race) => void }) {
+function StepRace({
+  race,
+  onPick,
+  options,
+}: {
+  race: Race;
+  onPick: (r: Race) => void;
+  /** #1479 — dostępność z backendu; brak danych = wszystko dostępne (nie blokuj kreatora). */
+  options?: CreationRace[];
+}) {
+  const byKey = new Map((options ?? []).map((o) => [o.key, o]));
   return (
     <div>
       <h1 className="text-center font-serif text-title-lg font-semibold text-text">Wybierz rasę</h1>
@@ -450,9 +469,20 @@ function StepRace({ race, onPick }: { race: Race; onPick: (r: Race) => void }) {
         Rasa kształtuje cechy fizyczne i zdolności twojego bohatera.
       </p>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {RACES.map(({ key, ...rest }) => (
-          <PickCard key={key} selected={race === key} onClick={() => onPick(key)} {...rest} />
-        ))}
+        {RACES.map(({ key, ...rest }) => {
+          const opt = byKey.get(key);
+          const locked = opt ? !opt.available : false;
+          return (
+            <PickCard
+              key={key}
+              selected={race === key}
+              disabled={locked}
+              lockReason={locked ? opt?.reason ?? null : null}
+              onClick={() => !locked && onPick(key)}
+              {...rest}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -520,6 +550,8 @@ function PickCard({
   title,
   desc,
   bonus,
+  disabled = false,
+  lockReason = null,
 }: {
   selected: boolean;
   onClick: () => void;
@@ -527,19 +559,36 @@ function PickCard({
   title: string;
   desc: string;
   bonus: string;
+  /** #1479 — karta widoczna, ale nieklikalna (kraina rasy zamknięta). */
+  disabled?: boolean;
+  lockReason?: string | null;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled}
+      data-testid={disabled ? "pick-card-locked" : undefined}
+      title={lockReason ?? undefined}
       className={cn(
         "flex flex-col gap-1.5 rounded-lg border p-3.5 text-left transition-colors",
-        selected ? "border-line-ember bg-ember/[0.06]" : "border-line bg-surface hover:border-line-ember",
+        disabled
+          ? "cursor-not-allowed border-line bg-surface opacity-45"
+          : selected
+            ? "border-line-ember bg-ember/[0.06]"
+            : "border-line bg-surface hover:border-line-ember",
       )}
     >
       <span className="text-2xl">{icon}</span>
-      <span className="font-serif text-body font-semibold text-text">{title}</span>
+      <span className="font-serif text-body font-semibold text-text">
+        {title}
+        {disabled && <span className="ml-1.5 align-middle text-micro">🔒</span>}
+      </span>
       <span className="font-ui text-micro leading-snug text-text-3">{desc}</span>
       <span className="mt-1 font-ui text-[10.5px] font-semibold text-ember-glow">{bonus}</span>
+      {disabled && lockReason && (
+        <span className="mt-1 font-ui text-[10.5px] font-semibold text-text-3">{lockReason}</span>
+      )}
     </button>
   );
 }
