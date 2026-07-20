@@ -1,6 +1,6 @@
 # SIWE GRANIE — rozdział krainy (baza wiedzy świata)
 
-> **Status:** projekt zatwierdzony kierunkowo (dyskusja z Piotrem 2026-07-20). Rozdział rozwija LORE_v1_KANON.md (sekcja 3D) — kanon-parasol pozostaje nadrzędny. Elementy oznaczone **[PROPOZYCJA]** czekają na akceptację Piotra.
+> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20; sól i Biała Bogini domknięte). Rozdział rozwija LORE_v1_KANON.md (sekcja 3D) — kanon-parasol pozostaje nadrzędny.
 > Zasila: dział „Świat" wizytówki, narratora, seedowanie regionu `siwe_granie` (issue krainy w milestone Faza RM).
 
 ---
@@ -22,7 +22,7 @@ Surowa północ: granitowe pasma, wieczny śnieg, wymarłe kopalnie i wiatr, kt�
 
 1. **Starszyzna vs Młotodzierżcy** — czekać, aż stukanie ucichnie, czy zejść i skończyć to, co się zaczęło?
 2. **Pamięć vs przetrwanie** — opuszczone hołdy pełne dziedzictwa rodów; wracać po nie znaczy łamać zakazy.
-3. **Góra vs lodowiec** — stary, niepisany zakaz wchodzenia na Lodowy Pas. Nikt nie pamięta, kto go wydał. **[PROPOZYCJA]** może oba zakazy (kopania w głąb i wchodzenia na lód) wydało dawno temu to samo — patrz §7.
+3. **Góra vs lodowiec** — stary, niepisany zakaz wchodzenia na Lodowy Pas. Nikt nie pamięta, kto go wydał. Smaczek-tajemnica (nierozstrzygana w grze): może oba zakazy — kopania w głąb i wchodzenia na lód — wydało dawno temu to samo.
 
 ## 4. Lokacje
 
@@ -36,6 +36,8 @@ Surowa północ: granitowe pasma, wieczny śnieg, wymarłe kopalnie i wiatr, kt�
 | **Siarkowe Pola** | obóz zbieraczy pod Czarnymi Skałami | Handel siarką, trujące opary (kondycje), geotermia. |
 | **Gorące Źródła** | odpoczynek | Jedyne ciepłe miejsce w górach; odpoczynek, plotki, kąpielisko karawan. |
 | **Karawanseraj na trakcie** | przystanek handlowy | Łącznik z Kresami; karawany, przemytnicy ze Starej Przełęczy. |
+| **Obóz Wygnańców Lodu** | koczowisko w tundrze | Wyklęty ród krasnoludzki (§7B); handel po cichu z Młotodzierżcami; wiedza o lodowcu. |
+| **Sanktuarium Zamarzniętej Pielgrzymki** | opuszczone sanktuarium (Lodowy Pas) | §7A; procesja wmarznięta w lód, pustelnik-strażnik (1 NPC). |
 
 ### Istniejące w DB (zostają)
 
@@ -65,7 +67,7 @@ Stan zastany: 84% mapy to mountain+snow (1293+839 z 2544 hexów), 6 lokacji. Cel
 
 **Istniejące typy — redystrybucja:** doliny (hills/heath wokół osad), więcej jezior górskich, `grania` (44) zostaje jako grzbiety, przełęcze bez zmian.
 
-## 6. Sól — materiał przeciw-Rdzeniowy **[PROPOZYCJA mechaniczna]**
+## 6. Sól — materiał przeciw-Rdzeniowy **[ZATWIERDZONE]**
 
 Zasada fikcji: sól nie jest magiczna — jest **obojętna na Rdzeń** (izolator). Dlatego Linia Soli działa, dlatego górnicy noszą woreczek soli przy pasie. Przedmioty (wartości startowe, silnik effect_json/kondycji — bez nowego kodu koncepcyjnie):
 
@@ -77,15 +79,15 @@ Zasada fikcji: sól nie jest magiczna — jest **obojętna na Rdzeń** (izolator
 
 Ekonomia: **sól = drugi towar eksportowy Grań** (obok srebra) — sztolnie solne dają regionowi tożsamość handlową i uzasadniają dostępność przedmiotów.
 
-## 7. Biała Bogini — bez nowego ludu **[DO AKCEPTACJI — dwie opcje]**
+Przy implementacji: wpis do **Księgi Zasad** (rozdział + karta przedmiotów + glosy, ledger #868) i do **wizytówki** (dział „Świat" — wiedza o soli jako część lore Grań).
 
-Kanon trzyma Białą Boginię jako niedowiedzioną legendę. Żywy kult tubylców tworzyłby nowy lud — odrzucone. Alternatywy:
+## 7. Biała Bogini — bez nowego ludu **[ZATWIERDZONE: A + B razem]**
 
-**Opcja A (rekomendowana): Zamarznięta Pielgrzymka.** Na Lodowym Pasie stoi opuszczone sanktuarium, a w lodzie wokół — zamarznięta procesja pielgrzymów sprzed pokoleń. Nikt nie wie, skąd przyszli ani czemu szli w górę. Sanktuarium jest puste — ale odśnieżone. Jedyny żywy: **ostatni strażnik-pustelnik** (człowiek, JEDEN NPC — żaden lud), który nie pamięta, kiedy przyszedł. Kult martwy, tajemnica żywa; idealnie wpisuje się w filar „miejsc zapomnianych".
+Kanon trzyma Białą Boginię jako niedowiedzioną legendę. Żadnego żywego kultu-ludu. Dwa elementy wchodzą OBA:
 
-**Opcja B: Wygnańcy Lodu.** Krasnoludzki ród wyklęty za złamanie zakazu lodowca, koczujący w tundrze — nie nowa rasa, to krasnoludy; żywa osada questowa i trzecia strona konfliktu rodów.
+**A — Zamarznięta Pielgrzymka.** Na Lodowym Pasie stoi opuszczone sanktuarium, a w lodzie wokół — zamarznięta procesja pielgrzymów sprzed pokoleń. Nikt nie wie, skąd przyszli ani czemu szli w górę. Sanktuarium jest puste — ale odśnieżone. Jedyny żywy: **ostatni strażnik-pustelnik** (człowiek, JEDEN NPC — żaden lud), który nie pamięta, kiedy przyszedł. Kult martwy, tajemnica żywa.
 
-Opcje łączą się (B jako mała enklawa obok A), ale rekomendacja bazowa: **A** — mniejszy zakres, większy klimat.
+**B — Wygnańcy Lodu.** Krasnoludzki ród wyklęty za złamanie zakazu lodowca, koczujący w tundrze — nie nowa rasa, to krasnoludy. Żywa osada questowa (obóz w tundrze, poniżej Lodowego Pasu) i trzecia strona konfliktu rodów: starszyzna ich wyklęła, Młotodzierżcy po cichu z nimi handlują, a Wygnańcy jako jedyni widzieli lodowiec z bliska — i czegoś tam się boją bardziej niż wyklęcia.
 
 ---
 
