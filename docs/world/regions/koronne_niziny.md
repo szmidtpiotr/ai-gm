@@ -1,6 +1,6 @@
 # KORONNE NIZINY — rozdział krainy (baza wiedzy świata)
 
-> **Status:** design domknięty poza stylem części imion **[DO AKCEPTACJI — poprawiony styl §7]** (dyskusja z Piotrem 2026-07-20). Rozwija LORE_v1_KANON.md (sekcja 3A). **Kraina neutralna — bez rasy rodowej**; cel „późnej fazy" kampanii wszystkich ras.
+> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20; styl imion §7 zaakceptowany). Rozwija LORE_v1_KANON.md (sekcja 3A). **Kraina neutralna — bez rasy rodowej**; cel „późnej fazy" kampanii wszystkich ras.
 > Osobliwość startowa: człowiek dostaje LOSOWY start Kresy/Vilnograd (§8).
 
 ---
@@ -78,7 +78,7 @@ Era Latarni wzniosła Vilnograd jako latarnię porządku. Dziś, w Zmierzchu Lat
 
 Enklawa krasnoludzka awansuje z lore (🔵) do gry: kantory, jubilerstwo, weksle. Przy implementacji: wpis do **Księgi Zasad** + **wizytówki** — standard fali.
 
-## 7. Obsada krainy — NPC-ikony **[DO AKCEPTACJI — poprawiony styl]**
+## 7. Obsada krainy — NPC-ikony **[ZATWIERDZONE]**
 
 Reguły stylu (poprawione po uwadze Piotra): **dwór i stolica** = archaiczno-dworskie słowiańskie (jak kanoniczne Vilnograd/Volhynia); **półświatek** = pseudonimy-urzędy, nie ksywki; **krasnoludy** = wzór Grań (nordyckie imię + polski przydomek); **prowincja zachodnia** = germańskie/hybrydy (#997). Kanoniczni NPC bez zmian.
 
