@@ -166,10 +166,11 @@ Liczby zmierzone na DEV przy snapshocie końcowym. Sekcja opisowa: nie zmienia k
 
 **Treść.** 53 lokacje krainy (27 makro + 26 sub), 26 heksów z dowiązaniem `location_key`, 15 przypisań NPC, 24 przypisania wrogów, 2 lochy (Sztolnia Umarłego Rodu lvl 2, Kopalnia Czarnego Hutmana lvl 7), 15 plotek regionalnych, 3 nowi wrogowie (`widmo_lodowe`, `zamarzniety_pielgrzym`, `straznik_rdzenia`), 3 przedmioty solne. Od SG-9 wszystko to leży w git-seedach (`data/seeds/content/`), nie tylko w bazie DEV.
 
-**Otwarte po SG-9 (nie blokuje bramki, do osobnych zadań):**
-- `tundra_mrozu` — lokacja makro bez heksa i bez współrzędnych (sierota po wcześniejszym reseedzie terenu).
-- Wydarzenia regionalne (#1193) — kraina ma 0 wpisów; wszystkie 3 istniejące należą do Kresów.
-- Pule spotkań dla nowych terenów żyją w kodzie (`hex_travel_service._WORLD_ENCOUNTER_FALLBACK_POOLS`), nie w danych heksów — własną pulę ma 9 heksów (6 lodowiec, 2 przełęcz, 1 ruiny).
+**Domknięte zaraz po bramce (commit `8668ce65`):**
+
+- **Wydarzenia krainowe.** Kraina ma cztery własne: **Głębokie Bicie** (stukanie się nasila — spotkania ×1,4), **Karawana solna nie dotarła** (mikstury i sól ×1,4), **Biały Wiatr** (zamieć z lodowca — marsz ×1,35), **Zjazd Rodów** (targ pełny, ceny ×0,85). Szablon ma teraz `region_scope`, więc wydarzenie Grań nie wypadnie w Kresach.
+- **Tundra Wiecznego Mrozu** — hub z trzema sub-lokacjami odzyskał heks (26, −59); wcześniej wisiał bez współrzędnych po reseedzie terenu.
+- **Pule spotkań w danych.** `hex_type_config.default_encounter_pool` zamiast słownika w kodzie. Lodowiec: Widmo Lodowe + Zamarznięty Pielgrzym. Pola siarkowe: Wynaturzona Bestia + Ghul. Bór iglasty: wilk/goblin/bandyta. Tundra: wilk/bandyta — bez istot Rdzenia, bo ten teren występuje też w Kresach. Kolejność źródeł: pula heksa → teren → stałe w kodzie.
 
 ---
 
