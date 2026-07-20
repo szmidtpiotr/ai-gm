@@ -6,9 +6,10 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.core.jwt_auth import assert_campaign_owner, assert_character_owner
+from app.core.db_runtime import resolve_db_path
 
 router = APIRouter()
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def _guard_dungeon_req(character_id: int, campaign_id: int, authorization: str | None) -> None:

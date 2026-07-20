@@ -17,11 +17,12 @@ from pydantic import BaseModel
 
 from app.core.logging import get_logger
 from app.services.economy_service import get_character_gold as _get_character_gold
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
 router = APIRouter()
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 GITHUB_API = "https://api.github.com"
 
 

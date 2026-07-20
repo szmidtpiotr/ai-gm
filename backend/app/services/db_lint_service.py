@@ -25,7 +25,7 @@ try:
     from app.core.db_runtime import resolve_db_path
     _DEFAULT_DB_PATH = resolve_db_path()
 except Exception:
-    _DEFAULT_DB_PATH = "/data/ai_gm.db"
+    _DEFAULT_DB_PATH = resolve_db_path()
 
 _VALID_KINDS = {"weapon", "armor", "item", "consumable"}
 _VALID_REVIEW_STATUS = {"permanent", "pending", "approved", "rejected"}

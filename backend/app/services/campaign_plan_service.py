@@ -24,10 +24,11 @@ import structlog
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 from app.services.llm_service import generate_chat
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 # ── Slug helper ─────────────────────────────────────────────────────────────

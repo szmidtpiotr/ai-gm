@@ -11,8 +11,9 @@ import json
 import random
 import sqlite3
 from typing import Any
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # ── B2: live World State column helpers ────────────────────────────────────────
 

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def list_characters_admin() -> list[dict]:

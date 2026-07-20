@@ -18,8 +18,9 @@ from app.core.mechanics import proficiency_bonus
 from app.services.vitality_service import stat_modifier
 from app.services.dice import roll_d20
 from app.services.llm_tag_parser import clamp_dc_to_scale
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # Single fallback map skill → (governing stat, label). Used only when the DB
 # lookup is unavailable — game_config_skills stays the source of truth (katalog=prawda).

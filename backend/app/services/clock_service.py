@@ -36,8 +36,9 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Any, Optional
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 
 # Cap individual advance to a sane upper bound — defensive against bugs that
 # would accidentally fast-forward years. Tunable; 168h = 1 in-game week.

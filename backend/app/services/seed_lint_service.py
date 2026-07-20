@@ -32,7 +32,7 @@ try:
     from app.core.db_runtime import resolve_db_path
     _DEFAULT_SOURCE_DB = resolve_db_path()
 except Exception:
-    _DEFAULT_SOURCE_DB = "/data/ai_gm.db"
+    _DEFAULT_SOURCE_DB = resolve_db_path()
 
 # Domyślny katalog seedów względem korzenia repo (host) i obrazu (/app → /app/../data).
 _DEFAULT_SEEDS_DIRS = (

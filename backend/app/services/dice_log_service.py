@@ -17,11 +17,12 @@ import sqlite3
 from typing import Any, Optional
 
 import structlog
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger(__name__)
 
 # Ta sama baza co reszta backendu (bind-mount /data/ai_gm.db w kontenerze).
-DICE_LOG_DB_PATH = "/data/ai_gm.db"
+DICE_LOG_DB_PATH = resolve_db_path()
 
 # Dozwolone typy rzutu — informacyjne (DB nie wymusza CHECK, żeby nie blokować
 # przyszłych typów). Trzymane tu jako kontrakt/dokumentacja.

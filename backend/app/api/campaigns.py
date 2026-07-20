@@ -13,8 +13,9 @@ from app.services.solo_death_service import death_summary_payload, end_summary_p
 from app.services.gm_plan_generation_service import retry_initial_gm_plan_for_campaign
 from app.services.gm_plan_schema import merge_gm_plan_patch, normalize_gm_plan
 from app.services.summary_settings_service import get_dual_summary_preview_mode
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 logger = get_logger(__name__)
 
 router = APIRouter()

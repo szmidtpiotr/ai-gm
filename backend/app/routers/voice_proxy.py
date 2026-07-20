@@ -32,8 +32,9 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.routers.admin import require_admin_token
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 DEFAULT_BASE = "http://voice-service:8300"
 
 public_router = APIRouter(prefix="/voice", tags=["voice-proxy"])

@@ -24,10 +24,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.logging import get_logger
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
 
-BESTIARY_DB_PATH = "/data/ai_gm.db"
+BESTIARY_DB_PATH = resolve_db_path()
 
 # kills required to reach each tier — startowe, Sandbox-tunable (#1191 Numbers Policy)
 BESTIARY_TIER_KILLS: dict[int, int] = {1: 1, 2: 5, 3: 15}

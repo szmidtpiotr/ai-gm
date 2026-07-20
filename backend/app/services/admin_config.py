@@ -4,9 +4,10 @@ import sqlite3
 from pathlib import Path
 
 from app.services.actor_stats import stats_for_actor, validate_stats_json
+from app.core.db_runtime import resolve_db_path
 
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # #1382 — distinguishes "field omitted in PATCH" (leave as-is) from "field sent as
 # null" (clear the override). None is a meaningful value, so it cannot be the default.

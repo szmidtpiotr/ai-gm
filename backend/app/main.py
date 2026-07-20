@@ -6,6 +6,7 @@ import random
 
 # env.test / .env w katalogu repozytorium (obok backend/) — AI_TEST_MODE=1 itd. bez ręcznego export
 from app.bootstrap_env import load_repo_env
+from app.core.db_runtime import resolve_db_path
 
 load_repo_env()
 import re
@@ -94,7 +95,7 @@ from app.routers.campaign_workshop import router as campaign_workshop_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 logger = get_logger("ai_gm")
 
 

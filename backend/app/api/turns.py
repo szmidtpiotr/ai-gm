@@ -13,6 +13,7 @@ from app.core.jwt_auth import assert_campaign_owner
 from pydantic import BaseModel
 
 from app.core.logging import bind_context, get_logger
+from app.core.db_runtime import resolve_db_path
 
 try:
     from structlog.contextvars import get_contextvars as _structlog_get_contextvars
@@ -109,7 +110,7 @@ from app.services.suggested_actions import build_suggested_actions
 from app.services.intent_parser import ParsedIntent
 
 router = APIRouter()
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # Skill keys that represent combat-class weapon modifiers / catch-all combat
 # verbs / meta-combat mechanics rather than standalone skill checks. Their
@@ -9380,7 +9381,7 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
     import json as _j
     import sqlite3 as _sq
 
-    DB_PATH = "/data/ai_gm.db"
+    DB_PATH = resolve_db_path()
     conn = _sq.connect(DB_PATH)
     conn.row_factory = _sq.Row
     try:

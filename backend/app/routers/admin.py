@@ -126,12 +126,13 @@ from app.api.npcs import (
     list_npcs as list_npcs_public,
     patch_npc as patch_npc_public,
 )
+from app.core.db_runtime import resolve_db_path
 
 router = APIRouter()
 
-ADMIN_SQLITE_PATH = "/data/ai_gm.db"
+ADMIN_SQLITE_PATH = resolve_db_path()
 ADMIN_DB_RESTORE_TMP = "/data/ai_gm_restore_tmp.db"
-ADMIN_DB_BAK_PATH = "/data/ai_gm.db.bak"
+ADMIN_DB_BAK_PATH = resolve_db_path() + ".bak"
 _SAFE_SQLITE_TABLE = re.compile(r"^[a-zA-Z0-9_]+$")
 
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
@@ -2822,7 +2823,7 @@ def admin_set_account_password(
 
 @router.get("/admin/users/{user_id}/activity")
 def admin_user_activity(user_id: int, _: None = Depends(require_admin_token)):
-    conn = sqlite3.connect("/data/ai_gm.db")
+    conn = sqlite3.connect(resolve_db_path())
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(

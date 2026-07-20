@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 LOKI_META_KEY = "loki_url"
 # Suggested default for Docker Compose service name (observability stack).
 DEFAULT_LOKI_URL = "http://loki:3100"

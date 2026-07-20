@@ -2,9 +2,10 @@
 from __future__ import annotations
 import sqlite3
 from fastapi import APIRouter
+from app.core.db_runtime import resolve_db_path
 
 router = APIRouter()
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 CATEGORY_ORDER = ["combat", "magic", "exploration", "mechanics", "general"]
 

@@ -7,8 +7,9 @@ import sqlite3
 from typing import Any
 
 from app.api.slash_command_registry import COMMAND_REGISTRY
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 META_KEY_SLASH_COMMANDS = "slash_commands_ui"
 

@@ -17,8 +17,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 
 admin_router = APIRouter(prefix="/admin/dice-config", tags=["admin-dice"])
 public_router = APIRouter(prefix="/game/dice-config", tags=["dice-public"])

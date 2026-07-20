@@ -17,8 +17,9 @@ import sqlite3
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.services.world_state_diff_service import compute_snapshot_diff
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 from app.services.admin_auth import verify_admin_token
 

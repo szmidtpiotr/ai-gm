@@ -21,10 +21,11 @@ import structlog
 from app.core.constants import DEFAULT_REGION
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 Outcome = Literal["death", "victory", "abandoned"]
 

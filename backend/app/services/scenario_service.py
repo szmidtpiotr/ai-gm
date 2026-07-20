@@ -27,8 +27,9 @@ import sqlite3
 import uuid
 from pathlib import Path
 from typing import Any
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 
 SCN_CAMPAIGN_PREFIX = "[SBX-SCN]"
 SCN_CLONE_PREFIX = "[SCN] "

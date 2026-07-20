@@ -24,10 +24,11 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
 
-TREASURE_DB_PATH = "/data/ai_gm.db"
+TREASURE_DB_PATH = resolve_db_path()
 
 # Carrier item keys / prefix that route a grant into the treasure tables.
 _WHOLE_MAP_KEYS = {"treasure_map"}

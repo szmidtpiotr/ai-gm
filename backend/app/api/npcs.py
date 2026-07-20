@@ -9,8 +9,9 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.jwt_auth import require_admin_role
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(tags=["npcs"])
 _NPC_TYPES = {"neutral", "merchant", "quest_giver", "ally"}

@@ -25,8 +25,9 @@ from app.services.location_duplicate_service import (
     merge_location_duplicates,
     scan_location_duplicates,
 )
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/api/admin/location-duplicates", tags=["admin-location-duplicates"])
 

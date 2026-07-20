@@ -28,8 +28,9 @@ from app.services.dungeon_tile_service import (
     resolve_tile_content,
 )
 from app.services.tile_compositor import TILE_SIZE, composite_tile, default_overlays_for
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 TILES_DIR = Path("/app/tiles")  # bind-mounted to frontend/images/tiles
 TILES_DIR.mkdir(parents=True, exist_ok=True)
 

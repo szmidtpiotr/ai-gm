@@ -6,8 +6,9 @@ from datetime import datetime, UTC, timedelta
 from typing import Any
 
 from app.services.admin_config import normalize_effect_json_value
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 SUPPORTED_MAJOR = "1"
 IMPORT_BACKUP_DIR = os.getenv("ADMIN_IMPORT_BACKUP_DIR", "/backups/imports")
 IMPORT_BACKUP_KEEP_LAST = 10

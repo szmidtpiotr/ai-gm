@@ -16,10 +16,11 @@ import random
 import sqlite3
 import structlog
 from typing import Any
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # ── Wound Labels (TASK_24 → U15) ───────────────────────────────────────────
 # U15: labels now derive from the single source of truth in wound_utils.WOUND_TIERS

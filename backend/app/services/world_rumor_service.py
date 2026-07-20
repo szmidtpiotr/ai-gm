@@ -15,10 +15,11 @@ import sqlite3
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
 
-WR_DB_PATH = "/data/ai_gm.db"
+WR_DB_PATH = resolve_db_path()
 
 
 def _conn() -> sqlite3.Connection:

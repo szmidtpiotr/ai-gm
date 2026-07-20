@@ -16,6 +16,7 @@ import json
 import random
 import sqlite3
 from typing import Optional
+from app.core.db_runtime import resolve_db_path
 
 # PT10 #1120: fallback enemy pool when local hex has no encounter_pool set
 _LOCAL_ENCOUNTER_FALLBACK_POOL = ["bandit", "unknown_attacker", "goblin"]
@@ -45,7 +46,7 @@ from app.services.world_service import (
 )
 from app.core.logging import get_logger
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 router = APIRouter(tags=["local-map"])
 logger = get_logger(__name__)
 

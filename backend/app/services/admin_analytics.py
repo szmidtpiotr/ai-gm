@@ -1,7 +1,8 @@
 import sqlite3
 from datetime import datetime, timedelta, UTC
+from app.core.db_runtime import resolve_db_path
 
-ADMIN_DB = "/data/ai_gm.db"
+ADMIN_DB = resolve_db_path()
 
 
 def _conn():

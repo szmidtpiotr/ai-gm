@@ -15,8 +15,9 @@ from app.services.history_summary_service import (
     persist_summary,
     touch_rollup_cooldown_anchor,
 )
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def list_campaigns_by_owner(owner_user_id: int) -> list[dict]:

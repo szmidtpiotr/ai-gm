@@ -15,8 +15,9 @@ from app.services.admin_spectate_service import (
     list_all_campaigns,
     resume_campaign,
 )
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/api/admin-spectate", tags=["admin-spectate"])
 

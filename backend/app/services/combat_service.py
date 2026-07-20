@@ -29,9 +29,10 @@ from app.services.weapon_rules import (
 )
 from app.services.wound_utils import wound_dex_penalty, wound_penalty
 from app.services.world_state_service import set_world_state_flags
+from app.core.db_runtime import resolve_db_path
 
 # Tests may monkeypatch this to a temp file path.
-COMBAT_DB_PATH = "/data/ai_gm.db"
+COMBAT_DB_PATH = resolve_db_path()
 
 logger = get_logger(__name__)
 

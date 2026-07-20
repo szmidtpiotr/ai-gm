@@ -2,10 +2,11 @@ import sqlite3
 from fastapi import APIRouter
 
 from app.services.admin_config import list_dc, list_skills, list_stats
+from app.core.db_runtime import resolve_db_path
 
 
 router = APIRouter()
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def _build_test_descriptions() -> dict[str, str]:

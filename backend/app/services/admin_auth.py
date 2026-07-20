@@ -5,9 +5,10 @@ import sqlite3
 from datetime import UTC, datetime
 
 import bcrypt
+from app.core.db_runtime import resolve_db_path
 
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def hash_admin_token(raw_token: str) -> str:

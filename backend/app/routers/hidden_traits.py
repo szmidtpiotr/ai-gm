@@ -4,8 +4,9 @@ import sqlite3
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.services.hidden_trait_service import get_trait_pool
+from app.core.db_runtime import resolve_db_path
 
-ADMIN_SQLITE_PATH = "/data/ai_gm.db"
+ADMIN_SQLITE_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/admin/hidden-traits", tags=["admin-hidden-traits"])
 

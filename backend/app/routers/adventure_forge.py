@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.services.admin_auth import verify_admin_token
 from app.services.campaign_plan_service import normalize_plan_beats
 from app.services.llm_service import generate_chat
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
 
@@ -30,7 +31,7 @@ def _safe_int(val, default):
 
 _LOC_TYPE_MAP = {"sub": "sub"}  # everything else → macro
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/api/admin/forge", tags=["admin-adventure-forge"])
 

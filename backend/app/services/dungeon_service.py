@@ -6,8 +6,9 @@ import random
 import sqlite3
 import unicodedata
 from datetime import datetime, timedelta, timezone
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def _get_db():

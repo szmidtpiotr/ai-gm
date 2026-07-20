@@ -21,10 +21,11 @@ import structlog
 
 from app.core.mechanics import proficiency_bonus, stat_modifier
 from app.services.dice import roll_d20
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # ── Numbers Policy (starting values) ────────────────────────────────────────
 # Effective mount travel-time multiplier by riding skill rank. Lower = faster.

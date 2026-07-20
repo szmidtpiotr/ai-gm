@@ -1,8 +1,9 @@
 """O1+O2 — write_game_event() and write_llm_log() helpers. Best-effort: never raises."""
 import json
 import sqlite3
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def write_game_event(

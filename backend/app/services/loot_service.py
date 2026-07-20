@@ -11,8 +11,9 @@ from typing import Any
 from app.core.logging import get_logger
 from app.services.dice import parse_character_sheet
 from app.services.effect_json_migration import legacy_effect_fields_from_json
+from app.core.db_runtime import resolve_db_path
 
-LOOT_DB_PATH = "/data/ai_gm.db"
+LOOT_DB_PATH = resolve_db_path()
 
 # G10 (#795) — MP loot scaling flag (sandbox-tunable, starting value).
 # Multiplied into each loot entry's drop chance in roll_loot_for_class.

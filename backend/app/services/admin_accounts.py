@@ -3,8 +3,9 @@ import re
 import sqlite3
 
 import bcrypt
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]{3,40}$")
 

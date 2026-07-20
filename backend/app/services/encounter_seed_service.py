@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # biome values mirror world_hexes.hex_type / game_locations.biome conventions.
 GENERIC_ENCOUNTERS = [

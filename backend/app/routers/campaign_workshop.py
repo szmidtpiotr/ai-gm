@@ -16,8 +16,9 @@ from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
 from app.services.llm_service import generate_chat
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/api/admin/campaigns", tags=["admin-campaign-workshop"])
 

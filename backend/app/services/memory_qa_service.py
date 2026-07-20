@@ -10,8 +10,9 @@ from typing import Any
 from app.memory_qa_prompt_loader import MEMORY_QA_PROMPT_TEXT
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 _GM_DOES_NOT_REMEMBER = (
     "Nie przypominam sobie tego szczegółu — w zapisanym podsumowaniu nic takiego nie mam. "

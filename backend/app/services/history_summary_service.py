@@ -20,9 +20,10 @@ from app.services.summary_settings_service import (
     get_summary_rollup_cooldown_turns,
 )
 from app.services.user_llm_settings import get_user_llm_settings_full
+from app.core.db_runtime import resolve_db_path
 
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # [T02 / S11b] Rollup storage: public-facing vs GM-only context (separate rows).
 SummaryAudience = Literal["player", "gm"]

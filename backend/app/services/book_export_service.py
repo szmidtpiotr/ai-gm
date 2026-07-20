@@ -24,8 +24,9 @@ import sqlite3
 import sys
 import urllib.request
 from typing import List, Optional
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # Bielik 11B (wariant Q6_K — lepsze dialogi; offline więc szybkość nieistotna).
 # Zapasowo: gemma4:12b / qwen3.6 — patrz issue #547.

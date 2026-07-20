@@ -16,8 +16,9 @@ import sqlite3
 from typing import Any
 
 from app.services.dice import DICE_TEST_TO_CONFIG_SKILL_KEY, parse_character_sheet
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 # G8 #1472: align fallback with the runtime DB truth (main.py seeds
 # game_config_meta.xp_skill_rank_costs = {"1":100,"2":75,"3":150} and caps every

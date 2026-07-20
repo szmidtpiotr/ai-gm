@@ -14,8 +14,9 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 router = APIRouter(prefix="/api/admin/world", tags=["hex-world"])
 
 

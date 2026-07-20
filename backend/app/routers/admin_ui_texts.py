@@ -22,8 +22,9 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.routers.admin import require_admin_token
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 
 admin_router = APIRouter(prefix="/admin/ui-texts", tags=["admin-ui-texts"])  # auth: warstwa /api/admin (#1187)
 public_router = APIRouter(prefix="/ui/texts", tags=["ui-texts"])

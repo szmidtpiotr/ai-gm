@@ -8,9 +8,10 @@ import json
 import sqlite3
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from app.core.db_runtime import resolve_db_path
 
 router = APIRouter()
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 VALID_MECHANIC_KEYS = {
     "dice_roll", "combat_start", "damage_taken",

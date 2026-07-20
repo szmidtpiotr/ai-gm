@@ -2,9 +2,10 @@ import sqlite3
 from typing import Any
 
 from app.services import llm_service
+from app.core.db_runtime import resolve_db_path
 
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 LLM_MODE_DEFAULT = "default"
 LLM_MODE_CUSTOM = "custom"
 

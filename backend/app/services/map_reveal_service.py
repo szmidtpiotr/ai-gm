@@ -12,8 +12,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from typing import Any
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 _MODES = {"radius", "region", "hexes", "location"}
 

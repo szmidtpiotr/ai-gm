@@ -374,7 +374,7 @@ def _valid_username(username: str) -> bool:
     return bool(re.match(r'^[a-zA-Z0-9_]{3,30}$', username))
 
 
-_AUTH_DB = "/data/ai_gm.db"
+_AUTH_DB = resolve_db_path()
 
 
 @router.get("/auth/registration-status")

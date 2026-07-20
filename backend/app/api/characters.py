@@ -37,8 +37,9 @@ from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import compose_narrator_system_prompt
 from app.services.location_intent_parser import parse as parse_location_intent
 from app.services.location_validator import persist_ai_generated_location
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 HIDDEN_POTENTIALS = ["blessed", "cursed", "gifted", "hollow"]
 logger = logging.getLogger(__name__)
 

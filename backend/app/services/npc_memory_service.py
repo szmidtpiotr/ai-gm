@@ -18,10 +18,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import structlog
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 
 # Cap exposed to MG. More history → bigger prompt → no real upside since the
 # user explicitly chose "last 10 met" during BUG-03 discovery.

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = Path("/data/ai_gm.db")
+DB_PATH = Path(resolve_db_path())
 
 _KEY_FORCE_UPDATE_TURNS = "gm_plan_force_update_turns"
 

@@ -20,8 +20,9 @@ from app.services.llm_service import (
     generate_chat,
     resolve_content_llm_config,
 )
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/api/admin/smart-entry", tags=["admin-smart-entry"])
 

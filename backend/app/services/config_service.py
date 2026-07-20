@@ -3,8 +3,9 @@ import os
 import sqlite3
 import time
 from typing import Any
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 _CACHE_TTL_SECONDS = 60
 _CACHE: dict[str, Any] = {"expires_at": 0.0, "value": None}
 

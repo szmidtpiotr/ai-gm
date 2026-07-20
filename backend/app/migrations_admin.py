@@ -3,9 +3,10 @@ import os
 import sqlite3
 
 from app.core.logging import get_logger
+from app.core.db_runtime import resolve_db_path
 
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 logger = get_logger(__name__)
 
 # #592 — FAZA U mechanics documented in the admin Knowledge book (Narzędzia → Wiedza).

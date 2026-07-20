@@ -15,13 +15,14 @@ from pydantic import BaseModel
 from typing import Any
 
 from app.routers.admin import require_admin_token
+from app.core.db_runtime import resolve_db_path
 
 router = APIRouter(prefix="/api/admin/images", tags=["admin-images"])  # auth: warstwa /api/admin (#1187)
 
 IMAGE_GEN_URL = os.getenv("IMAGE_GEN_URL", "http://192.168.1.170:8765")
 TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))
 TILES_URL_PREFIX = "/images/tiles"
-_DB_PATH = Path("/data/ai_gm.db")
+_DB_PATH = Path(resolve_db_path())
 
 _IMAGE_GEN_KEYS = (
     "image_gen.url", "image_gen.steps", "image_gen.refine_steps",

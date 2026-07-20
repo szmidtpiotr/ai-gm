@@ -29,8 +29,9 @@ from app.services.world_service import (
     SUBLOC_SAFE_FOR_REST,
     _SUBLOC_LABELS,
 )
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/api/admin/world", tags=["admin-world-review"])  # auth: warstwa /api/admin (#1187)
 

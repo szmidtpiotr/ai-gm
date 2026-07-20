@@ -18,10 +18,11 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
 
-RUMOR_DB_PATH = "/data/ai_gm.db"
+RUMOR_DB_PATH = resolve_db_path()
 
 # #1190 — Numbers Policy (wartości startowe, Sandbox-tunable):
 #   proporcja plotek PRAWDZIWYCH do fałszywych = 60/40.

@@ -14,10 +14,11 @@ import sqlite3
 from typing import Any, Optional
 
 import structlog
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger(__name__)
 
-DECISION_LOG_DB_PATH = "/data/ai_gm.db"
+DECISION_LOG_DB_PATH = resolve_db_path()
 
 
 def _conn() -> sqlite3.Connection:

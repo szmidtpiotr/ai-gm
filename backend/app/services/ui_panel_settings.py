@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from typing import Any
+from app.core.db_runtime import resolve_db_path
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 META_KEY = "ui_panel_defaults"
 ALLOWED_PANELS = frozenset({"stats", "skills", "identity", "inventory"})
 BUILTIN_DEFAULTS: dict[str, str] = {

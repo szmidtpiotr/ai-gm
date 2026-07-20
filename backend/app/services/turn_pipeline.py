@@ -42,10 +42,11 @@ from app.services.skill_service import (
     calc_skill_modifier_info, intercept_skill_test_tag, intercept_trap_tag,
     build_skill_result_context,
 )
+from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
 
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 import re as _re_tp
 

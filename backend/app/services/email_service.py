@@ -5,9 +5,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.core.logging import get_logger
+from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = resolve_db_path()
 
 
 def _get_smtp_config() -> dict:
