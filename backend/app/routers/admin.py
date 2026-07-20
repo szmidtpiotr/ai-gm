@@ -365,6 +365,9 @@ class EnemyCreateReq(BaseModel):
     drop_chance: float = 1.0
     note: str | None = None
     is_active: bool = True
+    min_level: int | None = None
+    # SG-7 (#1481): klasa istoty dla mechaniki soli — puste/None = żywe stworzenie.
+    creature_type: str | None = None
 
 
 class EnemyPatchReq(BaseModel):
@@ -393,6 +396,7 @@ class EnemyPatchReq(BaseModel):
     image_url_raw: str | None = None
     image_gen_prompt: str | None = None
     min_level: int | None = None
+    creature_type: str | None = None
 
 
 class EnemyDeleteReq(BaseModel):
@@ -1902,6 +1906,8 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             drop_chance=req.drop_chance,
             note=req.note,
             is_active=req.is_active,
+            min_level=req.min_level,
+            creature_type=req.creature_type,
         )
         return {"item": item}
     except ValueError as e:
@@ -1938,6 +1944,11 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             raise HTTPException(status_code=422, detail="loot_table_key must reference an existing loot table") from None
         if str(e) == "invalid_drop_chance":
             raise HTTPException(status_code=422, detail="invalid_drop_chance") from None
+        if str(e) == "invalid_creature_type":
+            raise HTTPException(
+                status_code=422,
+                detail="creature_type must be empty or one of: undead, demon, rdzen",
+            ) from None
         raise HTTPException(status_code=422, detail="Invalid enemy payload") from None
 
 
@@ -1970,6 +1981,7 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             image_url_raw=req.image_url_raw,
             image_gen_prompt=req.image_gen_prompt,
             min_level=req.min_level,
+            creature_type=req.creature_type,
         )
         return {"item": item}
     except KeyError:
@@ -2008,6 +2020,11 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             raise HTTPException(status_code=422, detail="loot_table_key must reference an existing loot table") from None
         if str(e) == "invalid_drop_chance":
             raise HTTPException(status_code=422, detail="invalid_drop_chance") from None
+        if str(e) == "invalid_creature_type":
+            raise HTTPException(
+                status_code=422,
+                detail="creature_type must be empty or one of: undead, demon, rdzen",
+            ) from None
         raise HTTPException(status_code=422, detail="Invalid enemy payload") from None
 
 

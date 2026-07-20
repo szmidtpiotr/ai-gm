@@ -317,7 +317,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
     },
     "game_config_enemies": {
         "required": ["key", "label", "tier", "hp_base", "ac_base", "attack_bonus", "damage_dice"],
-        "optional": ["drop_chance", "loot_table_key"],
+        "optional": ["drop_chance", "loot_table_key", "creature_type"],
         "fields": {
             "key": {
                 "type": "text",
@@ -364,6 +364,17 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             "loot_table_key": {
                 "type": "text",
                 "question": "Klucz tabeli łupów (opcjonalnie, np. 'goblin_loot').",
+            },
+            # SG-7 (#1481): bramka mechaniki soli — puste = żywe stworzenie.
+            "creature_type": {
+                "type": "single_choice",
+                "question": "Czy to istota Rdzenia? (decyduje, czy działają przedmioty solne)",
+                "options": [
+                    {"label": "", "description": "Żywe stworzenie — sól nie działa"},
+                    {"label": "undead", "description": "Nieumarły"},
+                    {"label": "demon", "description": "Demon"},
+                    {"label": "rdzen", "description": "Twór Rdzenia"},
+                ],
             },
         },
     },

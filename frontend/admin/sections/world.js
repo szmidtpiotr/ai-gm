@@ -237,7 +237,7 @@ async function _loadEnemies() {
       const enc = encodeURIComponent(JSON.stringify(e));
       return `<tr data-key="${_esc(e.key)}" data-rjson="${enc}">
         <td class="col-check"><input type="checkbox"></td>
-        <td class="td-sticky td-name">${_esc(e.label||e.key)}</td>
+        <td class="td-sticky td-name">${_esc(e.label||e.key)}${CREATURE_BADGE[e.creature_type] ? ` <span title="Istota Rdzenia — działają na nią przedmioty solne">${CREATURE_BADGE[e.creature_type]}</span>` : ''}</td>
         <td data-label="Tier">${tierBadge(e.tier)}</td>
         <td class="td-mono" data-label="Min lvl" title="Minimalny poziom bohatera">${e.min_level??1}</td>
         <td class="td-mono" data-label="HP">${e.hp_base??'—'}</td>
@@ -269,11 +269,31 @@ async function deleteEnemy(key, btn) {
   }
 }
 
+// Typy obrażeń: baza + wartość rekordu (dane w bazie mają też magical/necrotic).
+const DMG_TYPE_BASE = ['physical','fire','cold','poison','magic','magical','necrotic','lightning','ice','acid','holy','dark','misc'];
+function _dmgTypeOptions(current) {
+  const cur = (current || '').trim().toLowerCase();
+  return cur && !DMG_TYPE_BASE.includes(cur) ? [...DMG_TYPE_BASE, cur] : DMG_TYPE_BASE;
+}
+
+// SG-7 (#1481): klasa istoty — bramka mechaniki soli z Siwych Grań. Puste = żywe
+// stworzenie (sól nie działa); undead/demon/rdzen = istota Rdzenia.
+const ENEMY_CREATURE_TYPES = [
+  { v: '',        t: '— żywe stworzenie (sól nie działa) —' },
+  { v: 'undead',  t: '💀 Nieumarły' },
+  { v: 'demon',   t: '😈 Demon' },
+  { v: 'rdzen',   t: '🜂 Twór Rdzenia' },
+];
+const CREATURE_BADGE = { undead: '💀', demon: '😈', rdzen: '🜂' };
+
 function openEnemyFormModal(prefillOrNull) {
   const p = typeof prefillOrNull === 'string' ? JSON.parse(decodeURIComponent(prefillOrNull)) : (prefillOrNull || {});
   const isEdit = !!p.key;
   const TIERS = ['weak','standard','elite','boss'];
-  const DMG_TYPES = ['physical','fire','cold','poison','magic','lightning'];
+  // Lista musi zawierać AKTUALNĄ wartość rekordu, inaczej select po cichu zmienia
+  // typ obrażeń na pierwszą opcję przy zwykłej edycji nazwy (#1481 poprawka).
+  const DMG_TYPES = _dmgTypeOptions(p.damage_type);
+  const CREATURE_TYPES = ENEMY_CREATURE_TYPES;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
   overlay.onclick = ev => { if (ev.target === overlay) overlay.remove(); };
@@ -292,6 +312,10 @@ function openEnemyFormModal(prefillOrNull) {
         <div class="form-field"><label class="form-label" title="Minimalny poziom bohatera wymagany do spotkania">Min lvl</label><input id="ef-minlvl" class="form-input mono" type="number" min="1" max="20" value="${p.min_level??1}" /></div>
         <div class="form-field"><label class="form-label">Typ dmg</label>
           <select id="ef-dmgtype" class="form-select">${DMG_TYPES.map(t=>`<option value="${t}"${p.damage_type===t?' selected':''}>${t}</option>`).join('')}</select>
+        </div>
+        <div class="form-field form-full"><label class="form-label" title="Decyduje, czy działają przedmioty solne z Siwych Grań (krąg soli, solona klinga)">Klasa istoty (sól)</label>
+          <select id="ef-creature" class="form-select">${CREATURE_TYPES.map(c=>`<option value="${c.v}"${(p.creature_type||'')===c.v?' selected':''}>${c.t}</option>`).join('')}</select>
+          <span style="font-size:0.7rem;color:var(--t3);margin-top:4px">Puste = żywe stworzenie — sól nie robi mu nic. Istota Rdzenia: krąg soli nie wpuszcza jej do zwarcia, solona klinga zadaje jej +1k4.</span>
         </div>
         <div class="form-field"><label class="form-label">HP bazowe</label><input id="ef-hp" class="form-input mono" type="number" value="${p.hp_base??''}" /></div>
         <div class="form-field"><label class="form-label">AC bazowe</label><input id="ef-ac" class="form-input mono" type="number" value="${p.ac_base??''}" /></div>
@@ -340,8 +364,10 @@ async function saveEnemyForm(existingKey, btn) {
   const key = existingKey || g('ef-key')?.value?.trim();
   if (!key) { _showToast('Wypełnij klucz.', 'error'); return; }
   const body = {
-    label, key,
+    label,
     tier: g('ef-tier')?.value,
+    // SG-7 (#1481): '' = wróg jest żywym stworzeniem (backend zapisuje NULL).
+    creature_type: g('ef-creature')?.value ?? '',
     min_level: parseInt(g('ef-minlvl')?.value) || 1,
     damage_type: g('ef-dmgtype')?.value,
     hp_base: parseInt(g('ef-hp')?.value) || null,
@@ -368,9 +394,10 @@ async function saveEnemyForm(existingKey, btn) {
   btn.disabled = true; btn.textContent = '⏳';
   try {
     if (existingKey) {
+      // PATCH nie przyjmuje `key` (extra="forbid") — klucz jedzie w URL.
       await apiFetch(`/api/admin/enemies/${existingKey}`, { method: 'PATCH', body: JSON.stringify(body) });
     } else {
-      await apiFetch('/api/admin/enemies', { method: 'POST', body: JSON.stringify(body) });
+      await apiFetch('/api/admin/enemies', { method: 'POST', body: JSON.stringify({ ...body, key }) });
     }
     btn.closest('.modal-overlay').remove();
     _loaded.delete('enemies');
@@ -959,7 +986,10 @@ async function savePendingNpc(key, btn) {
 function openPendingEnemyEditModal(item) {
   const p = typeof item === 'string' ? JSON.parse(item) : item;
   const TIERS = ['weak','standard','elite','boss'];
-  const DMG_TYPES = ['physical','fire','cold','poison','magic','lightning'];
+  // Lista musi zawierać AKTUALNĄ wartość rekordu, inaczej select po cichu zmienia
+  // typ obrażeń na pierwszą opcję przy zwykłej edycji nazwy (#1481 poprawka).
+  const DMG_TYPES = _dmgTypeOptions(p.damage_type);
+  const CREATURE_TYPES = ENEMY_CREATURE_TYPES;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
   overlay.innerHTML = `<div class="modal-box" style="max-width:580px">
@@ -971,6 +1001,9 @@ function openPendingEnemyEditModal(item) {
       </div>
       <div class="form-row"><label class="form-label">Typ dmg</label>
         <select id="pe-dmgtype" class="field-input">${DMG_TYPES.map(t=>`<option value="${t}"${p.damage_type===t?' selected':''}>${t}</option>`).join('')}</select>
+      </div>
+      <div class="form-row" style="grid-column:1/-1"><label class="form-label" title="Decyduje, czy działają przedmioty solne z Siwych Grań">Klasa istoty (sól)</label>
+        <select id="pe-creature" class="field-input">${CREATURE_TYPES.map(c=>`<option value="${c.v}"${(p.creature_type||'')===c.v?' selected':''}>${c.t}</option>`).join('')}</select>
       </div>
       <div class="form-row"><label class="form-label">HP bazowe</label><input id="pe-hp" class="field-input" type="number" value="${p.hp_base??''}"></div>
       <div class="form-row"><label class="form-label" style="color:var(--warning)">AC bazowe *</label><input id="pe-ac" class="field-input" type="number" value="${p.ac_base??''}" placeholder="wymagane (8–18)"></div>
@@ -1023,6 +1056,7 @@ async function savePendingEnemy(key, btn) {
     dex_modifier: parseInt(g('pe-dex')?.value) || 0,
     damage_die: dieVal,
     min_level: parseInt(g('pe-minlvl')?.value) || 1,
+    creature_type: g('pe-creature')?.value ?? '',
     xp_award: parseInt(g('pe-xp')?.value) || 0,
     drop_chance: g('pe-drop')?.value !== '' ? parseInt(g('pe-drop').value)/100 : null,
     description: g('pe-desc')?.value?.trim() || null,

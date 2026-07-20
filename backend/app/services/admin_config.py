@@ -72,7 +72,14 @@ ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
 ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative", "relic"}
 ALLOWED_WEAPON_TYPES = {"melee", "ranged", "spell"}
 ALLOWED_TARGETING_TYPES = {"single", "aoe_radius"}
-ALLOWED_DAMAGE_TYPES = {"physical", "magic", "fire", "poison", "misc"}
+# SG-7 (#1481, poprawka przy okazji): lista była węższa niż DANE w bazie — wrogowie
+# z `cold`, `magical` i `necrotic` (12 rekordów) nie dawali się zapisać z panelu (422
+# przy KAŻDEJ edycji, nie tylko przy zmianie typu obrażeń). Silnik traktuje typ jako
+# etykietę opisową, więc allowlista pokrywa teraz to, czego gra realnie używa.
+ALLOWED_DAMAGE_TYPES = {
+    "physical", "magic", "magical", "fire", "cold", "ice", "poison", "necrotic",
+    "lightning", "acid", "psychic", "holy", "dark", "rdzen", "misc",
+}
 ALLOWED_TIERS = {"weak", "standard", "elite", "boss"}
 ALLOWED_EFFECT_TYPES = {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff", "misc"}
 ALLOWED_EFFECT_TARGETS = {"self", "ally", "any"}
@@ -642,6 +649,20 @@ def _validate_tier(v: str) -> str:
     return t
 
 
+#: SG-7 (#1481): klasa istoty dla mechaniki soli. Puste = zwykłe, żywe stworzenie
+#: (sól nie działa) — to domyślny stan każdego wroga.
+ALLOWED_CREATURE_TYPES = {"undead", "demon", "rdzen"}
+
+
+def _validate_creature_type(v: str | None) -> str | None:
+    t = (v or "").strip().lower()
+    if not t:
+        return None
+    if t not in ALLOWED_CREATURE_TYPES:
+        raise ValueError("invalid_creature_type")
+    return t
+
+
 def _validate_drop_chance(v: float | None, *, current: float | None = None) -> float:
     if v is None:
         return float(current if current is not None else 1.0)
@@ -1142,7 +1163,7 @@ def list_enemies() -> list[dict]:
                description, is_active, locked_at, created_at, updated_at, loot_tier,
                image_url, image_url_raw, image_gen_prompt,
                COALESCE(min_level, 1) AS min_level, max_level,
-               terrain_tags, world_scope, review_status
+               terrain_tags, world_scope, review_status, creature_type
         FROM game_config_enemies
         ORDER BY key ASC
         """
@@ -1843,9 +1864,14 @@ def create_enemy(
     dex_modifier: int = 0,
     skills_json: dict[str, int] | None = None,
     stats_json: dict[str, int] | None = None,
+    min_level: int | None = None,
+    creature_type: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_drop = _validate_drop_chance(drop_chance)
+    # SG-7 (#1481): klasa istoty — puste = żywe stworzenie, sól nie działa.
+    safe_creature_type = _validate_creature_type(creature_type)
+    safe_min_level = max(1, int(min_level)) if min_level is not None else 1
     safe_damage_die = _validate_damage_die(damage_die)
     if hp_base < 1:
         raise ValueError("invalid_hp_base")
@@ -1895,8 +1921,8 @@ def create_enemy(
                 key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                 tier, attacks_per_turn, damage_bonus, damage_type,
                 xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
-                description, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+                description, is_active, min_level, creature_type, locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1919,6 +1945,8 @@ def create_enemy(
                 note,
                 description,
                 1 if is_active else 0,
+                safe_min_level,
+                safe_creature_type,
             ),
         )
         new_row = _fetch_one(
@@ -1927,7 +1955,8 @@ def create_enemy(
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
-                   description, is_active, locked_at, created_at, updated_at
+                   description, is_active, locked_at, created_at, updated_at,
+                   COALESCE(min_level, 1) AS min_level, creature_type
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),
@@ -1983,6 +2012,7 @@ def update_enemy(
     image_url_raw: str | None = None,
     image_gen_prompt: str | None = None,
     min_level: int | None = None,
+    creature_type: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1996,7 +2026,7 @@ def update_enemy(
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at,
                    image_url, image_url_raw, image_gen_prompt,
-                   COALESCE(min_level, 1) AS min_level
+                   COALESCE(min_level, 1) AS min_level, creature_type
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),
@@ -2062,6 +2092,12 @@ def update_enemy(
         final_image_url_raw = image_url_raw if image_url_raw is not None else current.get("image_url_raw")
         final_image_gen_prompt = image_gen_prompt if image_gen_prompt is not None else current.get("image_gen_prompt")
         final_min_level = max(1, int(min_level)) if min_level is not None else int(current.get("min_level") or 1)
+        # SG-7 (#1481): pusty string = świadome wyzerowanie klasy (wróg wraca do „żywy").
+        final_creature_type = (
+            _validate_creature_type(creature_type)
+            if creature_type is not None
+            else current.get("creature_type")
+        )
 
         conn.execute(
             """
@@ -2070,7 +2106,7 @@ def update_enemy(
                 tier = ?, attacks_per_turn = ?, damage_bonus = ?, damage_type = ?,
                 xp_award = ?, conditions_immune = ?, skills_json = ?, stats_json = ?, loot_table_key = ?, drop_chance = ?, note = ?,
                 description = ?, is_active = ?, image_url = ?, image_url_raw = ?, image_gen_prompt = ?,
-                min_level = ?,
+                min_level = ?, creature_type = ?,
                 updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -2098,6 +2134,7 @@ def update_enemy(
                 final_image_url_raw,
                 final_image_gen_prompt,
                 final_min_level,
+                final_creature_type,
                 safe_key,
             ),
         )
@@ -2109,7 +2146,7 @@ def update_enemy(
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at,
                    image_url, image_url_raw, image_gen_prompt,
-                   COALESCE(min_level, 1) AS min_level
+                   COALESCE(min_level, 1) AS min_level, creature_type
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),
