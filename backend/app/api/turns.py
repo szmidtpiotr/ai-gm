@@ -967,7 +967,7 @@ def _run_narrative_travel(
             _to = (int(_dst["q"]), int(_dst["r"]))
             _label = target_label or location_key
             if _pm4_maybe_prompt(conn, campaign_id, _from, _to, _label, _flags):
-                _terrain = analyze_route(_from, _to, conn).get("terrain_label", "dzicz")
+                _terrain = analyze_route(_from, _to, conn, campaign_id=campaign_id).get("terrain_label", "dzicz")
                 try:
                     _data_q = json.loads(clean_response)
                 except Exception:

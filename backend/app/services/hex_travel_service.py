@@ -43,31 +43,41 @@ def hex_neighbors(q: int, r: int) -> list[tuple[int, int]]:
 
 # ── Graph loading ─────────────────────────────────────────────────────────────
 
-def _load_live_regions(conn: sqlite3.Connection) -> set[str]:
-    """Return set of region keys that are 'live' (passable).
+def _load_live_regions(
+    conn: sqlite3.Connection,
+    include_coming: bool = False,
+) -> set[str]:
+    """Return set of region keys that are passable.
+
+    Default = 'live' only. #1478: ``include_coming`` (tester) also lets 'coming'
+    regions through so a new kraina can be play-tested before it goes public;
+    'locked' is never passable.
 
     Falls back to {'kresy'} if the world_regions table is absent (pre-RM1 DB
     or a test fixture without it) — keeps pathfinding working on legacy schemas.
     """
+    from app.services.world_region_service import passable_region_keys
     try:
-        rows = conn.execute(
-            "SELECT key FROM world_regions WHERE status = 'live'"
-        ).fetchall()
+        keys = passable_region_keys(conn, include_coming=include_coming)
     except sqlite3.OperationalError:
         return {DEFAULT_REGION}
-    if not rows:
+    if not keys:
         return {DEFAULT_REGION}
-    return {r["key"] for r in rows}
+    return keys
 
 
-def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
+def _load_hex_graph(
+    conn: sqlite3.Connection,
+    include_coming: bool = False,
+) -> dict[tuple[int, int], dict]:
     """
     Load world_hexes and hex_teleport_connections into an adjacency-aware dict.
     Only hexes in 'live' regions are included — coming/locked regions are impassable.
+    #1478: ``include_coming`` (tester) also admits 'coming' regions; 'locked' never.
     PT8 #1118: hex types with is_passable=0 (water, sea) are excluded from the graph.
     Returns: {(q, r): {hex_data + 'teleport_edges': [...]}}
     """
-    live_regions = _load_live_regions(conn)
+    live_regions = _load_live_regions(conn, include_coming=include_coming)
 
     # PT8: load passable hex types; None = fallback (pre-PT8 schema — allow all)
     passable_types: set[str] | None = None
@@ -743,7 +753,12 @@ def resolve_chain_travel(
           "hex_data": dict,              # data for arrived_hex
         }
     """
-    hexes = _load_hex_graph(conn)
+    # #1478 — tester ma wstęp do krain 'coming' (poczekalnia), żeby przetestować
+    # nową krainę przed udostępnieniem graczom. 'locked' zamknięte dla wszystkich.
+    from app.services.world_region_service import campaign_viewer_is_tester
+    _tester = campaign_viewer_is_tester(conn, campaign_id)
+
+    hexes = _load_hex_graph(conn, include_coming=_tester)
     hex_type_cfg = _load_hex_type_config(conn)
 
     # #1411 — rzeki/woda są poza grafem (is_passable=0). Jeśli bohater STOI na takim
@@ -881,7 +896,7 @@ def resolve_chain_travel(
         # #1039: wspólny helper — payload niesie error_code/region_label, żeby ŻAR
         # pokazał dedykowany modal zamiast po cichu zignorować ok:false.
         from app.services.world_region_service import region_block_for_hex
-        _region_block = region_block_for_hex(conn, to_hex[0], to_hex[1])
+        _region_block = region_block_for_hex(conn, to_hex[0], to_hex[1], include_coming=_tester)
         if _region_block:
             return {
                 "ok": False,
@@ -2229,6 +2244,7 @@ def estimate_route_hours(
     to_hex: tuple[int, int],
     conn: sqlite3.Connection,
     route_mode: str = "direct",
+    campaign_id: int | None = None,
 ) -> dict[str, Any]:
     """Realny szacunek podróży = suma `travel_hours` po znalezionej trasie (bez
     ruchu/commitu). Panel podróży pokazywał heurystykę `perHex×dist` (teren CELU),
@@ -2236,7 +2252,11 @@ def estimate_route_hours(
     dist = hex_distance(from_hex[0], from_hex[1], to_hex[0], to_hex[1])
     out: dict[str, Any] = {"dist": dist, "hours": float(dist) * 4.0}
     try:
-        hexes = _load_hex_graph(conn)
+        # #1478 — ta sama widoczność krain co realna podróż, inaczej tester widzi
+        # „brak trasy" do krainy, do której za chwilę wejdzie.
+        from app.services.world_region_service import campaign_viewer_is_tester
+        _tester = campaign_id is not None and campaign_viewer_is_tester(conn, campaign_id)
+        hexes = _load_hex_graph(conn, include_coming=_tester)
         cfg = _load_hex_type_config(conn)
         path = find_path(from_hex, to_hex, hexes, cfg, route_mode=route_mode)
         if not path or len(path) <= 1:
@@ -2265,6 +2285,7 @@ def analyze_route(
     from_hex: tuple[int, int],
     to_hex: tuple[int, int],
     conn: sqlite3.Connection,
+    campaign_id: int | None = None,
 ) -> dict[str, Any]:
     """PM4 #1223: decide whether the direct/road question is worth asking.
 
@@ -2278,7 +2299,11 @@ def analyze_route(
     dist = hex_distance(from_hex[0], from_hex[1], to_hex[0], to_hex[1])
     out = {"dist": dist, "road_alt": False, "terrain_label": "dzicz"}
     try:
-        hexes = _load_hex_graph(conn)
+        # #1478 — ta sama widoczność krain co realna podróż, inaczej tester widzi
+        # „brak trasy" do krainy, do której za chwilę wejdzie.
+        from app.services.world_region_service import campaign_viewer_is_tester
+        _tester = campaign_id is not None and campaign_viewer_is_tester(conn, campaign_id)
+        hexes = _load_hex_graph(conn, include_coming=_tester)
         cfg = _load_hex_type_config(conn)
         path = find_path(from_hex, to_hex, hexes, cfg, route_mode="direct")
         if not path or len(path) <= 1:

@@ -328,7 +328,7 @@ def _pm4_maybe_prompt(
     if flags.get("pending_travel_choice"):
         return None
     from app.services.hex_travel_service import analyze_route, ROAD_CHOICE_MIN_HEXES
-    info = analyze_route(from_hex, to_hex, conn)
+    info = analyze_route(from_hex, to_hex, conn, campaign_id=campaign_id)
     if info["dist"] <= ROAD_CHOICE_MIN_HEXES or not info["road_alt"]:
         return None
     flags["pending_travel_choice"] = {

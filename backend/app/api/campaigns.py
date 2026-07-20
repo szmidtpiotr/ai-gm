@@ -1323,6 +1323,7 @@ def travel_estimate(campaign_id: int, to_q: int, to_r: int, mode: str = "direct"
         est = estimate_route_hours(
             (int(cur["q"]), int(cur["r"])), (int(to_q), int(to_r)), conn,
             route_mode=("road" if mode == "road" else "direct"),
+            campaign_id=campaign_id,  # #1478 — tester widzi trasę do krainy 'coming'
         )
         # #1405: dołóż ścieżkę + per-hex koszty i bieżący budżet marszu, żeby front
         # narysował podgląd trasy i oznaczył heks „tu dziś obóz" (dzienny cap).

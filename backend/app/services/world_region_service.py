@@ -26,6 +26,42 @@ REGION_STATUSES = ("live", "coming", "locked")
 BLOCKING_STATUSES = ("coming", "locked")
 
 
+def campaign_viewer_is_tester(conn: sqlite3.Connection, campaign_id: int) -> bool:
+    """#1478 — czy właściciel kampanii ma flagę testera (``users.is_tester``).
+
+    Tester dostaje wstęp do krain ``coming`` (poczekalnia), żeby przetestować je
+    przed udostępnieniem graczom. ``locked`` zostaje zamknięte dla wszystkich.
+    Każda niepewność (brak kampanii, brak kolumny, stary schemat) → False:
+    podwyższone uprawnienia nadaje się jawnie, nigdy przez pomyłkę.
+    """
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(u.is_tester, 0) AS is_tester FROM campaigns c "
+            "JOIN users u ON u.id = c.owner_user_id WHERE c.id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+    except (sqlite3.Error, TypeError, ValueError):
+        return False
+    return bool(row and int(row["is_tester"] or 0))
+
+
+def passable_region_keys(
+    conn: sqlite3.Connection,
+    include_coming: bool = False,
+) -> set[str]:
+    """Klucze krain, przez które wolno podróżować.
+
+    Domyślnie same ``live``. ``include_coming`` (tester) dokłada ``coming``.
+    ``locked`` nie wchodzi do puli nigdy.
+    """
+    wanted = ("live", "coming") if include_coming else ("live",)
+    placeholders = ",".join("?" * len(wanted))
+    rows = conn.execute(
+        f"SELECT key FROM world_regions WHERE status IN ({placeholders})", wanted
+    ).fetchall()
+    return {r["key"] for r in rows}
+
+
 def list_region_rows(conn: sqlite3.Connection) -> list[dict]:
     """Wszystkie krainy ze statusem — admin preview (live + coming + locked)."""
     return [dict(r) for r in conn.execute(
@@ -81,12 +117,20 @@ def reset_region_status(conn: sqlite3.Connection, key: str) -> dict:
     }
 
 
-def region_block_for_hex(conn: sqlite3.Connection, q: int, r: int) -> dict | None:
+def region_block_for_hex(
+    conn: sqlite3.Connection,
+    q: int,
+    r: int,
+    include_coming: bool = False,
+) -> dict | None:
     """Blokada travel dla heksa w niedostępnej krainie, albo None.
 
     None znaczy „ta bramka nie ma nic do powiedzenia" — heks jest w krainie
     ``live`` albo w ogóle nie istnieje (inne komunikaty travel go obsłużą).
+    ``include_coming=True`` (tester, #1478) przepuszcza ``coming``; ``locked``
+    blokuje zawsze.
     """
+    blocking = ("locked",) if include_coming else BLOCKING_STATUSES
     try:
         row = conn.execute(
             "SELECT wh.region, wr.status, wr.label FROM world_hexes wh "
@@ -96,7 +140,7 @@ def region_block_for_hex(conn: sqlite3.Connection, q: int, r: int) -> dict | Non
         ).fetchone()
     except sqlite3.Error:
         return None
-    if not row or row["status"] not in BLOCKING_STATUSES:
+    if not row or row["status"] not in blocking:
         return None
     label = row["label"] or row["region"]
     return {
