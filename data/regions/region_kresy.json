@@ -13,7 +13,6 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
-   "location_key": "issue1105_tundra_mrozu_990001105",
    "created_by_gm": 0
   },
   {
@@ -8153,8 +8152,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "test_flow_1782999416.6444147"
+   "encounter_chance": 0.15
   },
   {
    "q": 21,
@@ -8871,7 +8869,6 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
-   "location_key": "issue1105_origin_990001105",
    "created_by_gm": 0
   },
   {

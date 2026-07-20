@@ -1,13 +1,5 @@
 [
   {
-    "id": 1,
-    "location_key": "test_inn_u31",
-    "npc_key": "marta_u31",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
     "id": 2,
     "location_key": "locked_inn_u31",
     "npc_key": "ghost_npc_u31",

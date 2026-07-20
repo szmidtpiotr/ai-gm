@@ -66,18 +66,34 @@ CONTENT_TABLES = [
 # locations additionally carry source_campaign_id. The filter below is applied
 # to BOTH the snapshot SELECT and the pre-insert DELETE, so any campaign /
 # gameplay row on the target is neither exported to git nor deleted on apply.
+# #1382/#941 — test-suite pollution (test_*, __test_*, dup_test_*, issue1105_* …) is
+# not canon. Klucze z prefiksem numeru issue (`issue1105_gospoda_szlaku_990001105`)
+# przeciekły do git mimo filtra na `test_` — stąd wzorzec GLOB 'issue[0-9]*' (#1480).
+# Trzymaj ten zestaw wzorców zgodny z JUNK_PREDICATE w scripts/cleanup_test_locations.py.
+def _not_junk(col):
+    return (
+        f"{col} NOT LIKE 'test\\_%' ESCAPE '\\' "
+        f"AND {col} NOT LIKE '\\_\\_test%' ESCAPE '\\' "
+        f"AND {col} NOT LIKE '%\\_test\\_%' ESCAPE '\\' "
+        f"AND {col} NOT GLOB 'issue[0-9]*'"
+    )
+
+
 CANON_FILTERS = {
-    # #1382/#941 — test-suite pollution (test_*, __test_*, dup_test_* …) is not
-    # canon: excluded from snapshot (never lands in git) AND from the pre-insert
-    # DELETE (junk rows on the target are left alone; cleanup is a separate task).
+    # Filtr działa na snapshot SELECT ORAZ na pre-insert DELETE, więc śmieć nigdy nie
+    # trafia do gita, a wiersze śmieciowe na targecie nie są ruszane (sprzątanie to
+    # osobne zadanie: scripts/cleanup_test_locations.py).
     "game_locations": (
         "source_campaign_id IS NULL "
         "AND (review_status IS NULL OR review_status != 'pending_review') "
-        "AND key NOT LIKE 'test\\_%' ESCAPE '\\' "
-        "AND key NOT LIKE '\\_\\_test%' ESCAPE '\\' "
-        "AND key NOT LIKE '%\\_test\\_%' ESCAPE '\\'"
+        "AND " + _not_junk("key")
     ),
     "npcs": "(review_status IS NULL OR review_status != 'pending_review')",
+    # Przypisania wskazują na lokację kluczem — bez filtra do gita trafiał
+    # np. location_npc_assignments → test_inn_u31 (#1480).
+    "location_npc_assignments": _not_junk("location_key"),
+    "location_enemy_assignments": _not_junk("location_key"),
+    "npc_locations": _not_junk("location_key"),
 }
 
 

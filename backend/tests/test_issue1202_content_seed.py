@@ -240,6 +240,31 @@ def test_sync_and_lib_table_lists_match():
 
 
 def test_canon_filters_cover_only_dual_tables():
-    assert set(csl.CANON_FILTERS) == {"npcs", "game_locations"}
+    # #1480 — filtr rozszerzony o tabele przypisań: wskazują lokację kluczem, więc
+    # bez filtra przypisanie do lokacji-śmiecia (test_inn_u31) trafiało do gita.
+    assert set(csl.CANON_FILTERS) == {
+        "npcs",
+        "game_locations",
+        "location_npc_assignments",
+        "location_enemy_assignments",
+        "npc_locations",
+    }
     for t in csl.CANON_FILTERS:
         assert t in csl.CONTENT_TABLES
+
+
+def test_canon_filter_excludes_issue_prefixed_junk():
+    """#1480 — klucze `issue1105_*` przeciekły do gita mimo filtra na `test_`."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE game_locations (key TEXT, source_campaign_id INT, review_status TEXT)")
+    conn.executemany(
+        "INSERT INTO game_locations VALUES (?,NULL,NULL)",
+        [("tundra_mrozu",), ("issue1105_tundra_mrozu_990001105",), ("test_flow_123",),
+         ("__test_camp_1__",), ("dup_test_9",)],
+    )
+    rows = conn.execute(
+        f"SELECT key FROM game_locations WHERE {csl.CANON_FILTERS['game_locations']}"
+    ).fetchall()
+    assert [r[0] for r in rows] == ["tundra_mrozu"]
