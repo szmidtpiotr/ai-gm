@@ -2280,7 +2280,8 @@
    "hex_type": "tundra",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.2
+   "encounter_chance": 0.2,
+   "location_key": "tundra_mrozu"
   },
   {
    "q": 27,

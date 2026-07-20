@@ -108,15 +108,43 @@ def _template_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "narrative_tags": _decode(row["narrative_tags"], []),
         "weight": int(row["weight"]),
         "is_active": bool(row["is_active"]),
+        "region_scope": _template_regions(row),
     }
 
 
-def list_templates(conn: sqlite3.Connection, active_only: bool = True) -> list[dict[str, Any]]:
+def _template_regions(row: sqlite3.Row) -> list[str]:
+    """SG-9 (#1481): krainy, w których szablon może wypaść. Pusto = wszędzie."""
+    try:
+        raw = row["region_scope"]
+    except (IndexError, KeyError):
+        return []  # stara baza sprzed migracji — traktujemy jak globalny
+    val = _decode(raw, [])
+    if isinstance(val, str):
+        val = [v.strip() for v in val.split(",") if v.strip()]
+    return [str(v).strip() for v in (val or []) if str(v).strip()]
+
+
+def list_templates(
+    conn: sqlite3.Connection,
+    active_only: bool = True,
+    region: str | None = None,
+) -> list[dict[str, Any]]:
+    """Szablony wydarzeń. Z `region` — tylko te dopuszczone w tej krainie.
+
+    SG-9 (#1481): bez filtra „Głębokie Bicie" (stukanie w żyle Rdzenia pod
+    Siwymi Graniami) wypadałoby także w Kresach. Szablon bez `region_scope`
+    zostaje uniwersalny, więc stare dane działają bez zmian.
+    """
     sql = "SELECT * FROM game_config_event_templates"
     if active_only:
         sql += " WHERE is_active = 1"
     sql += " ORDER BY type, key"
-    return [_template_row_to_dict(r) for r in conn.execute(sql).fetchall()]
+    rows = conn.execute(sql).fetchall()
+    if region:
+        want = _norm_region(region)
+        rows = [r for r in rows
+                if not _template_regions(r) or want in _template_regions(r)]
+    return [_template_row_to_dict(r) for r in rows]
 
 
 def get_template(conn: sqlite3.Connection, template_key: str) -> dict[str, Any] | None:
@@ -255,7 +283,7 @@ def roll_event(
     region = _norm_region(region)
     if get_active_event(conn, region) is not None:
         return None
-    templates = list_templates(conn, active_only=True)
+    templates = list_templates(conn, active_only=True, region=region)
     if not templates:
         return None
     weights = [max(1, int(t.get("weight") or 1)) for t in templates]

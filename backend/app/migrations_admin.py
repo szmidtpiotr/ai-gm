@@ -3978,6 +3978,64 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('las_iglasty', 'Las iglasty', 2.0, 0.22, '#1f4536', '🌲', 1, 'biome', 0.15, 0.20)
     """, "vSG1-siwe-granie-hex-types")
 
+    # SG-9 #1481/#1193 — wydarzenia regionalne przypisane do krainy.
+    # Bez `region_scope` roll_event losował z całej puli szablonów, więc „Głębokie
+    # Bicie" (stukanie w żyle Rdzenia pod Graniami) mogło wypaść w Kresach. Pusty
+    # scope = szablon uniwersalny, czyli wszystkie dotychczasowe działają bez zmian.
+    _exec(
+        "ALTER TABLE game_config_event_templates ADD COLUMN region_scope TEXT",
+        "vSG9-event-templates-region-scope",
+    )
+    # Cztery wydarzenia Siwych Grań. modifiers_json = ta sama cienka warstwa
+    # mnożników co w #1193; WARTOŚCI STARTOWE (Numbers Policy — do strojenia).
+    _exec("""
+        INSERT OR IGNORE INTO game_config_event_templates
+            (key, type, label, duration_days_min, duration_days_max, modifiers_json,
+             narrative_tags, weight, is_active, created_by, region_scope)
+        VALUES
+        ('glebokie_bicie', 'glebokie_bicie', 'Głębokie Bicie', 3, 6,
+         '{"encounter_chance_mult":1.4,"badge":"🔨"}',
+         '["Stukanie z głębi przybrało na sile — słychać je w każdej sztolni, a górnicy wychodzą przed zmianą.","Po zmroku ludzie trzymają się blisko ognia; coś w skale nie chce ucichnąć."]',
+         9, 1, 'seed', '["siwe_granie"]'),
+        ('solna_blokada', 'solna_blokada', 'Karawana solna nie dotarła', 3, 6,
+         '{"shop_price_mult":{"consumable":1.4},"badge":"🧂"}',
+         '["Karawana z solą nie dojechała na czas — na targu sól sprzedaje się na szczypty, po cenie srebra.","Górnicy schodzą bez woreczka u pasa i modlą się, żeby nie było im potrzebny."]',
+         7, 1, 'seed', '["siwe_granie"]'),
+        ('bialy_wiatr', 'bialy_wiatr', 'Biały Wiatr', 2, 5,
+         '{"travel_hours_mult":1.35,"badge":"🌬"}',
+         '["Z lodowca schodzi biały wiatr — zamieć zasypuje trakty i zabiera widoczność na wyciągnięcie ręki.","Przewodnicy odmawiają wyjścia z osady, dopóki nie ucichnie."]',
+         6, 1, 'seed', '["siwe_granie"]'),
+        ('zjazd_rodow', 'zjazd_rodow', 'Zjazd Rodów', 2, 4,
+         '{"shop_price_mult":{"*":0.85},"badge":"⚒"}',
+         '["W Kamiennym Grodzie trwa zjazd rodów — Sala Rodów pęka w szwach, a na targu towar schodzi taniej niż zwykle.","Przy stołach więcej się mówi niż zwykle — i więcej da się usłyszeć."]',
+         8, 1, 'seed', '["siwe_granie"]')
+    """, "vSG9-siwe-granie-event-templates")
+
+    # SG-9 #1481 — domyślne pule spotkań per teren jako DANE, nie kod.
+    # Dotąd siedziały w `_WORLD_ENCOUNTER_FALLBACK_POOLS` w hex_travel_service, więc
+    # zmiana „kto zaczepia na lodowcu" wymagała wydania kodu. Kolejność źródeł:
+    # pula na heksie → ta kolumna → stałe w kodzie (dla baz sprzed migracji).
+    _exec(
+        "ALTER TABLE hex_type_config ADD COLUMN default_encounter_pool TEXT",
+        "vSG9-hex-type-default-pool",
+    )
+    # Trzy nowe typy występują wyłącznie w Siwych Graniach, więc pula terenu jest
+    # tu de facto pulą krainy. `tundra` istnieje też w Kresach (42 heksy) — dlatego
+    # dostaje zwierzynę i zbójów, a nie istoty Rdzenia. Poziomy wrogów dobrane pod
+    # skalowanie silnika: pielgrzym min_level 2, widmo 3. WARTOŚCI STARTOWE.
+    for _ht, _pool in (
+        ("lodowiec",    '["widmo_lodowe", "zamarzniety_pielgrzym"]'),
+        ("siarka",      '["wynaturzona_bestia", "ghoul", "unknown_attacker"]'),
+        ("las_iglasty", '["wolf", "goblin", "bandit"]'),
+        ("tundra",      '["wolf", "bandit"]'),
+    ):
+        _exec(
+            "UPDATE hex_type_config SET default_encounter_pool = '%s' "
+            "WHERE hex_type = '%s' AND (default_encounter_pool IS NULL OR default_encounter_pool = '')"
+            % (_pool, _ht),
+            "vSG9-pool-%s" % _ht,
+        )
+
     logger.info("v2_schema_migrations_complete")
 
 

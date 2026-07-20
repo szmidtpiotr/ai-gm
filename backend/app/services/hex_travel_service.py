@@ -301,11 +301,38 @@ _WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
 _WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
 
 
-def _pick_encounter_enemy(hex_data: dict) -> str | None:
+def terrain_default_pool(conn: sqlite3.Connection | None, hex_type: str) -> list[str]:
+    """SG-9 (#1481): domyślna pula terenu z DANYCH (`hex_type_config`), nie z kodu.
+
+    Kolejność: kolumna `default_encounter_pool` → stałe niżej → pula awaryjna.
+    Brak kolumny (baza sprzed migracji) albo brak połączenia = zachowanie sprzed
+    zmiany, więc nic się nie psuje po drodze.
+    """
+    ht = str(hex_type or "plains")
+    if conn is not None:
+        try:
+            row = conn.execute(
+                "SELECT default_encounter_pool FROM hex_type_config WHERE hex_type = ?",
+                (ht,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            row = None
+        if row is not None:
+            raw = row[0] if not isinstance(row, sqlite3.Row) else row["default_encounter_pool"]
+            if raw:
+                try:
+                    parsed = json.loads(raw) if isinstance(raw, str) else raw
+                except (TypeError, ValueError):
+                    parsed = None
+                if isinstance(parsed, list) and parsed:
+                    return [str(k) for k in parsed]
+    return _WORLD_ENCOUNTER_FALLBACK_POOLS.get(ht, _WORLD_ENCOUNTER_FALLBACK_DEFAULT)
+
+
+def _pick_encounter_enemy(hex_data: dict, conn: sqlite3.Connection | None = None) -> str | None:
     pool = hex_data.get("encounter_pool") or []
     if not pool:
-        ht = str(hex_data.get("hex_type") or "plains")
-        pool = _WORLD_ENCOUNTER_FALLBACK_POOLS.get(ht, _WORLD_ENCOUNTER_FALLBACK_DEFAULT)
+        pool = terrain_default_pool(conn, str(hex_data.get("hex_type") or "plains"))
     if not pool:
         return None
     return random.choice(pool)
@@ -1124,7 +1151,7 @@ def resolve_chain_travel(
                     "hex_label": hex_data.get("label"),
                     "atmosphere": hex_data.get("atmosphere"),
                 }
-            enemy_key = _pick_encounter_enemy(hex_data)
+            enemy_key = _pick_encounter_enemy(hex_data, conn=conn)
             if enemy_key:
                 return {
                     "enemy_key": enemy_key,
