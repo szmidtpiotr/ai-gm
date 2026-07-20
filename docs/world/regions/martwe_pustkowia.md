@@ -1,6 +1,6 @@
 # MARTWE PUSTKOWIA — rozdział krainy (baza wiedzy świata)
 
-> **Status:** design domknięty poza imionami Piętnowanych **[DO WYBORU — pula arabska]** (dyskusja z Piotrem 2026-07-20). Rozwija LORE_v1_KANON.md (sekcja 3F). Kraina rasy: **Piętnowani** (#1475 — mechanika NIEwdrożona; kraina seedowana ~równolegle z wdrażaniem rasy, gdy Piotr uruchomi etap wykonawczy).
+> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20; imiona Piętnowanych domknięte — pula alternatywna). Rozwija LORE_v1_KANON.md (sekcja 3F). Kraina rasy: **Piętnowani** (#1475 — mechanika NIEwdrożona; kraina seedowana ~równolegle z wdrażaniem rasy, gdy Piotr uruchomi etap wykonawczy).
 > Serce metafizyki świata: Rdzeń najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi.
 
 ---
@@ -80,18 +80,18 @@ Przy implementacji: wpis do **Księgi Zasad** + **wizytówki** (dział Świat) �
 
 Ludzie **[ZATWIERDZENI]**: **Greta** (szefowa Obozu Gorączki) · **Brat Ansgar** (uzdrowiciel Misji) · **Siostra Verena** (inkwizytorka-obserwatorka — antagonistka-nie-złoczyńca) · **Fabian** (agent Brata Tomasza, skup reliktów).
 
-Piętnowani **[DO WYBORU — brzmienie arabskie]** (uzasadnienie lore: koloniści z południowych prowincji Imperium — mowa południa przetrwała tylko tu; transliteracja przyjazna polskiej wymowie):
+Piętnowani **[ZATWIERDZENI — brzmienie arabskie]** (uzasadnienie lore: koloniści z południowych prowincji Imperium — mowa południa przetrwała tylko tu; transliteracja przyjazna polskiej wymowie):
 
-| Rola | Propozycja | Alternatywy |
-|---|---|---|
-| Starszy enklawy (twarz ukrycia) | **Zahir** | Raszid, Kassim |
-| Przewodniczka (twarz otwarcia) | **Samira** | Lejla, Zajna |
-| Mistrzyni solnych żniw | **Alia** | Nadira, Jasmina |
-| Kupiec, Targ Przewodników | **Nadir** | Farid, Malik |
+| Rola | Imię |
+|---|---|
+| Starszy enklawy (twarz ukrycia) | **Raszid** |
+| Przewodniczka (twarz otwarcia) | **Lejla** |
+| Mistrzyni solnych żniw | **Nadira** |
+| Kupiec, Targ Przewodników | **Farid** |
 
 ## 8. Start Piętnowanego (po wdrożeniu #1475)
 
-Whitelist startowa: default **gospoda w Solnym Progu**; wariant: Obóz Gorączki. Haki startowe: Samira vs Zahir (otwarcie/ukrycie), Siostra Verena węszy w enklawie.
+Whitelist startowa: default **gospoda w Solnym Progu**; wariant: Obóz Gorączki. Haki startowe: Lejla vs Raszid (otwarcie/ukrycie), Siostra Verena węszy w enklawie.
 
 ---
 
