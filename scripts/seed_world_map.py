@@ -34,8 +34,8 @@ _GIT_SEED = ROOT / "docs" / "world" / "world_map_seed.json"
 MIN_HEX = 50
 
 
-def dexec(container: str, sql: str, piped: bool = False):
-    cmd = ["docker", "exec"] + (["-i"] if piped else []) + [container, "sqlite3", "/data/ai_gm.db"]
+def dexec(container: str, sql: str, piped: bool = False, db: str = "/data/ai_gm.db"):
+    cmd = ["docker", "exec"] + (["-i"] if piped else []) + [container, "sqlite3", db]
     if not piped:
         cmd.append(sql)
     return subprocess.run(cmd, input=(sql if piped else None), text=True, capture_output=True)
@@ -46,10 +46,14 @@ def _row_sql(h: dict) -> str:
         return "NULL" if s is None else "'" + str(s).replace("'", "''") + "'"
 
     region = h.get("region", "kresy")
+    # Domyślne wartości muszą być zgodne z HEX_DEFAULTS w snapshot_world_map.py —
+    # snapshot pomija je w pliku, seed je tu odtwarza (round-trip 1:1).
     return (
         f"({h['q']},{h['r']},'{h.get('hex_type','plains')}',"
         f"{esc(h.get('label'))},{esc(h.get('atmosphere'))},"
-        f"{h.get('encounter_chance', 0.15)},'[]',NULL,1,1,0,{esc(region)})"
+        f"{h.get('encounter_chance', 0.15)},{esc(h.get('encounter_pool', '[]'))},"
+        f"{esc(h.get('location_key'))},{int(h.get('created_by_gm', 1))},"
+        f"{int(h.get('is_active', 1))},0,{esc(region)})"
     )
 
 
@@ -124,6 +128,8 @@ def main():
                     help="pełny wipe+reseed CAŁEJ mapy (map_level=0) — niebezpieczne")
     ap.add_argument("--yes",       action="store_true", help="pomiń interaktywne potwierdzenie --force-all")
     ap.add_argument("--container", default="ai-gm-dev-backend-1")
+    ap.add_argument("--db", default="/data/ai_gm.db",
+                    help="ścieżka DB wewnątrz kontenera (np. kopia do weryfikacji odtwarzalności)")
     a = ap.parse_args()
 
     # --force bez --region jest dwuznaczne: kiedyś oznaczało pełny wipe. Odmawiamy,
@@ -142,7 +148,8 @@ def main():
             sys.exit(1)
 
         cnt = int((dexec(a.container,
-            f"SELECT count(*) FROM world_hexes WHERE map_level=0 AND region='{a.region}';").stdout or "0").strip() or 0)
+            f"SELECT count(*) FROM world_hexes WHERE map_level=0 AND region='{a.region}';",
+            db=a.db).stdout or "0").strip() or 0)
         if cnt > 0 and not a.force:
             print(f"world_hexes ma {cnt} heksów regionu '{a.region}' — pomijam. Użyj --force by nadpisać.")
             return
@@ -153,7 +160,7 @@ def main():
             + _build_insert_sql(hexes)
             + "\nCOMMIT;"
         )
-        r = dexec(a.container, sql, piped=True)
+        r = dexec(a.container, sql, piped=True, db=a.db)
         if r.returncode != 0:
             print("BŁĄD seedowania:", r.stderr, file=sys.stderr)
             sys.exit(1)
@@ -161,7 +168,8 @@ def main():
 
     else:
         # --- Tryb stitch: wszystkie live krainy ---
-        cnt = int((dexec(a.container, "SELECT count(*) FROM world_hexes WHERE map_level=0;").stdout or "0").strip() or 0)
+        cnt = int((dexec(a.container, "SELECT count(*) FROM world_hexes WHERE map_level=0;",
+                         db=a.db).stdout or "0").strip() or 0)
         if cnt > 0 and not a.force_all:
             print(f"world_hexes ma {cnt} heksów (map_level=0) — pomijam (idempotentny seed pustej mapy). "
                   "Pełny wipe+reseed → --force-all.")
@@ -186,7 +194,7 @@ def main():
             + _build_insert_sql(hexes)
             + "\nCOMMIT;"
         )
-        r = dexec(a.container, sql, piped=True)
+        r = dexec(a.container, sql, piped=True, db=a.db)
         if r.returncode != 0:
             print("BŁĄD seedowania:", r.stderr, file=sys.stderr)
             sys.exit(1)

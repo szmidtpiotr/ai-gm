@@ -40,11 +40,17 @@ def _existing_region_meta(region_key: str) -> dict:
     return {"label": region_key, "status": "coming", "w": 50, "h": 50}
 
 
-def _query_hexes(container: str, region: str | None = None) -> list[dict]:
+# Kolumny o wartości domyślnej pomijamy w pliku (mniejszy plik, czytelny diff).
+# Seed używa dokładnie tych samych domyślnych wartości, więc round-trip jest 1:1.
+HEX_DEFAULTS = {"encounter_pool": "[]", "location_key": None, "created_by_gm": 1, "is_active": 1}
+
+
+def _query_hexes(container: str, region: str | None = None, db: str = "/data/ai_gm.db") -> list[dict]:
     where = "map_level=0" + (f" AND region='{region}'" if region else "")
     out = subprocess.run(
-        ["docker", "exec", container, "sqlite3", "-json", "/data/ai_gm.db",
-         f"SELECT q,r,hex_type,label,atmosphere,encounter_chance,region "
+        ["docker", "exec", container, "sqlite3", "-json", db,
+         f"SELECT q,r,hex_type,label,atmosphere,encounter_chance,encounter_pool,"
+         f"location_key,created_by_gm,is_active,region "
          f"FROM world_hexes WHERE {where} ORDER BY region,r,q;"],
         text=True, capture_output=True,
     )
@@ -54,10 +60,17 @@ def _query_hexes(container: str, region: str | None = None) -> list[dict]:
     return json.loads(out.stdout or "[]")
 
 
+def _strip_hex(h: dict) -> dict:
+    """Usuń 'region' (jest w top-level) i kolumny o wartości domyślnej."""
+    return {
+        k: v for k, v in h.items()
+        if k != "region" and not (k in HEX_DEFAULTS and v == HEX_DEFAULTS[k])
+    }
+
+
 def _save_region(hexes: list[dict], region_key: str) -> Path:
     meta = _existing_region_meta(region_key)
-    # Usuń region z każdego heksa (jest w top-level)
-    stripped = [{k: v for k, v in h.items() if k != "region"} for h in hexes]
+    stripped = [_strip_hex(h) for h in hexes]
     data = {
         "region": region_key,
         "label":  meta["label"],
@@ -80,7 +93,7 @@ def _save_region(hexes: list[dict], region_key: str) -> Path:
 
 
 def _save_legacy(hexes: list[dict]) -> Path:
-    stripped = [{k: v for k, v in h.items() if k != "region"} for h in hexes]
+    stripped = [_strip_hex(h) for h in hexes]
     data = {
         "name": "Kresy",
         "note": (
@@ -100,11 +113,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--region",    default=None, help="snapshot tylko tej krainy")
     ap.add_argument("--container", default="ai-gm-dev-backend-1")
+    ap.add_argument("--db", default="/data/ai_gm.db",
+                    help="ścieżka DB wewnątrz kontenera (np. kopia do weryfikacji)")
     a = ap.parse_args()
 
     if a.region:
         # --- Snapshot jednej krainy ---
-        hexes = _query_hexes(a.container, a.region)
+        hexes = _query_hexes(a.container, a.region, a.db)
         if not hexes:
             print(f"world_hexes (region={a.region}, map_level=0) puste — nic do zapisania.")
             sys.exit(1)
@@ -114,7 +129,7 @@ def main():
         print(f"Zapisano {len(hexes)} heksów (region={a.region}) → {out}. ZACOMMITUJ plik.")
     else:
         # --- Snapshot wszystkich krain (per-region) ---
-        all_hexes = _query_hexes(a.container, None)
+        all_hexes = _query_hexes(a.container, None, a.db)
         if not all_hexes:
             print("world_hexes (map_level=0) puste — nic do zapisania. Najpierw seed_world_map.py.")
             sys.exit(1)
