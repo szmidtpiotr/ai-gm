@@ -211,15 +211,18 @@ Rdzeń projektu jest zdrowy. Problemy siedzą w **warstwach historycznych, któr
 | kto jest rodzicem | **2** | numer rodzica i nazwa rodzica — kod sprawdza oba, bo numer bywa pusty |
 | czy stworzyło AI | **2** | stara flaga `ai_generated` i nowe pole „kto stworzył" |
 
-**Dowód, że to nie teoria** — trzy pytania o to samo, trzy różne odpowiedzi na żywej bazie:
+**Dowód, że to nie teoria** — trzy pytania o to samo dawały trzy różne odpowiedzi:
 
 ```
-lokacji z przełącznikiem "placed"          : 60
-lokacji z wpisanymi współrzędnymi          : 56
-heksów świata wskazujących lokację         : 54
+                                    PRZED (2026-07-21)    PO fali 0
+lokacji z przełącznikiem "placed"          60                39
+lokacji z wpisanymi współrzędnymi          56                39
+heksów świata wskazujących lokację         54                39
 ```
 
-Rozbieżność ma konkretne twarze: 11 lokacji twierdzi, że stoi na mapie, choć żaden heks ich nie zna (w tym sub-lokacje Trzech Kruków, Wołanki i Wołchynii, które **z definicji** nie powinny być „placed"), a 3 heksy świata wskazują skasowane obozowiska i rekord testowy.
+Rozbieżność miała konkretne twarze: 11 lokacji twierdziło, że stoi na mapie, choć żaden heks ich nie znał (w tym sub-lokacje Trzech Kruków, Wołanki i Wołchynii, które **z definicji** nie powinny być „placed"), a 3 heksy świata wskazywały skasowane obozowiska i rekord testowy.
+
+✅ **Naprawione w fali 0** (#1528, commit `cc27fd22`). Od tej pory reconcile przy starcie backendu nie ma czego prostować (`cleared: 0, promoted: 0`).
 
 Bug z gospodą „Pod Złamanym Rogiem" (#1524) to dokładnie ten sam mechanizm w wariancie NPC.
 
@@ -246,6 +249,7 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 
 | Fala | Co robimy | Efekt dla ciebie |
 |---|---|---|
+| **0** ✅ (#1528) | czysty kanon wiązań heks↔lokacja + bezpiecznik seeda | geografia przestaje ginąć przy reseedzie |
 | **1** (#1524) | jeden system NPC: tabela przypisań = prawda, lista na karcie = automatyczna kopia, stara tabela skasowana | gospodarze przestają znikać i dublować się |
 | **2** | jedna prawda na informację: kasujemy `placement`, `ai_generated`, jeden rodzic, 3 legalne statusy | znikają rozjazdy 60/56/54 |
 | **3** | jedne drzwi: wszystkie 14 ścieżek przez jedną funkcję stemplującą flagi tak samo | koniec lokacji w limbo |
@@ -276,6 +280,8 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 
 ### Zasady bezpieczeństwa danych
 - **Git jest prawdą, baza jest brudnopisem.** Twoje zmiany w panelu przetrwają tylko po zrzuceniu do gita (`snapshot_world_map.py` / `snapshot_content.py`) i **zacommitowaniu**.
+- ⚠️ **Snapshot zrzuca bazę taką, jaka jest — razem ze śmieciami.** Tak właśnie do kanonu Kresów trafiły obozowiska, rekord testowy i 9 lokacji roboczych Kuźni (naprawione w fali 0). Przed snapshotem sprawdź `/admin/` → Mapa, czy nie zrzucasz brudu.
+- **Kanon mapy to `data/regions/region_<kraina>.json`** (pliki krain, status `live`). `docs/world/world_map_seed.json` to tylko legacy fallback — ma 0 wiązań, więc od fali 0 seed odmawia wsiania go na niepustą mapę.
 - Mapa świata (`world_hexes`, poziom 0) jest **twoja** — nie ruszamy jej przy niepowiązanych zadaniach.
 - Reseed treści z gita jest celowo wąski: **nie kasuje** lokacji stworzonych przez kampanie ani czekających w poczekalni.
 
