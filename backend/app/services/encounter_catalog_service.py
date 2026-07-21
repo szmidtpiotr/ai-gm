@@ -473,6 +473,11 @@ def _extract_json(text: str) -> Optional[dict]:
 def _build_generate_prompt(
     conn: sqlite3.Connection, kind: str, *, biome=None, subtype=None, level=None
 ) -> str:
+    # #1527 - spotkanie dostaje tytul i nazwy wrogow; obowiazuje ta sama
+    # konwencja nazw co reszte swiata (kanon #997). Biom nie mowi o krainie,
+    # wiec wchodzi regula ogolna.
+    from app.services.world_naming_service import naming_prompt_block
+    _naming = "\n\n" + naming_prompt_block(conn, "")
     enums = allowed_enums(conn, kind)
     if kind == "combat":
         keys = ", ".join(e["key"] for e in enums["enemy_key"])
@@ -489,6 +494,7 @@ def _build_generate_prompt(
             '"scene_setup":"...","gm_notes":"...","rewards":{"gold_pct":20}}}\n\n'
             "Free-text WYŁĄCZNIE: title, scene_setup, gm_notes. "
             "enemy_key tylko z listy. gold_pct maks " + str(GOLD_PCT_CAP) + "."
+            + _naming
         )
     if kind == "social":
         skills = ", ".join(s["key"] for s in enums["skill"])
@@ -505,6 +511,7 @@ def _build_generate_prompt(
             "Free-text WYŁĄCZNIE: title, soft_outcome, flavor. "
             "skill tylko z listy. stat z: " + ", ".join(STATS) + ". "
             f"DC w skali {DC_MIN}-{DC_MAX}."
+            + _naming
         )
     raise ValueError(f"nieznany kind '{kind}'")
 

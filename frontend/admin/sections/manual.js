@@ -215,7 +215,9 @@ którym podejmiesz tę decyzję <b>bez wychodzenia z zakładki</b>:</p>
       Koronne Niziny: dworskie słowiańskie i pseudonimy-urzędy · Wybrzeże Łez: wyspiarskie) oraz
       widzi, jak nazywają się postacie już stojące w tej krainie. Jeśli mimo to poda współczesne
       polskie imię albo powtórzy kogoś, kto już istnieje, prosimy model o drugie podejście —
-      dopiero potem pokazujemy wynik.</li>
+      dopiero potem pokazujemy wynik. Tę samą konwencję dostają teraz
+      <b>wszystkie</b> generatory treści w panelu: Kreator AI, Kuźnia, generator podlokacji osady,
+      plan GM, katalog spotkań, plotki i nazwy komnat lochu.</li>
   <li><b>⚖ Porównaj i rozstrzygnij</b> (duplikat) — pokazuje obie karty obok siebie z faktami,
       które przesądzają wybór: źródło, status, obsada, liczba wnętrz, czy stoi na mapie. Klikasz
       <b>Zostaw tę, wygaś drugą</b>. Zaznaczone pole <b>Przenieś obsadę i wnętrza</b> przepina

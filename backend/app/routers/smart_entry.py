@@ -1042,7 +1042,14 @@ def smart_entry_message(
         user_content = "\n".join(context_parts) + f"\n\nAdmin: {req.message}"
 
     session["history"].append({"role": "user", "content": user_content})
-    messages = [{"role": "system", "content": SMART_ENTRY_SYSTEM_PROMPT_V2}] + session["history"][-10:]
+    # #1527 — Kreator wypełnia pola `label`, czyli NADAJE NAZWY (wrogom,
+    # przedmiotom, NPC). Bez konwencji wracały nazwy z polskiej książki
+    # telefonicznej i realne toponimy — dokładnie to, co kasowało #997.
+    from app.services.world_naming_service import naming_prompt_block
+    _naming = naming_prompt_block(None, "")
+    messages = [
+        {"role": "system", "content": SMART_ENTRY_SYSTEM_PROMPT_V2 + "\n\n" + _naming}
+    ] + session["history"][-10:]
 
     try:
         # #818 (H4): content generation runs on the offline/local profile (.170),

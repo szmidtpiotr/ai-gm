@@ -553,7 +553,11 @@ def forge_chat_message(req: ForgeMessageReq, _: None = Depends(_require_admin)):
         user_content = req.message
     session["history"].append({"role": "user", "content": user_content})
 
-    messages = [{"role": "system", "content": FORGE_SYSTEM_PROMPT}] + session["history"]
+    # #1527 - Kuznia nadaje nazwy kampaniom, lokacjom, NPC i przedmiotom.
+    from app.services.world_naming_service import naming_prompt_block
+    messages = [
+        {"role": "system", "content": FORGE_SYSTEM_PROMPT + "\n\n" + naming_prompt_block(None, "")}
+    ] + session["history"]
     try:
         reply = generate_chat(messages=messages)
     except Exception as e:
@@ -707,8 +711,10 @@ def forge_extract_hooks(idea_id: int, _: None = Depends(_require_admin)):
             f"Przygoda: {json.dumps(structured, ensure_ascii=False)}\n\n"
             "Wyodrębnij wszystkie hooki z tej przygody."
         )
+        from app.services.world_naming_service import naming_prompt_block
         messages = [
-            {"role": "system", "content": EXTRACT_HOOKS_SYSTEM_PROMPT},
+            {"role": "system", "content": EXTRACT_HOOKS_SYSTEM_PROMPT + "\n\n"
+                + naming_prompt_block(None, "")},
             {"role": "user", "content": prompt},
         ]
         try:
@@ -2098,8 +2104,10 @@ def forge_generate_template_plan(
         # designs the right number of tiers, and the engine validates/tops up afterwards.
         reward_budget = _compute_reward_budget(final_act_count, tpl["difficulty_rating"])
 
+        from app.services.world_naming_service import naming_prompt_block
         messages = [
-            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count, reward_budget)},
+            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count, reward_budget)
+                + "\n\n" + naming_prompt_block(None, "")},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -2408,9 +2416,11 @@ def forge_generate_sublocations(
     finally:
         conn.close()
 
+    from app.services.world_naming_service import naming_prompt_block
     system_prompt = (
         "Jesteś asystentem projektanta gier RPG. Zwracasz TYLKO JSON — żadnego tekstu poza JSON. "
         'Format odpowiedzi: {"sub_locations": [{"key": "slug", "name": "Nazwa", "description": "Krótki opis"}]}'
+        + "\n\n" + naming_prompt_block(None, "", kind="place")
     )
     user_prompt = (
         f"Kampania: {tpl['title']}\n"
@@ -2463,9 +2473,11 @@ def forge_generate_encounter(
         except Exception:
             dd = {}
 
+    from app.services.world_naming_service import naming_prompt_block
     system_prompt = (
         "Jesteś mistrzem gry RPG tworzącym spotkania. Zwracasz TYLKO JSON — żadnego tekstu poza JSON. "
         'Format: {"title":"...","scene_setup":"...","trigger_condition":"...","enemies":[{"name":"...","count":1,"notes":"..."}],"objectives":["..."],"rewards":{"xp_estimate":50,"loot_notes":"..."},"gm_notes":"..."}'
+        + "\n\n" + naming_prompt_block(None, "")
     )
     user_prompt = (
         f"Typ haka: {hook['hook_type']}\n"
@@ -2550,10 +2562,12 @@ def forge_generate_template_description(
     acts = plan.get("acts", [])
     acts_summary = "; ".join(a.get("title", "") for a in acts[:3] if a.get("title"))
 
+    from app.services.world_naming_service import naming_prompt_block
     system_prompt = (
         "Jesteś copywriterem gier RPG. Piszesz krótkie, klimatyczne opisy kampanii. "
         "Zwróć TYLKO JSON: {\"description\": \"string\"} — 2-4 zdania po polsku, "
         "zachęcające gracza do wzięcia udziału w kampanii. Mroczny klimat WFRP."
+        + "\n\n" + naming_prompt_block(None, "")
     )
     user_prompt = (
         f"Tytuł kampanii: {title}\n"
@@ -2668,11 +2682,13 @@ note: "Amulet emanuje ciemną aurą grozy. MG: każdy wróg wchodzący w kontakt
     }
     type_labels = {"weapon": "broń", "item": "przedmiot", "consumable": "użytek/eliksir"}
 
+    from app.services.world_naming_service import naming_prompt_block
     system_prompt = (
         f"Jesteś projektantem gier RPG. Tworzysz {type_labels[entity_type]} dla kampanii. "
         f"Zwróć TYLKO poprawny JSON pasujący do tego schematu:\n{type_schemas[entity_type]}\n"
         "Klucz (key): lowercase_slug. Powiąż przedmiot tematycznie z fabułą kampanii.\n"
         + (EFFECT_JSON_STRICT_RULES if entity_type in ("weapon", "item") else "")
+        + "\n\n" + naming_prompt_block(None, "")
     )
     user_prompt = (
         f"Kampania: {tpl['title']}\n"

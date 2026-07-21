@@ -161,8 +161,10 @@ def _generate_new_act_flat_plan_llm(
         f"{char_summary}\n\n"
         "Zaproponuj JSON nowego łuku fabularnego (roadmap, cele sceny, haki, tytuł)."
     )
+    # #1527 - nowy akt dokłada NPC, lokacje i haki fabularne = nowe nazwy wlasne.
+    from app.services.world_naming_service import naming_prompt_block
     messages = [
-        {"role": "system", "content": GM_PLAN_NEW_ACT_SYSTEM},
+        {"role": "system", "content": GM_PLAN_NEW_ACT_SYSTEM + "\n\n" + naming_prompt_block(None, "")},
         {"role": "user", "content": user_content},
     ]
     raw = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()

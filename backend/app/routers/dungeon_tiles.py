@@ -298,12 +298,15 @@ def ai_create_tile(payload: dict = Body(...)) -> dict:
 
     cat = dict(cat)
 
+    # #1527 - kafel dostaje polska nazwe komnaty = nazwa wlasna w swiecie.
+    from app.services.world_naming_service import naming_prompt_block
     messages = [
         {
             "role": "system",
             "content": (
                 "You are an expert dungeon designer creating dungeon tile definitions for a dark fantasy RPG. "
-                "Always respond with valid JSON only, no markdown, no explanation."
+                "Always respond with valid JSON only, no markdown, no explanation.\n\n"
+                + naming_prompt_block(None, "", kind="place")
             ),
         },
         {

@@ -191,6 +191,78 @@ def test_taken_name_also_covers_canon_icons_not_yet_in_db(conn):
     assert name_already_taken(conn, "Mizgor Kamienny Szept") is False
 
 
+# ─── Wariant dla MIEJSC (toponimy — rdzeń reguły #997) ──────────────────────
+
+def test_place_variant_bans_real_polish_toponyms(conn):
+    """#997 powstalo wlasnie po to: model robil „Cieszowice" i „Wolanke"."""
+    block = naming_prompt_block(conn, "kresy", kind="place")
+    low = block.lower()
+    assert "-owice" in low and "-anka" in low
+    assert "vilnograd" in low or "strzegwacht" in low
+
+
+def test_place_variant_differs_from_person_variant(conn):
+    assert naming_prompt_block(conn, "kresy", kind="place") != naming_prompt_block(conn, "kresy")
+
+
+def test_place_variant_is_region_aware(conn):
+    granie = naming_prompt_block(conn, "siwe_granie", kind="place").lower()
+    assert "gród" in granie or "grod" in granie or "sztolnia" in granie or "hold" in granie
+
+
+def test_place_variant_for_every_region_has_examples(conn):
+    for region in REGION_NAMING:
+        g = naming_guidance(conn, region, kind="place")
+        assert g["examples"], f"{region}: brak wzorów nazw miejsc"
+
+
+def test_person_variant_stays_the_default(conn):
+    assert naming_guidance(conn, "kresy")["examples"] == REGION_NAMING["kresy"]["examples"]
+
+
+def test_place_toponym_guard_catches_real_pl_endings():
+    from app.services.world_naming_service import looks_like_real_pl_toponym
+
+    assert looks_like_real_pl_toponym("Cieszowice") is True
+    assert looks_like_real_pl_toponym("Wolanka") is True
+    assert looks_like_real_pl_toponym("Brzezino") is True
+    assert looks_like_real_pl_toponym("Vilnograd") is False
+    assert looks_like_real_pl_toponym("Strzegwacht") is False
+    assert looks_like_real_pl_toponym("") is False
+
+
+# ─── Religia: świat ma własny kult, nie naszych świętych ────────────────────
+
+def test_naming_bans_real_world_saints(conn):
+    """Model zaproponowal „Kaplice Swietego Floriana" — patrona z NASZEGO swiata.
+
+    Kanon ma wlasna religie (Swiatlo, Klasztor Iskry, Biala Bogini, kulty
+    Rdzenia). Realny swiety wyrywa gracza z fikcji.
+    """
+    for kind in ("person", "place"):
+        block = naming_prompt_block(conn, "kresy", kind=kind).lower()
+        assert "florian" in block or "świętych z naszego" in block or "swietych z naszego" in block
+        assert "iskr" in block or "światł" in block or "swiatl" in block
+
+
+# ─── Wołanie bez połączenia (generatory, które nie mają conn w zasięgu) ──────
+
+def test_block_works_without_a_db_connection():
+    """15 z 19 generatorow nie ma conn w zasiegu — brak polaczenia nie moze
+    znaczyc „brak konwencji"."""
+    block = naming_prompt_block(None, "kresy")
+    assert "KONWENCJA" in block and "Agnieszka" in block
+
+
+def test_guidance_without_connection_has_no_live_examples():
+    assert naming_guidance(None, "siwe_granie")["live_examples"] == []
+
+
+def test_taken_name_without_connection_still_checks_canon():
+    assert name_already_taken(None, "Nimriel") is True
+    assert name_already_taken(None, "Mizgor Kamienny Szept") is False
+
+
 # ─── Sprzątanie etykiety ─────────────────────────────────────────────────────
 
 def test_role_glued_to_the_name_is_trimmed():

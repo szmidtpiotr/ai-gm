@@ -457,8 +457,10 @@ def generate_v2_campaign_plan(
         race_hint=race_hint,
     )
 
+    # #1527 - plan V2 nadaje nazwy aktom, NPC, lokacjom i wrogom.
+    from app.services.world_naming_service import naming_prompt_block
     messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": _SYSTEM_PROMPT + "\n\n" + naming_prompt_block(None, "")},
         {"role": "user", "content": user_prompt},
     ]
 

@@ -31,6 +31,7 @@ __all__ = [
     "REGION_NAMING",
     "clean_person_label",
     "looks_like_modern_polish_name",
+    "looks_like_real_pl_toponym",
     "name_already_taken",
     "naming_guidance",
     "naming_prompt_block",
@@ -42,10 +43,24 @@ LIVE_EXAMPLES_LIMIT = 8
 #: Zakaz wspólny dla wszystkich krain — to jest ta konkretna choroba, którą
 #: leczymy: model sięga po imiona z polskiej książki telefonicznej.
 _COMMON_AVOID = [
+    "imiona realnych świętych i patronów z naszego świata (św. Florian, "
+    "św. Barbara, św. Mikołaj) — świat ma własną wiarę: Światło, Klasztor "
+    "Iskry, Biała Bogini, kulty Rdzenia",
     "współczesne polskie imiona i nazwiska (Agnieszka, Anna, Piotr, Bartek, "
     "Katarzyna, Michał; Kowalski, Nowak, Wiśniewski, Kowalczyk, Zielińska)",
     "realne polskie toponimy w przydomkach (-owice, -anka, -ino)",
     "imiona skopiowane wprost z Tolkiena, Wiedźmina i innych znanych serii",
+]
+
+#: Zakaz dla NAZW MIEJSC — to jest dokładnie ta choroba, po której powstało #997.
+_PLACE_AVOID = [
+    "imiona realnych świętych i patronów z naszego świata (św. Florian, "
+    "św. Barbara, św. Mikołaj) — świat ma własną wiarę: Światło, Klasztor "
+    "Iskry, Biała Bogini, kulty Rdzenia",
+    "realne polskie toponimy osadnicze: końcówki -owice (Cieszowice), -anka "
+    "(Wolanka), -ino (Brzezino), -ówka, -yce",
+    "nazwy będące imieniem osoby („Wieś Marka”)",
+    "nazwy skopiowane wprost z Tolkiena, Wiedźmina i innych znanych serii",
 ]
 
 REGION_NAMING: dict[str, dict] = {
@@ -57,6 +72,10 @@ REGION_NAMING: dict[str, dict] = {
             "rzemiosła, cechy albo miejsca (nie od nazwiska rodowego)."
         ),
         "examples": ["Hanka Rogowa", "Mizel", "Wolfram", "Berta Twarda Pieczęć", "Grimm Rdzawy"],
+        "place_style": (
+            "MIX słowiańsko-germański (#997): słowiańskie fantasy, germańskie dark albo hybryda (słowiański rdzeń + germańska końcówka). Zachód/Imperium → germańskie, wschód/głębokie Kresy → słowiańskie, pas graniczny → hybrydy."
+        ),
+        "place_examples": ["Vilnograd", "Czarnobór", "Strzegwacht", "Rabenstein", "Czarnstein", "Wilczburg", "Bór Zmarłych"],
     },
     "siwe_granie": {
         "label": "Siwe Granie",
@@ -69,6 +88,10 @@ REGION_NAMING: dict[str, dict] = {
             "Balrik Siwotarczy", "Dagna Młotodzierżca", "Helga Solnobroda",
             "Torvin", "Grimm Rdzawy", "Kettil", "Brat Elias",
         ],
+        "place_style": (
+            "Krasnoludzkie hołdy, sztolnie i kuźnie: nazwy złożone, kamienno-górnicze, albo germańskie z końcówką -hold. Miejsca ludzkie w górach — sanktuaria i pielgrzymki."
+        ),
+        "place_examples": ["Kamienny Gród", "Wielka Kuźnia", "Echo-Wieża", "Sztolnia Umarłego Rodu", "Lodowa Brama", "Frosthold"],
     },
     "czarnobor": {
         "label": "Czarnobór",
@@ -78,6 +101,10 @@ REGION_NAMING: dict[str, dict] = {
             "Ludzie na skraju boru (drwale, kupcy, łowcy) — imiona germańskie."
         ),
         "examples": ["Nimriel", "Cathel", "Aerlin", "Sylvar", "Erethil", "Bartel", "Hagen"],
+        "place_style": (
+            "Nazwy na mapie to LUDZKIE tłumaczenia elfich nazw — poetyckie, obrazowe, złożone z rzeczownika natury i cechy. Osady ludzkie na skraju boru: nazwy graniczne i strażnicze."
+        ),
+        "place_examples": ["Szept Koron", "Gościnne Drzewo", "Łukodzielnia", "Targ Wymienny", "Ostęp Graniczny", "Stanica Wilcza"],
     },
     "martwe_pustkowia": {
         "label": "Martwe Pustkowia",
@@ -87,6 +114,10 @@ REGION_NAMING: dict[str, dict] = {
             "Ludzie z zewnątrz (misja, obóz gorączki) — imiona germańskie/zakonne."
         ),
         "examples": ["Raszid", "Lejla", "Nadira", "Farid", "Greta", "Brat Ansgar", "Siostra Verena"],
+        "place_style": (
+            "Nazwy solne, popielne i porzucone: rzeczownik + funkcja albo ślad po Imperium (kolonia, wieża, misja). Nic sielskiego."
+        ),
+        "place_examples": ["Solny Próg", "Obóz Gorączki", "Misja Światła", "Targ Przewodników", "Solne Magazyny", "Aschfeld"],
     },
     "koronne_niziny": {
         "label": "Koronne Niziny",
@@ -100,6 +131,10 @@ REGION_NAMING: dict[str, dict] = {
             "Kanclerz Dobrogost", "Matka Urszula", "Brat Aleksy Złotnik",
             "„Nocny Burmistrz”", "„Rachmistrzyni”", "Gundrik Złota Waga", "Berta Twarda Pieczęć",
         ],
+        "place_style": (
+            "Cywilizacja Korony: miasta i dzielnice, urzędy, rogatki, klasztory. Archaiczno-dworskie słowiańskie; prowincja zachodnia — germańskie."
+        ),
+        "place_examples": ["Vilnograd", "Klasztor Iskry", "Rogatka Wschodnia", "Targ Wielki", "Dzielnica Złodziei"],
     },
     "wybrzeze_lez": {
         "label": "Wybrzeże Łez",
@@ -109,6 +144,10 @@ REGION_NAMING: dict[str, dict] = {
             "słowiańsko-germańskie (#997)."
         ),
         "examples": ["Taio", "Nakea", "Malua", "Ravu"],
+        "place_style": (
+            "Porty, zatoki i doki: nazwy morskie, mroczne, słowiańsko-germańskie; miejsca diaspory wyspiarskiej brzmią obco na tle lądu."
+        ),
+        "place_examples": ["Czarnogród", "Zatoka Topielców", "Port Łez", "Mokra Grobla"],
     },
 }
 
@@ -181,11 +220,11 @@ def _region_rule(region: str) -> dict:
 
 
 def live_name_examples(
-    conn: sqlite3.Connection, region: str, limit: int = LIVE_EXAMPLES_LIMIT
+    conn: sqlite3.Connection | None, region: str, limit: int = LIVE_EXAMPLES_LIMIT
 ) -> list[str]:
     """Imiona NPC, którzy JUŻ stoją w tej krainie (kanon = tabela przypisań, #1524)."""
     key = _norm(region).lower()
-    if not key:
+    if conn is None or not key:
         return []
     try:
         rows = conn.execute(
@@ -202,24 +241,31 @@ def live_name_examples(
     return [r[0] for r in rows if r[0]]
 
 
-def naming_guidance(conn: sqlite3.Connection, region: str) -> dict:
-    """Wytyczna nazewnicza dla krainy: styl + przykłady kanonu + przykłady żywe."""
+def naming_guidance(conn: sqlite3.Connection | None, region: str, kind: str = "person") -> dict:
+    """Wytyczna nazewnicza dla krainy: styl + przykłady kanonu + przykłady żywe.
+
+    `kind="person"` — imiona postaci; `kind="place"` — nazwy miejsc (toponimy,
+    czyli rdzeń reguły #997: to po nich model najczęściej robił „Cieszowice").
+    """
     rule = _region_rule(region)
+    is_place = kind == "place"
     return {
         "region": _norm(region).lower() or _FALLBACK_REGION,
         "region_label": rule["label"],
-        "style": rule["style"],
-        "examples": list(rule["examples"]),
-        "live_examples": live_name_examples(conn, region),
-        "avoid": list(_COMMON_AVOID),
+        "kind": "place" if is_place else "person",
+        "style": rule["place_style"] if is_place else rule["style"],
+        "examples": list(rule["place_examples"] if is_place else rule["examples"]),
+        "live_examples": [] if is_place else live_name_examples(conn, region),
+        "avoid": list(_PLACE_AVOID if is_place else _COMMON_AVOID),
     }
 
 
-def naming_prompt_block(conn: sqlite3.Connection, region: str) -> str:
+def naming_prompt_block(conn: sqlite3.Connection | None, region: str = "", kind: str = "person") -> str:
     """Gotowy fragment instrukcji systemowej — do wklejenia w prompt generatora."""
-    g = naming_guidance(conn, region)
+    g = naming_guidance(conn, region, kind=kind)
+    what = "NAZW MIEJSC" if g["kind"] == "place" else "NAZW"
     lines = [
-        f"KONWENCJA NAZW — kraina „{g['region_label']}” (kanon #997 + rozdział krainy):",
+        f"KONWENCJA {what} — kraina „{g['region_label']}” (kanon #997 + rozdział krainy):",
         g["style"],
         "Wzory z kanonu: " + ", ".join(g["examples"]) + ".",
     ]
@@ -231,10 +277,16 @@ def naming_prompt_block(conn: sqlite3.Connection, region: str) -> str:
         "Przykłady pokazują STYL — NIE KOPIUJ ich i nie powtarzaj żadnego z tych "
         "imion. Postać ma mieć imię NOWE, którego w świecie jeszcze nie ma."
     )
-    lines.append(
-        "Pytanie kontrolne przed odpowiedzią: „Czy ta osoba mogłaby figurować "
-        "w polskiej książce telefonicznej?" " Jeśli tak — wymyśl imię od nowa."
-    )
+    if g["kind"] == "place":
+        lines.append(
+            "Pytanie kontrolne przed odpowiedzią: „Czy ta nazwa mogłaby być prawdziwą "
+            "wsią w Polsce?" " Jeśli tak — przerób ją na archaiczną albo wymyśloną."
+        )
+    else:
+        lines.append(
+            "Pytanie kontrolne przed odpowiedzią: „Czy ta osoba mogłaby figurować "
+            "w polskiej książce telefonicznej?" " Jeśli tak — wymyśl imię od nowa."
+        )
     return "\n".join(lines)
 
 
@@ -261,7 +313,7 @@ def _canon_icon_names() -> tuple[set[str], set[str]]:
     return full, single
 
 
-def name_already_taken(conn: sqlite3.Connection, label: str) -> bool:
+def name_already_taken(conn: sqlite3.Connection | None, label: str) -> bool:
     """Czy taka postać już stoi w świecie albo w kanonie? (few-shot kusi do kopiowania)."""
     clean = _norm(label).lower()
     if not clean:
@@ -269,6 +321,8 @@ def name_already_taken(conn: sqlite3.Connection, label: str) -> bool:
     canon_full, canon_single = _canon_icon_names()
     if clean in canon_full or clean.split()[0] in canon_single:
         return True
+    if conn is None:
+        return False
     try:
         row = conn.execute(
             "SELECT 1 FROM npcs WHERE is_active = 1 AND LOWER(TRIM(label)) = ? LIMIT 1",
@@ -279,6 +333,13 @@ def name_already_taken(conn: sqlite3.Connection, label: str) -> bool:
     return row is not None
 
 
-#: Wzorzec pomocniczy dla przyszłych walidatorów nazw miejsc (#997) — nazwy
-#: osad z tymi końcówkami to realne polskie toponimy.
-REAL_PL_TOPONYM_SUFFIXES = re.compile(r"(owice|ówka|anka|ino|yce)$", re.IGNORECASE)
+#: Końcówki realnych polskich toponimów osadniczych (#997).
+REAL_PL_TOPONYM_SUFFIXES = re.compile(r"(owice|ówka|owka|anka|ino|yce)$", re.IGNORECASE)
+
+
+def looks_like_real_pl_toponym(name: str) -> bool:
+    """Czy ta nazwa miejsca mogłaby być prawdziwą polską wsią? (strażnik #997)"""
+    clean = _norm(name)
+    if not clean:
+        return False
+    return any(REAL_PL_TOPONYM_SUFFIXES.search(token) for token in clean.split())

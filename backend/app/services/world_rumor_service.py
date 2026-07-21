@@ -202,6 +202,7 @@ def generate_ai_rumors(region: str, count: int = 5,
         from app.services.llm_service import (
             content_llm_enabled, generate_chat, resolve_content_llm_config,
         )
+        from app.services.world_naming_service import naming_prompt_block
         loc_lines = "\n".join(f"  - lokacja {l['key']}: {l['label']}" for l in facts["locations"])
         dun_lines = "\n".join(f"  - loch {d['key']}: {d['label']}" for d in facts["dungeons"])
         ev_line = f"Aktywne wydarzenie w regionie: {facts['event']}\n" if facts["event"] else ""
@@ -217,7 +218,10 @@ def generate_ai_rumors(region: str, count: int = 5,
             "- NIE wymyślaj kluczy spoza listy.\n"
             "- Około 40% plotek ma truth=false.\n"
             'Zwróć WYŁĄCZNIE JSON: {"rumors":[{"text":"...","truth":true,'
-            '"target_type":null,"target_key":null}, ...]}'
+            '"target_type":null,"target_key":null}, ...]}\n\n'
+            # #1527 — plotka nazywa ludzi i miejsca; bez konwencji model wkłada
+            # graczowi do ucha „Agnieszkę Kowalską" z karczmy na Kresach.
+            + naming_prompt_block(c, region)
         )
         user_prompt = (
             f"Region: {region}\n{ev_line}"

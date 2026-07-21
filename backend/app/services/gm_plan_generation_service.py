@@ -331,10 +331,14 @@ def generate_initial_gm_plan_v2_with_retries(
     identity = identity or {}
     gm_only = gm_only or {}
 
-    system_prompt = _SYSTEM_PROMPT
+    # #1527 - plan GM nazywa NPC, lokacje i wrogow; bez konwencji rodza sie
+    # wspolczesne polskie imiona i realne toponimy. Region planu nie jest tu
+    # znany, wiec wchodzi regula ogolna #997.
+    from app.services.world_naming_service import naming_prompt_block
+    system_prompt = _SYSTEM_PROMPT + "\n\n" + naming_prompt_block(None, "")
     if story_so_far:
         system_prompt = (
-            _SYSTEM_PROMPT
+            system_prompt
             + "\n\nUWAGA — KAMPANIA JEST JUŻ W TRAKCIE. Zbuduj plan KONTYNUUJĄCY fabułę "
               "od bieżącego momentu (na podstawie dotychczasowej rozgrywki poniżej). "
               "NIE restartuj historii, NIE zaczynaj od sceny startowej — akt 1 ma "

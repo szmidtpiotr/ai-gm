@@ -1629,7 +1629,7 @@ def enrich_sublocs_labels(
     Returns list of updated dicts: {"key", "label", "description"}.
     """
     parent = conn.execute(
-        "SELECT key, label, location_subtype, description FROM game_locations "
+        "SELECT key, label, location_subtype, description, region FROM game_locations "
         "WHERE key = ? AND is_active = 1",
         (parent_key,),
     ).fetchone()
@@ -1655,8 +1655,13 @@ def enrich_sublocs_labels(
 
     subloc_list = [{"key": r["key"], "subtype": r["location_subtype"]} for r in rows]
 
+    # #1527 — generator NADAJE NAZWY MIEJSC, czyli robi dokładnie to, po czym
+    # powstało #997 („Cieszowice", „Wolanka"). Konwencja bierze krainę rodzica.
+    from app.services.world_naming_service import naming_prompt_block
+    _naming = naming_prompt_block(conn, parent["region"] or "", kind="place")
+
     prompt = (
-        f"Jesteś narratorem świata fantasy słowiańskiego (Kresy). "
+        f"Jesteś narratorem świata fantasy (Kresy — świat gry AI-GM). "
         f"Osada: '{parent['label']}' (typ: {parent['location_subtype'] or 'osada'}).\n"
         f"Opis osady: {parent['description'] or 'brak opisu'}.\n\n"
         f"Nadaj tematyczne nazwy i krótkie opisy atmosferyczne (1-2 zdania po polsku) "
@@ -1664,6 +1669,7 @@ def enrich_sublocs_labels(
         + "\n".join(f"- key: {s['key']}, subtype: {s['subtype']}" for s in subloc_list)
         + "\n\nOdpowiedz WYŁĄCZNIE w formacie JSON:\n"
         '{"sublocs": [{"key": "...", "label": "...", "description": "..."}]}'
+        + "\n\n" + _naming
     )
 
     messages = [{"role": "user", "content": prompt}]
@@ -1774,9 +1780,13 @@ def fill_missing_pending_fields(conn: sqlite3.Connection, entity_type: str, key:
             context_parts.append(f"{k}={v}")
     context = ", ".join(context_parts[:20])
 
+    # #1527 — uzupełniane pola potrafią zawierać nazwy własne (imiona w opisie,
+    # przydomki, nazwy miejsc), więc generator dostaje konwencję nazw.
+    from app.services.world_naming_service import naming_prompt_block
     system_msg = (
         "You are a fantasy RPG content designer for a dark Slavic-Germanic world called Kresy. "
-        "Respond with ONLY a valid JSON object — no markdown, no explanation."
+        "Respond with ONLY a valid JSON object — no markdown, no explanation.\n\n"
+        + naming_prompt_block(conn, "")
     )
     user_msg = (
         f"Fill missing fields for this {entity_type}: \"{label}\"\n"
