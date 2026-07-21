@@ -1,7 +1,8 @@
 # Jak działa świat AI-GM
 
 > **Dla kogo:** dla Piotra i dla każdego, kto ma podjąć decyzję projektową o świecie gry — bez czytania kodu.
-> **Stan na:** 2026-07-21. Liczby zmierzone na żywej bazie DEV.
+> **Stan na:** 2026-07-21, po fali 4 (#1527). Liczby zmierzone na żywej bazie DEV.
+> **Uwaga o liczbach:** wszystkie liczby lokacji dotyczą **kart aktywnych**. W bazie leży dodatkowo 257 kart miękko skasowanych (`is_active=0`) — wcześniejsze wydania tego dokumentu liczyły je razem z żywymi, stąd „485 lokacji, 425 floating". To był artefakt liczenia, nie nagłe skasowanie świata.
 > **Status:** to jest ŹRÓDŁO PRAWDY o działaniu świata. Zastępuje `docs/V2_ARCHITECTURE/05_WORLD_BUILDER_AND_PERSISTENCE.md`, który opisuje model sprzed przebudowy #1243 i wprowadza w błąd.
 
 ---
@@ -14,6 +15,7 @@
 2. **Mapa świata** — siatka heksów (sześciokątnych pól). To ona decyduje o geografii. Heks może wskazać jedną lokację i powiedzieć „tu stoi Vilnograd".
 3. **Mapy lokalne** — mini-siatki *wewnątrz* osady. Karczma, kuźnia i rynek jednego miasteczka leżą na własnej małej mapce, a nie na mapie świata.
 4. **Poczekalnia** — gdy narrator AI wymyśli w trakcie gry nowe miejsce, trafia ono do kolejki „Do zatwierdzenia" w panelu admina. Gra go używa, ale świat go jeszcze nie kanonizował.
+5. **Kontrola świata** (od fali 4, #1527) — lampka kontrolna: lista rozjazdów w panelu zamiast cichego prostowania po nocach. Szczegóły w Części 6A.
 
 Kluczowa zasada, która rządzi wszystkim (decyzja z 2026-07-05, #1243):
 
@@ -27,7 +29,7 @@ Dlaczego tak: przy audycie okazało się, że współrzędne zapisane na kartach
 
 ### 1.1 Lokacja (karta w katalogu)
 
-**485 kart** w bazie DEV. Każda ma:
+**243 aktywne karty** w bazie DEV (80 makro + 163 sub-lokacje; obok nich 257 kart miękko skasowanych, których gra nie widzi). Każda ma:
 
 | Co | Znaczenie |
 |---|---|
@@ -44,7 +46,7 @@ Dlaczego tak: przy audycie okazało się, że współrzędne zapisane na kartach
 
 **5040 heksów** poziomu 0 (świat). Heks ma rodzaj terenu, atmosferę, szansę na spotkanie, krainę — i opcjonalnie wskazuje jedną lokację.
 
-Tylko **54 heksy** faktycznie wskazują jakąś lokację. Reszta to dzicz: teren, przez który się podróżuje, ale nie ma tam nazwanego miejsca.
+Tylko **40 heksów** faktycznie wskazuje jakąś lokację. Reszta to dzicz: teren, przez który się podróżuje, ale nie ma tam nazwanego miejsca.
 
 ### 1.3 Mapa lokalna (heksy wewnątrz osady)
 
@@ -57,10 +59,10 @@ Sub-lokacja **nie ma własnego miejsca na mapie świata** — jej „adres" to h
 - **placed (osadzona)** = lokacja stoi na konkretnym heksie mapy świata. Można do niej dojść, widać ją na mapie.
 - **floating (unosząca się)** = lokacja istnieje w katalogu, ale **nie ma jeszcze przypisanego miejsca w świecie**.
 
-**425 z 485 lokacji jest floating.** To brzmi alarmująco, ale w większości jest poprawne, bo floating oznacza dwie zupełnie różne rzeczy:
+**203 z 243 aktywnych lokacji jest floating** (osadzonych jest 40). To brzmi alarmująco, ale w większości jest poprawne, bo floating oznacza dwie zupełnie różne rzeczy:
 
-1. **Sub-lokacje** — z definicji nie stoją na mapie świata (Wielka Izba nie jest osobnym punktem na mapie Kresów, tylko wnętrzem karczmy). To ~większość floatingu i to jest w porządku.
-2. **Zapas makro-lokacji** — gotowe miejsca czekające na osadzenie. Silnik może je automatycznie postawić na pasującym pustym heksie o odpowiednim terenie. To celowy magazyn treści, nie śmieci.
+1. **Sub-lokacje** — z definicji nie stoją na mapie świata (Wielka Izba nie jest osobnym punktem na mapie Kresów, tylko wnętrzem karczmy). To **163 z 203** floatingu i to jest w porządku.
+2. **Zapas makro-lokacji** — **40** gotowych miejsc czekających na osadzenie. Silnik może je automatycznie postawić na pasującym pustym heksie o odpowiednim terenie. To celowy magazyn treści, nie śmieci.
 
 Floating lokacja **nadal jest grywalna narracyjnie** — narrator może o niej opowiedzieć, gracz może w niej być. Traci tylko pinezkę na mapie świata.
 
@@ -94,15 +96,17 @@ Lokacje wchodzą do świata **czternastoma różnymi wejściami**. Od fali 3 (#1
 11. **Sub-lokacje osady** — generator dosypuje do 4 miejsc (karczma/kuźnia/kram/świątynia). Stempel `auto_generated`.
 14. **Skrypty testowe/naprawcze.**
 
-**Rozkład na żywej bazie DEV:**
+**Rozkład na żywej bazie DEV (karty aktywne):**
 
 | Kto stworzył | Ile | Uwaga |
 |---|---|---|
-| `admin_manual` | 241 | 211 niekanonicznych + 30 kanonicznych |
-| `seed` (git, kanon) | 169 | ← prawdziwy kanon świata |
-| `forge` | 25 | wszystkie w poczekalni |
-| `gm_runtime` | 30 | 21 odrzuconych, 9 przyjętych |
-| `auto_generated` | 19 | stuby wiosek |
+| `seed` (git, kanon) | 181 | ← prawdziwy kanon świata |
+| `forge` | 24 | szablony kampanii, w poczekalni |
+| `gm_runtime` | 18 | twory narratora z tur |
+| `auto_generated` | 15 | stuby wiosek i sub-lokacje generatora |
+| `admin_manual` | 5 | ręczne wpisy z panelu |
+
+Zmiana względem poprzedniego wydania (`admin_manual` 241 → 5) to skutek fal 0–3: masa ręcznych kart okazała się śmieciem runtime i została wygaszona, a kanon przejął stempel `seed`. Kart z nielegalnym stemplem jest dziś **0** — pilnuje tego fabryka z fali 3 i reguła lintu z fali 4.
 
 ---
 
@@ -203,6 +207,36 @@ Plus dosypywanie brakujących krain i terenów.
 
 > ⚠️ **To jest ważne i nieoczywiste:** krok 3 potrafi *odpiąć od mapy* lokację, którą coś zapisało „na skróty". Dlatego każde miejsce ustawiane na mapie musi przechodzić przez jedną oficjalną funkcję — inaczej rano wraca floating. To była przyczyna błędu #1305.
 
+**Od fali 4 (#1527) to prostowanie nie jest już nieme.** Wszystko, co start serwera naprawił, ląduje w **kronice napraw** (panel: Świat → 🩺 Kontrola świata → 🕮 Historia napraw). Widzisz tam datę, regułę, czego dotyczyła naprawa i co dokładnie zrobiła.
+
+> 🔍 **Drugi cichy uzdrowiciel — znalezisko z fali 4.** Prostowanie mapy to nie było jedyne miejsce, które sprzątało po cichu. Osobne sprzątanie w migracji startowej gasi pinezki i zwalnia heksy **wcześniej** niż opisane wyżej prostowanie — czyli rozjazd znikał, zanim ten mechanizm zdążył go zobaczyć. Skutek praktyczny: kto szuka „kto mi to zmienił", musi patrzeć na oba. Oba raportują teraz do tej samej kroniki, rozróżniane podpisem: „⚙️ start backendu" (prostowanie mapy i migracja) vs „👤 panel" (twoje kliknięcie).
+
+---
+
+## Część 6A — 🩺 Kontrola świata (lampka zamiast zamiatania)
+
+Fala 4 (#1527) dołożyła w panelu zakładkę **Świat → 🩺 Kontrola świata**. To odwrócenie logiki: zamiast po cichu prostować, system **pokazuje listę rozjazdów** i pozwala je naprawiać świadomie.
+
+**Siedem reguł:**
+
+| Reguła | Co łapie | Guzik „Napraw"? |
+|---|---|---|
+| **Usługa bez gospodarza** | karczma, kuźnia, kram, świątynia, stajnia, komora — bez ani jednego NPC. Gracz wchodzi do pustego wnętrza | nie — dosiew treści |
+| **Sierota obsady** | NPC przypisany do lokacji, której już nie ma | tak |
+| **Heks bez lokacji** | pole mapy wskazuje lokację, która nie istnieje | tak |
+| **Pin bez kanonu** | karta twierdzi, że stoi na heksie, którego mapa jej nie przyznaje | tak |
+| **Zepsuty rodzic** | sub-lokacja bez rodzica albo z połowicznym wiązaniem | tak |
+| **Nielegalna flaga** | `created_by` / status recenzji spoza legalnego zbioru | tak |
+| **Duplikat etykiety** | dwie lokacje o (prawie) tej samej nazwie w jednej krainie | nie — wybór, którą zostawić |
+
+**Zasada podziału:** guzik pojawia się tylko tam, gdzie odpowiedź jest **jednoznaczna** (odpiąć pinezkę, zwolnić heks, uzupełnić rodzica, zdjąć martwe przypisanie). Tam, gdzie trzeba **decyzji treściowej**, panel pisze „decyzja człowieka" i niczego nie zgaduje — bo zgadywanie było właśnie tą chorobą.
+
+**Bramka krain:** reguła „usługa bez gospodarza" liczy się **wyłącznie dla krain otwartych** (status `live` — dziś Kresy i Siwe Granie). Filtr stoi na statusie, nie na liście nazw, więc Czarnobór i Martwe Pustkowia wejdą do lintu **automatycznie w dniu otwarcia**, bez zmiany w kodzie. Powodem ich wyłączenia nie jest lore — kanon obu krain **ma** osady i usługi — tylko stan świata: zero heksów i brak lokacji-hubów.
+
+**Pierwszy pomiar na żywej bazie DEV:** 45 rozjazdów, z czego 17 naprawialnych jednym kliknięciem. Licznik dokłada się do plakietki przy pozycji „Świat" w menu bocznym, więc widać go bez wchodzenia w zakładkę.
+
+**Progi (wartości startowe, do strojenia):** podobieństwo nazw uznane za duplikat = **0.85**, limit listy = **200** pozycji.
+
 ---
 
 ## Część 7 — Znane choroby (i dlaczego temat wraca co tydzień)
@@ -215,7 +249,7 @@ Rdzeń projektu jest zdrowy. Problemy siedzą w **warstwach historycznych, któr
 |---|---|---|
 | ~~kto jest NPC w lokacji~~ | ~~**3**~~ → **1** | ✅ **naprawione w fali 1** (#1524): kanon = tabela przypisań `location_npc_assignments`; lista na karcie lokacji (`npc_keys`) to od teraz **kopia pochodna** odświeżana po każdym zapisie; legacy `npc_locations` nie jest już czytana ani zapisywana (pusta, DROP po weryfikacji). Zasada dodatkowa: **gospodarz siedzi w sub-lokacji**, makro-hub osady zostaje pusty. |
 | ~~czy lokacja stoi na mapie~~ | ~~**3**~~ → **1** | ✅ **naprawione w fali 2** (#1525): kanon = wskazanie z heksa; współrzędne na karcie to jego lustro; `placement` skasowany, a wszystkie trzy równoległe testy „czy osadzona" zastąpił jeden helper. |
-| kto jest rodzicem | **2** | numer rodzica i nazwa rodzica — kod sprawdza oba, bo numer bywa pusty |
+| kto jest rodzicem | **2** (świadomie) | numer rodzica i nazwa rodzica. Obie kolumny zostają — od fali 2 baza sama dopisuje brakującą połówkę (triggery), a od fali 4 połowiczne i zerwane wiązania **widać na liście** jako „Zepsuty rodzic" z guzikiem naprawy |
 | ~~czy stworzyło AI~~ | ~~**2**~~ → **1** | ✅ **naprawione w fali 2** (#1525): zostaje `created_by` (enum zna też realnie zapisywane `forge` i `auto_generated` — koniec cichej podmiany na `gm_runtime`); `ai_generated` skasowany. |
 
 **Dowód, że to nie teoria** — trzy pytania o to samo dawały trzy różne odpowiedzi:
@@ -241,7 +275,11 @@ Każda z 14 ścieżek tworzenia stemplowała flagi po swojemu. Jedna wpisywała 
 ✅ **Naprawione w fali 3** (#1526): jest **jedna funkcja** `create_location()` (`backend/app/services/location_factory.py`) i to jedyne miejsce, które wstawia lokację. Gwarantuje cztery rzeczy naraz: komplet flag wg źródła (sześć legalnych źródeł), `parent_id` **i** `parent_key` zawsze razem, wiązanie z mapą wyłącznie przez kanonicznego writera heksa, oraz idempotencję po kluczu (powtórka nie robi kopii `_2`). Nowe, bezpośrednie wpisanie lokacji z pominięciem tych drzwi **wywala test** — więc choroba nie może wrócić tylnymi drzwiami.
 
 ### Choroba 3 — samonaprawa zamiast zdrowia
-Prostowanie świata przy starcie (Część 6) leczy objawy co rano zamiast usunąć przyczynę. Leczenie bywa agresywne (kasuje pinezki), więc trzeba było dokładać kolejne łatki, żeby przed nim ochronić poprawne dane.
+Prostowanie świata przy starcie (Część 6) leczyło objawy co rano zamiast usunąć przyczynę. Leczenie bywało agresywne (kasuje pinezki), więc trzeba było dokładać kolejne łatki, żeby przed nim ochronić poprawne dane.
+
+✅ **Naprawione w fali 4** (#1527): samonaprawa nie zniknęła — **przestała być cicha**. Wszystko, co prostuje się przy starcie, ląduje w kronice napraw, a rozjazdy, których nikt nie posprzątał, wiszą na liście w panelu (Część 6A) razem z wyjaśnieniem po polsku. Do tego doszła warstwa, której wcześniej nie było w ogóle: **kontrola jakości treści** — to ona wyłapuje karczmę bez karczmarza, czyli dokładnie ten typ problemu, który przeleżał miesiące niezauważony (#1524).
+
+Uczciwa uwaga: to nie usuwa przyczyn, tylko przestaje je ukrywać. Przyczyny kasują fale 1–3 (jedno źródło prawdy, jedne drzwi); fala 4 jest **lampką kontrolną**, nie silnikiem.
 
 ### Choroba 4 — dokumentacja opisuje nieistniejący system
 Dokument `05_WORLD_BUILDER_AND_PERSISTENCE.md` opisuje model sprzed #1243: pozycjonowanie po martwych dziś kolumnach `map_x/map_y` i tabelę terenu, której nigdy nie zbudowano. Jedyny prawdziwy opis relacji heks↔lokacja siedział **w komentarzu w kodzie**. Ten plik, który właśnie czytasz, to naprawa tej choroby.
@@ -263,11 +301,13 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 | Fala | Co robimy | Efekt dla ciebie |
 |---|---|---|
 | **0** ✅ (#1528) | czysty kanon wiązań heks↔lokacja + bezpiecznik seeda | geografia przestaje ginąć przy reseedzie |
-| **1** (#1524) | jeden system NPC: tabela przypisań = prawda, lista na karcie = automatyczna kopia, stara tabela skasowana | gospodarze przestają znikać i dublować się |
+| **1** ✅ (#1524) | jeden system NPC: tabela przypisań = prawda, lista na karcie = automatyczna kopia, stara tabela skasowana | gospodarze przestają znikać i dublować się |
 | **2** ✅ (#1525) | jedna prawda na informację: skasowane `placement` i `ai_generated`, 3 legalne statusy pilnowane przez bazę | zniknęły rozjazdy 60/56/54 |
 | **3** ✅ (#1526) | jedne drzwi: wszystkie 14 ścieżek przez jedną funkcję stemplującą flagi tak samo | koniec lokacji w limbo |
-| **4** | lampka w panelu admina zamiast cichej samonaprawy: lista rozjazdów + guzik „napraw" | widzisz problemy, zamiast systemu, który je zamiata |
-| **5** | ten dokument | wiesz, jak działa twoja gra ✅ |
+| **4** ✅ (#1527) | lampka w panelu admina zamiast cichej samonaprawy: lista rozjazdów + guzik „napraw" + kronika napraw | widzisz problemy, zamiast systemu, który je zamiata |
+| **5** ✅ | ten dokument | wiesz, jak działa twoja gra |
+
+**Wszystkie fale zamknięte.** Co zostało jako praca **treściowa**, nie systemowa: dosiać gospodarzy do 20 usługowych lokacji, które lint pokazuje jako puste, i rozstrzygnąć 8 par podobnych nazw. Lista czeka w panelu — to już nie jest szukanie po bazie, tylko odhaczanie.
 
 **Czego nie ruszamy, bo działa:** heks = prawda · jeden zapisywacz pozycji · jedna ścieżka podróży · model osady hub+suby · pula floating jako magazyn treści.
 
@@ -282,6 +322,8 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 | zatwierdzić twory AI | `/admin/` → Świat → Oczekujące |
 | zobaczyć mapę świata | `/admin/` → Mapa |
 | ustawić lokację na heksie | Mapa → klik w heks |
+| sprawdzić zdrowie świata | `/admin/` → Świat → **🩺 Kontrola świata** |
+| zobaczyć, co system naprawił sam | Świat → 🩺 Kontrola świata → **🕮 Historia napraw** |
 
 ### Gdzie leży prawda
 | Pytanie | Odpowiedź |
@@ -290,6 +332,8 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 | co jest kanonem świata? | `data/seeds/content/game_locations.json` w gicie |
 | kto jest w lokacji? | tabela przypisań NPC (po fali 1 — jedyna) |
 | jak działa relacja heks↔lokacja? | ten dokument + `backend/app/services/hex_location_link.py` |
+| co jest dziś zepsute w świecie? | Świat → 🩺 Kontrola świata (reguły: `backend/app/services/world_lint_service.py`) |
+| kto zmienił mi pinezkę w nocy? | kronika napraw — „⚙️ start backendu" = automat, „👤 panel" = człowiek |
 
 ### Zasady bezpieczeństwa danych
 - **Git jest prawdą, baza jest brudnopisem.** Twoje zmiany w panelu przetrwają tylko po zrzuceniu do gita (`snapshot_world_map.py` / `snapshot_content.py`) i **zacommitowaniu**.
