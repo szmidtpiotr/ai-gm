@@ -467,8 +467,8 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
         cur = conn.execute(
             """INSERT INTO game_locations
                (key, label, description, location_type, biome,
-                ai_generated, approved, review_status, created_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, 1, 'permanent', 'admin_kreator', ?, ?)""",
+                approved, review_status, created_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 1, 'permanent', 'admin_kreator', ?, ?)""",
             (key, label,
              d.get("description", hook.get("description", "")),
              _LOC_TYPE_MAP.get(d.get("location_type", ""), "macro"),
@@ -1470,9 +1470,9 @@ def _auto_create_forge_locations(
             conn.execute(
                 """INSERT OR IGNORE INTO game_locations
                    (key, label, description, location_type, parent_key,
-                    review_status, is_active, ai_generated,
+                    review_status, is_active,
                     created_by, source_campaign_id, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 'pending_review', 1, 1, 'forge', ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, 'pending_review', 1, 'forge', ?, ?, ?)""",
                 (key, name, description, loc_type, parent_key, template_id, now, now),
             )
             if conn.execute("SELECT changes()").fetchone()[0]:

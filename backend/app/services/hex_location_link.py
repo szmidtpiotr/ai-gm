@@ -50,6 +50,70 @@ def _cols(conn: sqlite3.Connection, table: str) -> set:
         return set()
 
 
+# ── #1525 (fala 2) — JEDEN test „czy lokacja stoi na mapie świata" ────────────
+# Przed falą 2 to samo pytanie zadawano na trzy sposoby: `placement='placed'`
+# (placement_engine), `world_hex_q IS NOT NULL` (location_validator, hex_travel)
+# i wskazanie z heksa. Kolumna `placement` została skasowana; jedynym źródłem jest
+# kanon `world_hexes.location_key` (map_level=0), a `world_hex_q/r` to nadal
+# tylko cache tego kanonu.
+
+#: SQL: lokacja `<alias>.key` NIE jest osadzona na mapie świata.
+NOT_PLACED_SQL = (
+    "NOT EXISTS (SELECT 1 FROM world_hexes h_p WHERE h_p.location_key = {alias}.key"
+    "            AND h_p.is_active = 1{ml})"
+)
+
+
+def not_placed_sql(conn: sqlite3.Connection, alias: str = "game_locations") -> str:
+    """Fragment WHERE: lokacja nie stoi na żadnym heksie świata (kanon).
+
+    Bez tabeli `world_hexes` (minimalne schematy testowe) nie ma mapy świata,
+    więc żadna lokacja nie jest osadzona — predykat degeneruje się do prawdy.
+    """
+    cols = _cols(conn, "world_hexes")
+    if not cols:
+        return "1 = 1"
+    ml = " AND h_p.map_level = 0" if "map_level" in cols else ""
+    return NOT_PLACED_SQL.format(alias=alias, ml=ml)
+
+
+def is_location_placed(conn: sqlite3.Connection, loc_key: str) -> bool:
+    """Kanoniczny test osadzenia: czy JAKIŚ heks świata wskazuje tę lokację."""
+    if not loc_key:
+        return False
+    ml, mlp = _ml(conn, 0)
+    row = conn.execute(
+        f"SELECT 1 FROM world_hexes WHERE location_key = ?{ml} AND is_active = 1 LIMIT 1",
+        (loc_key, *mlp),
+    ).fetchone()
+    return row is not None
+
+
+def is_placed_row(row) -> bool:
+    """Ten sam test co `is_location_placed`, ale na już wczytanym wierszu.
+
+    Skrót dla pętli fuzzy-matchingu (hex_travel / location_validator), które mają
+    w ręku setki wierszy i nie mogą odpytywać bazy per wiersz. Czyta CACHE
+    (`world_hex_q`), który po #1243 jest odświeżany wyłącznie z kanonu — jedna
+    definicja „osadzonej" zamiast trzech rozjeżdżających się testów (#1525).
+    """
+    try:
+        return row["world_hex_q"] is not None
+    except (KeyError, IndexError, TypeError):
+        return bool((row or {}).get("world_hex_q") is not None) if hasattr(row, "get") else False
+
+
+def placed_location_keys(conn: sqlite3.Connection) -> set[str]:
+    """Komplet kluczy lokacji osadzonych na mapie świata (kanon)."""
+    ml, mlp = _ml(conn, 0)
+    rows = conn.execute(
+        f"SELECT DISTINCT location_key FROM world_hexes"
+        f" WHERE location_key IS NOT NULL AND location_key != ''{ml} AND is_active = 1",
+        mlp,
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
 def link_location_to_hex(
     conn: sqlite3.Connection,
     loc_key: str,
@@ -63,7 +127,7 @@ def link_location_to_hex(
     """Canonical writer for the hex↔location pairing. THE single write path.
 
     level 0 (overworld): sets `world_hexes.location_key` (CANON) at (q, r) and
-      refreshes the derived cache `game_locations.world_hex_q/r` (+ placement).
+      refreshes the derived cache `game_locations.world_hex_q/r`.
     level 1 (local map): sets only `world_hexes.location_key` on the sub-hex —
       there is no `game_locations` cache column for local placement.
 
@@ -103,14 +167,10 @@ def link_location_to_hex(
     if claimed and sync_cache:
         gl = _cols(conn, "game_locations")
         if "world_hex_q" in gl and "world_hex_r" in gl:
-            sets = ["world_hex_q = ?", "world_hex_r = ?"]
-            params: list = [q, r]
-            if "placement" in gl:
-                sets.append("placement = 'placed'")
-            params.append(loc_key)
             conn.execute(
-                f"UPDATE game_locations SET {', '.join(sets)} WHERE key = ? AND is_active = 1",
-                params,
+                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? "
+                "WHERE key = ? AND is_active = 1",
+                (q, r, loc_key),
             )
     return claimed
 
@@ -271,8 +331,7 @@ def reconcile_location_hex_links(conn: sqlite3.Connection) -> dict:
             continue
         if row["world_hex_q"] != q or row["world_hex_r"] != r:
             conn.execute(
-                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ?, "
-                "placement = 'placed' WHERE key = ?",
+                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? WHERE key = ?",
                 (q, r, key),
             )
             report["backfilled"].append(
@@ -312,8 +371,8 @@ def reconcile_location_hex_links(conn: sqlite3.Connection) -> dict:
             logger.info("reconcile_stale_pin_promoted", key=key, hex=(q, r))
         else:
             conn.execute(
-                "UPDATE game_locations SET world_hex_q = NULL, world_hex_r = NULL, "
-                "placement = 'floating' WHERE key = ?",
+                "UPDATE game_locations SET world_hex_q = NULL, world_hex_r = NULL "
+                "WHERE key = ?",
                 (key,),
             )
             report["cleared"].append({"key": key, "was": (q, r)})

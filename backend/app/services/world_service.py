@@ -201,9 +201,9 @@ def _get_or_create_location(
         conn.execute(
             """INSERT OR IGNORE INTO game_locations
                (key, label, location_type, description, parent_id, parent_key,
-                rules, review_status, ai_generated, is_active,
+                rules, review_status, is_active,
                 created_by, canonical, source_campaign_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review', 1, 1,
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review', 1,
                        'gm_runtime', 0, ?)""",
             (key, label, loc_type, description, parent_id, parent_key or None, rules_json, campaign_id)
         )
@@ -1053,7 +1053,7 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
             """SELECT key, label, location_type, description, review_status,
                       created_by, location_subtype, biome, tier, canonical,
                       safe_for_rest, parent_key, source_campaign_id,
-                      ai_generated, is_active, temporary, created_at
+                      enrichment_locked, is_active, temporary, created_at
                FROM game_locations
                WHERE review_status = 'pending_review' AND is_active = 1
                ORDER BY rowid DESC LIMIT 100"""
@@ -1066,9 +1066,10 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
 def update_location_fields(conn: sqlite3.Connection, key: str, fields: dict) -> bool:
     """#590: edit a location's descriptive fields before approving/placing.
 
-    Only whitelisted columns are writable — `key`, `approved`, `review_status`,
-    `placement` and any unknown keys are ignored (prevents accidental state changes
-    and SQL injection via column names).
+    Only whitelisted columns are writable — `key`, `approved`, `review_status`
+    and any unknown keys are ignored (prevents accidental state changes and SQL
+    injection via column names). Osadzenie na mapie idzie wyłącznie przez
+    `link_location_to_hex` (kanon heksa, #1243/#1525).
     """
     editable = {
         "label", "description", "location_type", "location_subtype",
@@ -1599,7 +1600,8 @@ def generate_sublocs_for_settlement(
             """
             INSERT INTO game_locations
                 (key, label, location_type, location_subtype, parent_key,
-                 safe_for_rest, approved, review_status, is_active, created_by, ai_generated)
+                 safe_for_rest, approved, review_status, is_active, created_by,
+                 enrichment_locked)
             VALUES (?, ?, 'sub', ?, ?, ?, 1, 'permanent', 1, 'auto_generated', 0)
             """,
             (key, label, subtype, parent_key, safe),
@@ -1617,10 +1619,10 @@ def enrich_sublocs_labels(
 ) -> list[dict]:
     """#996 — LLM-enrich labels/descriptions of auto-generated sub-locations.
 
-    Fetches sub-locs under parent_key with ai_generated=0 (or the specific
+    Fetches sub-locs under parent_key with enrichment_locked=0 (or the specific
     subloc_keys if provided), asks LLM for thematic Polish names, then persists
-    label+description and sets ai_generated=1.  Idempotent: sub-locs already
-    enriched (ai_generated=1) are skipped.
+    label+description and sets enrichment_locked=1.  Idempotent: sub-locs already
+    enriched (enrichment_locked=1) are skipped.
 
     Returns list of updated dicts: {"key", "label", "description"}.
     """
@@ -1636,13 +1638,13 @@ def enrich_sublocs_labels(
         placeholders = ",".join("?" * len(subloc_keys))
         rows = conn.execute(
             f"SELECT key, location_subtype FROM game_locations "
-            f"WHERE parent_key = ? AND ai_generated = 0 AND key IN ({placeholders}) AND is_active = 1",
+            f"WHERE parent_key = ? AND enrichment_locked = 0 AND key IN ({placeholders}) AND is_active = 1",
             [parent_key] + list(subloc_keys),
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT key, location_subtype FROM game_locations "
-            "WHERE parent_key = ? AND ai_generated = 0 AND is_active = 1",
+            "WHERE parent_key = ? AND enrichment_locked = 0 AND is_active = 1",
             (parent_key,),
         ).fetchall()
 
@@ -1687,7 +1689,7 @@ def enrich_sublocs_labels(
         if key not in valid_keys or not label:
             continue
         conn.execute(
-            "UPDATE game_locations SET label = ?, description = ?, ai_generated = 1, "
+            "UPDATE game_locations SET label = ?, description = ?, enrichment_locked = 1, "
             "updated_at = datetime('now') WHERE key = ?",
             (label, description, key),
         )
@@ -1701,16 +1703,16 @@ def maybe_lazy_enrich_subloc(conn: sqlite3.Connection, location_key: str) -> boo
     """#1064 — lazy LLM-enrichment on first player entry into a sub-location.
 
     No-op (and no LLM call) unless the row is location_type='sub', has a
-    parent_key, and is still ai_generated=0 (generic template). Idempotent:
-    subsequent entries skip the LLM entirely. LLM failure leaves ai_generated=0
+    parent_key, and is still enrichment_locked=0 (generic template). Idempotent:
+    subsequent entries skip the LLM entirely. LLM failure leaves enrichment_locked=0
     so the next entry retries instead of getting stuck.
     """
     row = conn.execute(
-        "SELECT parent_key, location_type, ai_generated FROM game_locations "
+        "SELECT parent_key, location_type, enrichment_locked FROM game_locations "
         "WHERE key = ? AND is_active = 1",
         (location_key,),
     ).fetchone()
-    if not row or row["location_type"] != "sub" or row["ai_generated"] == 1 or not row["parent_key"]:
+    if not row or row["location_type"] != "sub" or row["enrichment_locked"] == 1 or not row["parent_key"]:
         return False
 
     updated = enrich_sublocs_labels(conn, row["parent_key"], subloc_keys=[location_key])

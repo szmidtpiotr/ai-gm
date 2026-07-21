@@ -1,7 +1,7 @@
 """TDD: Issue #589 + #590 — global world gen square shape + floating detail fields.
 
 #589: generate_world produced HEX/diamond (cube-constraint). Must be square/rectangle.
-#590: floating locations list missing full fields (description, parent_key, ai_generated)
+#590: floating locations list missing full fields (description, parent_key, created_by)
       needed for a preview/edit modal before placing.
 """
 import os
@@ -54,7 +54,7 @@ def _mk_conn() -> sqlite3.Connection:
         """CREATE TABLE game_locations (
             key TEXT, label TEXT, location_type TEXT, location_subtype TEXT,
             terrain_tags TEXT, biome TEXT, tier INTEGER, description TEXT,
-            parent_key TEXT, ai_generated INTEGER, placement TEXT,
+            parent_key TEXT, created_by TEXT,
             approved INTEGER, is_active INTEGER, world_hex_q INTEGER, world_hex_r INTEGER,
             region TEXT
         )"""
@@ -62,23 +62,23 @@ def _mk_conn() -> sqlite3.Connection:
     conn.execute(
         """INSERT INTO game_locations
            (key, label, location_type, location_subtype, terrain_tags, biome, tier,
-            description, parent_key, ai_generated, placement, approved, is_active)
+            description, parent_key, created_by, approved, is_active)
            VALUES ('cave1','Jaskinia','dungeon','cave','[\"forest\"]','forest',2,
-                   'Mroczna jaskinia w lesie','forest_region',1,'floating',1,1)"""
+                   'Mroczna jaskinia w lesie','forest_region','gm_runtime',1,1)"""
     )
     conn.commit()
     return conn
 
 
 def test_floating_includes_preview_fields():
-    """#590: floating rows must expose description, parent_key, ai_generated for the modal."""
+    """#590: floating rows must expose description, parent_key, created_by for the modal."""
     conn = _mk_conn()
     rows = get_floating_locations(conn)
     assert len(rows) == 1
     r = rows[0]
     assert r["description"] == "Mroczna jaskinia w lesie"
     assert r["parent_key"] == "forest_region"
-    assert r["ai_generated"] == 1
+    assert r["created_by"] == "gm_runtime"
 
 
 def test_floating_still_returns_basic_fields():

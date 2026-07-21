@@ -42,7 +42,6 @@ def _make_db() -> sqlite3.Connection:
             world_hex_q INTEGER,
             world_hex_r INTEGER,
             terrain_tags TEXT NOT NULL DEFAULT '[]',
-            placement TEXT NOT NULL DEFAULT 'floating',
             location_subtype TEXT,
             biome TEXT
         );
@@ -69,11 +68,12 @@ def _insert_hex(conn, q, r, hex_type="plains", label=None, location_key=None):
 
 def _insert_location(conn, key, label, q=None, r=None, placement="floating",
                      location_subtype=None, biome=None, description=None):
+    """#1525: „osadzona" wynika z kotwicy q/r (lustro kanonu), nie z kolumny."""
     conn.execute(
         """INSERT INTO game_locations
-           (key, label, description, world_hex_q, world_hex_r, placement, location_subtype, biome)
-           VALUES (?,?,?,?,?,?,?,?)""",
-        (key, label, description, q, r, placement, location_subtype, biome),
+           (key, label, description, world_hex_q, world_hex_r, location_subtype, biome)
+           VALUES (?,?,?,?,?,?,?)""",
+        (key, label, description, q, r, location_subtype, biome),
     )
     conn.commit()
 

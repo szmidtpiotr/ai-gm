@@ -12,7 +12,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:51:38",
     "updated_at": "2026-07-16 22:54:19",
-    "ai_generated": 1,
     "approved": 0,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -32,7 +31,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -48,7 +46,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:51:37",
     "updated_at": "2026-07-16 22:54:26",
-    "ai_generated": 1,
     "approved": 1,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -68,7 +65,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -84,7 +80,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -104,7 +99,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -120,7 +114,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -140,7 +133,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -156,7 +148,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -176,7 +167,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -192,7 +182,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -212,7 +201,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -228,7 +216,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -248,7 +235,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -264,7 +250,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -284,7 +269,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -300,7 +284,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -320,7 +303,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -336,7 +318,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -356,7 +337,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -372,7 +352,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -392,7 +371,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -408,7 +386,6 @@
     "is_active": 1,
     "created_at": "2026-07-16 10:56:58",
     "updated_at": "2026-07-16 10:56:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -428,7 +405,6 @@
     "world_hex_q": 43,
     "world_hex_r": 1,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -444,7 +420,6 @@
     "is_active": 1,
     "created_at": "2026-07-16 10:56:58",
     "updated_at": "2026-07-16 10:56:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -464,7 +439,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -480,7 +454,6 @@
     "is_active": 1,
     "created_at": "2026-07-16 10:56:58",
     "updated_at": "2026-07-16 10:56:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -500,7 +473,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -516,7 +488,6 @@
     "is_active": 1,
     "created_at": "2026-07-16 10:56:58",
     "updated_at": "2026-07-16 10:56:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -536,7 +507,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -552,7 +522,6 @@
     "is_active": 1,
     "created_at": "2026-07-16 10:56:58",
     "updated_at": "2026-07-16 10:56:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -572,7 +541,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -588,7 +556,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -608,7 +575,6 @@
     "world_hex_q": 39,
     "world_hex_r": 9,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -624,7 +590,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -644,7 +609,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -660,7 +624,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -680,7 +643,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -696,7 +658,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -716,7 +677,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -732,7 +692,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:26",
     "updated_at": "2026-06-22 05:52:26",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -752,7 +711,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -768,7 +726,6 @@
     "is_active": 0,
     "created_at": "2026-06-23 10:59:22",
     "updated_at": "2026-06-23 10:59:22",
-    "ai_generated": 1,
     "approved": 1,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -788,7 +745,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -804,7 +760,6 @@
     "is_active": 0,
     "created_at": "2026-06-23 11:44:02",
     "updated_at": "2026-06-23 11:44:02",
-    "ai_generated": 1,
     "approved": 1,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -824,7 +779,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -840,7 +794,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:23",
     "updated_at": "2026-06-22 05:52:23",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -860,7 +813,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -876,7 +828,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:35:02",
     "updated_at": "2026-06-22 08:35:02",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -896,7 +847,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -912,7 +862,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:14:05",
     "updated_at": "2026-06-22 09:14:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -932,7 +881,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -948,7 +896,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:10:09",
     "updated_at": "2026-06-22 17:10:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -968,7 +915,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -984,7 +930,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:56:57",
     "updated_at": "2026-06-22 17:56:57",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1004,7 +949,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1020,7 +964,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 20:54:07",
     "updated_at": "2026-06-22 20:54:07",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1040,7 +983,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1056,7 +998,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:41:47",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1076,7 +1017,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -1092,7 +1032,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:42:37",
     "updated_at": "2026-06-22 05:42:37",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1112,7 +1051,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1128,7 +1066,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:50:49",
     "updated_at": "2026-06-22 05:50:49",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1148,7 +1085,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1164,7 +1100,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:14",
     "updated_at": "2026-06-22 06:02:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1184,7 +1119,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1200,7 +1134,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:29",
     "updated_at": "2026-06-22 08:44:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1220,7 +1153,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1236,7 +1168,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:02",
     "updated_at": "2026-06-22 09:24:02",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1256,7 +1187,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1272,7 +1202,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:25",
     "updated_at": "2026-06-22 17:13:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1292,7 +1221,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1308,7 +1236,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:25",
     "updated_at": "2026-06-22 17:15:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1328,7 +1255,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1344,7 +1270,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:41",
     "updated_at": "2026-06-22 17:22:41",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1364,7 +1289,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1380,7 +1304,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:22",
     "updated_at": "2026-06-22 17:33:22",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1400,7 +1323,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1416,7 +1338,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:49",
     "updated_at": "2026-06-22 21:02:49",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1436,7 +1357,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1452,7 +1372,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:28",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1472,7 +1391,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -1488,7 +1406,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:20",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1508,7 +1425,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -1524,7 +1440,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:30",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1544,7 +1459,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -1560,7 +1474,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:25",
     "updated_at": "2026-06-22 05:52:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1580,7 +1493,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1596,7 +1508,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:35:05",
     "updated_at": "2026-06-22 08:35:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1616,7 +1527,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1632,7 +1542,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:14:07",
     "updated_at": "2026-06-22 09:14:07",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1652,7 +1561,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1668,7 +1576,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:10:11",
     "updated_at": "2026-06-22 17:10:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1688,7 +1595,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1704,7 +1610,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:56:59",
     "updated_at": "2026-06-22 17:56:59",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1724,7 +1629,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1740,7 +1644,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 20:54:09",
     "updated_at": "2026-06-22 20:54:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1760,7 +1663,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1776,7 +1678,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:41:49",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -1796,7 +1697,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -1812,7 +1712,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:14",
     "updated_at": "2026-06-22 06:02:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -1832,7 +1731,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1848,7 +1746,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:29",
     "updated_at": "2026-06-22 08:44:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -1868,7 +1765,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1884,7 +1780,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:03",
     "updated_at": "2026-06-22 09:24:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -1904,7 +1799,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1920,7 +1814,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:25",
     "updated_at": "2026-06-22 17:13:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -1940,7 +1833,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1956,7 +1848,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:26",
     "updated_at": "2026-06-22 17:15:26",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -1976,7 +1867,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -1992,7 +1882,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:42",
     "updated_at": "2026-06-22 17:22:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -2012,7 +1901,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2028,7 +1916,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:23",
     "updated_at": "2026-06-22 17:33:23",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2048,7 +1935,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2064,7 +1950,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:50",
     "updated_at": "2026-06-22 21:02:50",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2084,7 +1969,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2100,7 +1984,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:29",
     "updated_at": "2026-07-02 16:49:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2120,7 +2003,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2136,7 +2018,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:20",
     "updated_at": "2026-07-03 12:42:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2156,7 +2037,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2172,7 +2052,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:31",
     "updated_at": "2026-07-05 21:50:31",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2192,7 +2071,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2208,7 +2086,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:13",
     "updated_at": "2026-06-22 06:02:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2228,7 +2105,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2244,7 +2120,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:28",
     "updated_at": "2026-06-22 08:44:28",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2264,7 +2139,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2280,7 +2154,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:01",
     "updated_at": "2026-06-22 09:24:01",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2300,7 +2173,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2316,7 +2188,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:24",
     "updated_at": "2026-06-22 17:13:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2336,7 +2207,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2352,7 +2222,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:23",
     "updated_at": "2026-06-22 17:15:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2372,7 +2241,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2388,7 +2256,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:40",
     "updated_at": "2026-06-22 17:22:40",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2408,7 +2275,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2424,7 +2290,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:21",
     "updated_at": "2026-06-22 17:33:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2444,7 +2309,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2460,7 +2324,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:48",
     "updated_at": "2026-06-22 21:02:48",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2480,7 +2343,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2496,7 +2358,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:27",
     "updated_at": "2026-07-16 23:08:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2516,7 +2377,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2532,7 +2392,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:18",
     "updated_at": "2026-07-16 23:08:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2552,7 +2411,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2568,7 +2426,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:28",
     "updated_at": "2026-07-16 23:08:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2588,7 +2445,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2604,7 +2460,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -2624,7 +2479,6 @@
     "world_hex_q": 13,
     "world_hex_r": 22,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -2640,7 +2494,6 @@
     "is_active": 0,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -2660,7 +2513,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2676,7 +2528,6 @@
     "is_active": 0,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -2696,7 +2547,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2712,7 +2562,6 @@
     "is_active": 0,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -2732,7 +2581,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2748,7 +2596,6 @@
     "is_active": 0,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -2768,7 +2615,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2784,7 +2630,6 @@
     "is_active": 0,
     "created_at": "2026-06-25 16:50:27",
     "updated_at": "2026-06-25 16:50:27",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -2804,7 +2649,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -2820,7 +2664,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:26",
     "updated_at": "2026-06-22 05:52:26",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2840,7 +2683,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2856,7 +2698,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:27",
     "updated_at": "2026-06-22 06:02:27",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2876,7 +2717,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2892,7 +2732,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:41",
     "updated_at": "2026-06-22 08:44:41",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2912,7 +2751,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2928,7 +2766,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:16",
     "updated_at": "2026-06-22 09:24:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2948,7 +2785,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -2964,7 +2800,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:03",
     "updated_at": "2026-06-22 21:03:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -2984,7 +2819,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3000,7 +2834,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:51",
     "updated_at": "2026-07-16 18:34:07",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3020,7 +2853,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3036,7 +2868,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:55",
     "updated_at": "2026-07-16 22:54:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3056,7 +2887,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3072,7 +2902,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:53",
     "updated_at": "2026-07-16 22:54:39",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3092,7 +2921,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3108,7 +2936,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:23",
     "updated_at": "2026-07-16 22:54:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3128,7 +2955,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3144,7 +2970,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:31",
     "updated_at": "2026-07-16 22:54:48",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3164,7 +2989,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3180,7 +3004,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:46",
     "updated_at": "2026-07-16 22:54:52",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3200,7 +3023,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3216,7 +3038,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:03",
     "updated_at": "2026-07-16 22:54:54",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3236,7 +3057,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3252,7 +3072,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:27",
     "updated_at": "2026-06-22 06:02:27",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3272,7 +3091,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3288,7 +3106,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:41",
     "updated_at": "2026-06-22 08:44:41",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3308,7 +3125,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3324,7 +3140,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:16",
     "updated_at": "2026-06-22 09:24:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3344,7 +3159,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3360,7 +3174,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:03",
     "updated_at": "2026-06-22 21:03:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3380,7 +3193,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3396,7 +3208,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:51",
     "updated_at": "2026-07-16 22:54:55",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3416,7 +3227,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3432,7 +3242,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:55",
     "updated_at": "2026-07-16 22:54:55",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3452,7 +3261,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3468,7 +3276,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:53",
     "updated_at": "2026-07-16 22:54:56",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3488,7 +3295,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3504,7 +3310,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:23",
     "updated_at": "2026-07-16 22:54:57",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3524,7 +3329,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3540,7 +3344,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:31",
     "updated_at": "2026-07-16 22:54:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3560,7 +3363,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3576,7 +3378,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:46",
     "updated_at": "2026-07-16 22:54:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3596,7 +3397,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3612,7 +3412,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:03",
     "updated_at": "2026-07-16 22:55:00",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3632,7 +3431,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -3648,7 +3446,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -3668,7 +3465,6 @@
     "world_hex_q": 25,
     "world_hex_r": -54,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -3684,7 +3480,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:21",
     "updated_at": "2026-06-22 06:02:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -3704,7 +3499,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3720,7 +3514,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:37",
     "updated_at": "2026-06-22 08:44:37",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -3740,7 +3533,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3756,7 +3548,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:11",
     "updated_at": "2026-06-22 09:24:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -3776,7 +3567,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3792,7 +3582,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:33",
     "updated_at": "2026-06-22 17:13:33",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -3812,7 +3601,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3828,7 +3616,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:34",
     "updated_at": "2026-06-22 17:15:34",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -3848,7 +3635,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3864,7 +3650,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:49",
     "updated_at": "2026-06-22 17:22:49",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -3884,7 +3669,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3900,7 +3684,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:31",
     "updated_at": "2026-06-22 17:33:31",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3920,7 +3703,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3936,7 +3718,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:57",
     "updated_at": "2026-06-22 21:02:57",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3956,7 +3737,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -3972,7 +3752,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:36",
     "updated_at": "2026-07-02 16:49:36",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -3992,7 +3771,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -4008,7 +3786,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:38",
     "updated_at": "2026-07-05 21:50:38",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -4028,7 +3805,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -4044,7 +3820,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4064,7 +3839,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4080,7 +3854,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4100,7 +3873,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4116,7 +3888,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4136,7 +3907,6 @@
     "world_hex_q": 40,
     "world_hex_r": -29,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -4152,7 +3922,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4172,7 +3941,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4188,7 +3956,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4208,7 +3975,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -4224,7 +3990,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4244,7 +4009,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -4260,7 +4024,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4280,7 +4043,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -4296,7 +4058,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4316,7 +4077,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -4332,7 +4092,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4352,7 +4111,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -4368,7 +4126,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:26",
     "updated_at": "2026-06-22 05:52:26",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -4388,7 +4145,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -4404,7 +4160,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4424,7 +4179,6 @@
     "world_hex_q": 26,
     "world_hex_r": -29,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -4440,7 +4194,6 @@
     "is_active": 0,
     "created_at": "2026-06-12 20:42:24",
     "updated_at": "2026-06-12 20:42:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -4460,7 +4213,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -4476,7 +4228,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4496,7 +4247,6 @@
     "world_hex_q": 17,
     "world_hex_r": -47,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -4512,7 +4262,6 @@
     "is_active": 0,
     "created_at": "2026-06-12 20:42:24",
     "updated_at": "2026-06-12 20:42:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -4532,7 +4281,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -4548,7 +4296,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4568,7 +4315,6 @@
     "world_hex_q": 23,
     "world_hex_r": -36,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -4584,7 +4330,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4604,7 +4349,6 @@
     "world_hex_q": 25,
     "world_hex_r": -33,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -4620,7 +4364,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:30:42",
     "updated_at": "2026-07-20 15:30:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4640,7 +4383,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4656,7 +4398,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:30:42",
     "updated_at": "2026-07-20 15:30:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4676,7 +4417,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4692,7 +4432,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:30:42",
     "updated_at": "2026-07-20 15:30:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4712,7 +4451,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4728,7 +4466,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:30:42",
     "updated_at": "2026-07-20 15:30:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4748,7 +4485,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4764,7 +4500,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:30:42",
     "updated_at": "2026-07-20 15:30:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4784,7 +4519,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -4800,7 +4534,6 @@
     "is_active": 1,
     "created_at": "2026-07-09 09:45:23",
     "updated_at": "2026-07-09 09:45:23",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -4820,7 +4553,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -4836,7 +4568,6 @@
     "is_active": 1,
     "created_at": "2026-07-09 09:45:23",
     "updated_at": "2026-07-09 09:45:23",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -4856,7 +4587,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -4872,7 +4602,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:30:42",
     "updated_at": "2026-07-20 15:30:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -4892,7 +4621,6 @@
     "world_hex_q": 16,
     "world_hex_r": -17,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -4908,7 +4636,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 12:29:05",
     "updated_at": "2026-07-07 12:29:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -4928,7 +4655,6 @@
     "world_hex_q": 28,
     "world_hex_r": -5,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -4944,7 +4670,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 12:29:05",
     "updated_at": "2026-07-15 14:15:16",
-    "ai_generated": 1,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -4964,7 +4689,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -4980,7 +4704,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 12:29:05",
     "updated_at": "2026-07-07 12:29:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -5000,7 +4723,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -5016,7 +4738,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 12:29:05",
     "updated_at": "2026-07-15 15:12:16",
-    "ai_generated": 1,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -5036,7 +4757,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -5052,7 +4772,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 12:29:05",
     "updated_at": "2026-07-07 12:29:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -5072,7 +4791,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -5088,7 +4806,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5108,7 +4825,6 @@
     "world_hex_q": 10,
     "world_hex_r": -38,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -5124,7 +4840,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5144,7 +4859,6 @@
     "world_hex_q": 12,
     "world_hex_r": -14,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -5160,7 +4874,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5180,7 +4893,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -5196,7 +4908,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5216,7 +4927,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -5232,7 +4942,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5252,7 +4961,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -5268,7 +4976,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5288,7 +4995,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -5304,7 +5010,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5324,7 +5029,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -5340,7 +5044,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5360,7 +5063,6 @@
     "world_hex_q": 25,
     "world_hex_r": -40,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -5376,7 +5078,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5396,7 +5097,6 @@
     "world_hex_q": 28,
     "world_hex_r": -25,
     "terrain_tags": "[\"cave\", \"mountains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -5412,7 +5112,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5432,7 +5131,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5448,7 +5146,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5468,7 +5165,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5484,7 +5180,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5504,7 +5199,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5520,7 +5214,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5540,7 +5233,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5556,7 +5248,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5576,7 +5267,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5592,7 +5282,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5612,7 +5301,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -5628,7 +5316,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5648,7 +5335,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -5664,7 +5350,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5684,7 +5369,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -5700,7 +5384,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5720,7 +5403,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -5736,7 +5418,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5756,7 +5437,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -5772,7 +5452,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5792,7 +5471,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5808,7 +5486,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5828,7 +5505,6 @@
     "world_hex_q": 17,
     "world_hex_r": -18,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -5844,7 +5520,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5864,7 +5539,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5880,7 +5554,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5900,7 +5573,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5916,7 +5588,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5936,7 +5607,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5952,7 +5622,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -5972,7 +5641,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -5988,7 +5656,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6008,7 +5675,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -6024,7 +5690,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6044,7 +5709,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -6060,7 +5724,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6080,7 +5743,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -6096,7 +5758,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6116,7 +5777,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -6132,7 +5792,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6152,7 +5811,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -6168,7 +5826,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:42:36",
     "updated_at": "2026-06-22 05:42:37",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6188,7 +5845,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6204,7 +5860,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:50:48",
     "updated_at": "2026-06-22 05:50:48",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6224,7 +5879,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6240,7 +5894,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:13",
     "updated_at": "2026-06-22 06:02:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6260,7 +5913,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6276,7 +5928,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:28",
     "updated_at": "2026-06-22 08:44:28",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6296,7 +5947,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6312,7 +5962,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:02",
     "updated_at": "2026-06-22 09:24:02",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6332,7 +5981,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6348,7 +5996,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:24",
     "updated_at": "2026-06-22 17:13:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6368,7 +6015,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6384,7 +6030,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:24",
     "updated_at": "2026-06-22 17:15:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6404,7 +6049,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6420,7 +6064,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:41",
     "updated_at": "2026-06-22 17:22:41",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -6440,7 +6083,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6456,7 +6098,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:22",
     "updated_at": "2026-06-22 17:33:22",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6476,7 +6117,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6492,7 +6132,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:48",
     "updated_at": "2026-06-22 21:02:48",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6512,7 +6151,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6528,7 +6166,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:27",
     "updated_at": "2026-07-02 16:49:27",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6548,7 +6185,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6564,7 +6200,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:19",
     "updated_at": "2026-07-03 12:42:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6584,7 +6219,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6600,7 +6234,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:29",
     "updated_at": "2026-07-05 21:50:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6620,7 +6253,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6636,7 +6268,6 @@
     "is_active": 0,
     "created_at": "2026-06-12 20:42:24",
     "updated_at": "2026-06-12 20:42:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6656,7 +6287,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -6672,7 +6302,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6692,7 +6321,6 @@
     "world_hex_q": 30,
     "world_hex_r": -66,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -6708,7 +6336,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6728,7 +6355,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -6744,7 +6370,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6764,7 +6389,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -6780,7 +6404,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6800,7 +6423,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -6816,7 +6438,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6836,7 +6457,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -6852,7 +6472,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6872,7 +6491,6 @@
     "world_hex_q": 38,
     "world_hex_r": -64,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -6888,7 +6506,6 @@
     "is_active": 1,
     "created_at": "2026-07-09 09:45:24",
     "updated_at": "2026-07-09 09:45:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -6908,7 +6525,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -6924,7 +6540,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6944,7 +6559,6 @@
     "world_hex_q": 0,
     "world_hex_r": 7,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -6960,7 +6574,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -6980,7 +6593,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -6996,7 +6608,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -7016,7 +6627,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7032,7 +6642,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -7052,7 +6661,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7068,7 +6676,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:29",
     "updated_at": "2026-06-22 06:02:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7088,7 +6695,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7104,7 +6710,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:44",
     "updated_at": "2026-06-22 08:44:44",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7124,7 +6729,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7140,7 +6744,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:18",
     "updated_at": "2026-06-22 09:24:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7160,7 +6763,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7176,7 +6778,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:05",
     "updated_at": "2026-06-22 21:03:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7196,7 +6797,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7212,7 +6812,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -7232,7 +6831,6 @@
     "world_hex_q": 22,
     "world_hex_r": -55,
     "terrain_tags": "[\"town\", \"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -7248,7 +6846,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:23",
     "updated_at": "2026-06-22 05:52:23",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7268,7 +6865,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7284,7 +6880,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:35:02",
     "updated_at": "2026-06-22 08:35:02",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7304,7 +6899,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7320,7 +6914,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:14:05",
     "updated_at": "2026-06-22 09:14:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7340,7 +6933,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7356,7 +6948,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:10:09",
     "updated_at": "2026-06-22 17:10:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7376,7 +6967,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7392,7 +6982,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:56:57",
     "updated_at": "2026-06-22 17:56:57",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7412,7 +7001,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7428,7 +7016,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 20:54:07",
     "updated_at": "2026-06-22 20:54:07",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7448,7 +7035,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7464,7 +7050,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:41:46",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7484,7 +7069,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7500,7 +7084,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:29",
     "updated_at": "2026-06-22 06:02:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7520,7 +7103,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7536,7 +7118,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:43",
     "updated_at": "2026-06-22 08:44:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7556,7 +7137,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7572,7 +7152,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:17",
     "updated_at": "2026-06-22 09:24:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7592,7 +7171,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7608,7 +7186,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:04",
     "updated_at": "2026-06-22 21:03:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7628,7 +7205,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7644,7 +7220,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:52",
     "updated_at": "2026-07-16 23:08:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7664,7 +7239,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7680,7 +7254,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:56",
     "updated_at": "2026-07-16 23:08:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7700,7 +7273,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7716,7 +7288,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:54",
     "updated_at": "2026-07-16 23:08:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7736,7 +7307,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7752,7 +7322,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:25",
     "updated_at": "2026-07-16 23:08:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7772,7 +7341,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7788,7 +7356,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:32",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7808,7 +7375,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7824,7 +7390,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:47",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7844,7 +7409,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7860,7 +7424,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:05",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7880,7 +7443,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -7896,7 +7458,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:29",
     "updated_at": "2026-06-22 06:02:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7916,7 +7477,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7932,7 +7492,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:43",
     "updated_at": "2026-06-22 08:44:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7952,7 +7511,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -7968,7 +7526,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:17",
     "updated_at": "2026-06-22 09:24:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -7988,7 +7545,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8004,7 +7560,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:04",
     "updated_at": "2026-06-22 21:03:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8024,7 +7579,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8040,7 +7594,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:52",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8060,7 +7613,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8076,7 +7628,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:56",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8096,7 +7647,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8112,7 +7662,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:54",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8132,7 +7681,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8148,7 +7696,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:25",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8168,7 +7715,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8184,7 +7730,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:32",
     "updated_at": "2026-07-16 23:08:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8204,7 +7749,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8220,7 +7764,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:47",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8240,7 +7783,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8256,7 +7798,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:05",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8276,7 +7817,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8292,7 +7832,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:29",
     "updated_at": "2026-06-22 06:02:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8312,7 +7851,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8328,7 +7866,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:44",
     "updated_at": "2026-06-22 08:44:44",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8348,7 +7885,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8364,7 +7900,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:18",
     "updated_at": "2026-06-22 09:24:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8384,7 +7919,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8400,7 +7934,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:04",
     "updated_at": "2026-06-22 21:03:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8420,7 +7953,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8436,7 +7968,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:53",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8456,7 +7987,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8472,7 +8002,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:57",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8492,7 +8021,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8508,7 +8036,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:55",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8528,7 +8055,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8544,7 +8070,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:26",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8564,7 +8089,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8580,7 +8104,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:33",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8600,7 +8123,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8616,7 +8138,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:48",
     "updated_at": "2026-07-16 23:08:19",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8636,7 +8157,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8652,7 +8172,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:05",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8672,7 +8191,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -8688,7 +8206,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:42:37",
     "updated_at": "2026-06-22 05:42:37",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8708,7 +8225,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8724,7 +8240,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:50:49",
     "updated_at": "2026-06-22 05:50:49",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8744,7 +8259,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8760,7 +8274,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:14",
     "updated_at": "2026-06-22 06:02:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8780,7 +8293,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8796,7 +8308,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:29",
     "updated_at": "2026-06-22 08:44:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8816,7 +8327,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8832,7 +8342,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:02",
     "updated_at": "2026-06-22 09:24:02",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8852,7 +8361,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8868,7 +8376,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:25",
     "updated_at": "2026-06-22 17:13:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8888,7 +8395,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8904,7 +8410,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:25",
     "updated_at": "2026-06-22 17:15:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8924,7 +8429,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8940,7 +8444,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:41",
     "updated_at": "2026-06-22 17:22:41",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8960,7 +8463,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -8976,7 +8478,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:22",
     "updated_at": "2026-06-22 17:33:22",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -8996,7 +8497,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9012,7 +8512,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:49",
     "updated_at": "2026-06-22 21:02:49",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9032,7 +8531,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9048,7 +8546,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:28",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9068,7 +8565,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -9084,7 +8580,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:20",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9104,7 +8599,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -9120,7 +8614,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:29",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9140,7 +8633,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -9156,7 +8648,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 05:52:25",
     "updated_at": "2026-06-22 05:52:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9176,7 +8667,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9192,7 +8682,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:35:05",
     "updated_at": "2026-06-22 08:35:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9212,7 +8701,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9228,7 +8716,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:14:07",
     "updated_at": "2026-06-22 09:14:07",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9248,7 +8735,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9264,7 +8750,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:10:11",
     "updated_at": "2026-06-22 17:10:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9284,7 +8769,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9300,7 +8784,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:56:59",
     "updated_at": "2026-06-22 17:56:59",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9320,7 +8803,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9336,7 +8818,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 20:54:09",
     "updated_at": "2026-06-22 20:54:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9356,7 +8837,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9372,7 +8852,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:41:48",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9392,7 +8871,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -9408,7 +8886,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:14",
     "updated_at": "2026-06-22 06:02:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -9428,7 +8905,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9444,7 +8920,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:29",
     "updated_at": "2026-06-22 08:44:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -9464,7 +8939,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9480,7 +8954,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:03",
     "updated_at": "2026-06-22 09:24:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -9500,7 +8973,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9516,7 +8988,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:25",
     "updated_at": "2026-06-22 17:13:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -9536,7 +9007,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9552,7 +9022,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:26",
     "updated_at": "2026-06-22 17:15:26",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -9572,7 +9041,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9588,7 +9056,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:42",
     "updated_at": "2026-06-22 17:22:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -9608,7 +9075,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9624,7 +9090,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:23",
     "updated_at": "2026-06-22 17:33:23",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9644,7 +9109,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9660,7 +9124,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:49",
     "updated_at": "2026-06-22 21:02:50",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9680,7 +9143,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9696,7 +9158,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:29",
     "updated_at": "2026-07-02 16:49:29",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9716,7 +9177,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9732,7 +9192,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:20",
     "updated_at": "2026-07-03 12:42:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9752,7 +9211,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9768,7 +9226,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:31",
     "updated_at": "2026-07-05 21:50:31",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9788,7 +9245,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9804,7 +9260,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:13",
     "updated_at": "2026-06-22 06:02:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9824,7 +9279,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9840,7 +9294,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:28",
     "updated_at": "2026-06-22 08:44:28",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9860,7 +9313,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9876,7 +9328,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:01",
     "updated_at": "2026-06-22 09:24:01",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9896,7 +9347,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9912,7 +9362,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:24",
     "updated_at": "2026-06-22 17:13:24",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9932,7 +9381,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9948,7 +9396,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:22",
     "updated_at": "2026-06-22 17:15:22",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -9968,7 +9415,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -9984,7 +9430,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:22:40",
     "updated_at": "2026-06-22 17:22:40",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10004,7 +9449,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10020,7 +9464,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:33:21",
     "updated_at": "2026-06-22 17:33:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10040,7 +9483,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10056,7 +9498,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:02:48",
     "updated_at": "2026-06-22 21:02:48",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10076,7 +9517,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10092,7 +9532,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 16:49:26",
     "updated_at": "2026-07-16 23:08:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10112,7 +9551,6 @@
     "world_hex_q": 22,
     "world_hex_r": 8,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -10128,7 +9566,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:18",
     "updated_at": "2026-07-16 23:08:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10148,7 +9585,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10164,7 +9600,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:50:28",
     "updated_at": "2026-07-16 23:08:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10184,7 +9619,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10200,7 +9634,6 @@
     "is_active": 0,
     "created_at": "2026-06-12 20:42:25",
     "updated_at": "2026-06-12 20:42:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10220,7 +9653,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10236,7 +9668,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:28",
     "updated_at": "2026-06-22 06:02:28",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10256,7 +9687,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10272,7 +9702,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:42",
     "updated_at": "2026-06-22 08:44:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10292,7 +9721,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10308,7 +9736,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:16",
     "updated_at": "2026-06-22 09:24:16",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10328,7 +9755,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10344,7 +9770,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:03",
     "updated_at": "2026-06-22 21:03:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10364,7 +9789,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -10380,7 +9804,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:51",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10400,7 +9823,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10416,7 +9838,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:55",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10436,7 +9857,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10452,7 +9872,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:54",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10472,7 +9891,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10488,7 +9906,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:24",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10508,7 +9925,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10524,7 +9940,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:32",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10544,7 +9959,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10560,7 +9974,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:46",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10580,7 +9993,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10596,7 +10008,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:04",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10616,7 +10027,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10632,7 +10042,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:51:37",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 1,
     "approved": 0,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -10652,7 +10061,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10668,7 +10076,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10688,7 +10095,6 @@
     "world_hex_q": 14,
     "world_hex_r": -35,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -10704,7 +10110,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:24",
     "updated_at": "2026-07-16 23:11:00",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -10724,7 +10129,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10740,7 +10144,6 @@
     "is_active": 1,
     "created_at": "2026-07-06 09:54:04",
     "updated_at": "2026-07-06 09:54:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10760,7 +10163,6 @@
     "world_hex_q": 4,
     "world_hex_r": -3,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -10776,7 +10178,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10796,7 +10197,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10812,7 +10212,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10832,7 +10231,6 @@
     "world_hex_q": 0,
     "world_hex_r": 5,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -10848,7 +10246,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10868,7 +10265,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10884,7 +10280,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10904,7 +10299,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -10920,7 +10314,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10940,7 +10333,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"desert\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -10956,7 +10348,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -10976,7 +10367,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"desert\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -10992,7 +10382,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11012,7 +10401,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"desert\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11028,7 +10416,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11048,7 +10435,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"desert\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11064,7 +10450,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:13:03",
     "updated_at": "2026-06-22 17:13:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -11084,7 +10469,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -11100,7 +10484,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:15:14",
     "updated_at": "2026-06-22 17:15:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -11120,7 +10503,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -11136,7 +10518,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:21:12",
     "updated_at": "2026-06-22 17:21:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -11156,7 +10537,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -11172,7 +10552,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 17:20:57",
     "updated_at": "2026-06-22 17:20:58",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 1,
@@ -11192,7 +10571,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -11208,7 +10586,6 @@
     "is_active": 0,
     "created_at": "2026-07-05 21:51:38",
     "updated_at": "2026-07-16 23:10:58",
-    "ai_generated": 1,
     "approved": 0,
     "created_by": "gm_runtime",
     "canonical": 0,
@@ -11228,7 +10605,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -11244,7 +10620,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 13:11:45",
     "updated_at": "2026-07-07 13:11:45",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -11264,7 +10639,6 @@
     "world_hex_q": 36,
     "world_hex_r": -7,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -11280,7 +10654,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 13:11:45",
     "updated_at": "2026-07-07 13:11:45",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -11300,7 +10673,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -11316,7 +10688,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 13:11:45",
     "updated_at": "2026-07-07 13:11:45",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -11336,7 +10707,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -11352,7 +10722,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 13:11:45",
     "updated_at": "2026-07-15 08:50:58",
-    "ai_generated": 1,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -11372,7 +10741,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -11388,7 +10756,6 @@
     "is_active": 1,
     "created_at": "2026-07-07 13:11:45",
     "updated_at": "2026-07-07 13:11:45",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "auto_generated",
     "canonical": 0,
@@ -11408,7 +10775,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -11424,7 +10790,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11444,7 +10809,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11460,7 +10824,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11480,7 +10843,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11496,7 +10858,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11516,7 +10877,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11532,7 +10892,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:12",
     "updated_at": "2026-06-11 15:22:12",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11552,7 +10911,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11568,7 +10926,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11588,7 +10945,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -11604,7 +10960,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11624,7 +10979,6 @@
     "world_hex_q": 36,
     "world_hex_r": -65,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -11640,7 +10994,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11660,7 +11013,6 @@
     "world_hex_q": 42,
     "world_hex_r": -33,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -11676,7 +11028,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11696,7 +11047,6 @@
     "world_hex_q": 10,
     "world_hex_r": -29,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -11712,7 +11062,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11732,7 +11081,6 @@
     "world_hex_q": 25,
     "world_hex_r": -48,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -11748,7 +11096,6 @@
     "is_active": 1,
     "created_at": "2026-07-06 09:54:04",
     "updated_at": "2026-07-06 09:54:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11768,7 +11115,6 @@
     "world_hex_q": 24,
     "world_hex_r": -13,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -11784,7 +11130,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11804,7 +11149,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -11820,7 +11164,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11840,7 +11183,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -11856,7 +11198,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11876,7 +11217,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -11892,7 +11232,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11912,7 +11251,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -11928,7 +11266,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11948,7 +11285,6 @@
     "world_hex_q": 33,
     "world_hex_r": 6,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -11964,7 +11300,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -11984,7 +11319,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12000,7 +11334,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -12020,7 +11353,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12036,7 +11368,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -12056,7 +11387,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12072,7 +11402,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -12092,7 +11421,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12108,7 +11436,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:28",
     "updated_at": "2026-06-22 06:02:28",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12128,7 +11455,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12144,7 +11470,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:42",
     "updated_at": "2026-06-22 08:44:42",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12164,7 +11489,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12180,7 +11504,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:17",
     "updated_at": "2026-06-22 09:24:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12200,7 +11523,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12216,7 +11538,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:03",
     "updated_at": "2026-06-22 21:03:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12236,7 +11557,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12252,7 +11572,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:51",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12272,7 +11591,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12288,7 +11606,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:56",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12308,7 +11625,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12324,7 +11640,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:54",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12344,7 +11659,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12360,7 +11674,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:24",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12380,7 +11693,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12396,7 +11708,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:32",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12416,7 +11727,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12432,7 +11742,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:46",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12452,7 +11761,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12468,7 +11776,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:04",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12488,7 +11795,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12504,7 +11810,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:28",
     "updated_at": "2026-06-22 06:02:28",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12524,7 +11829,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12540,7 +11844,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:43",
     "updated_at": "2026-06-22 08:44:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12560,7 +11863,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12576,7 +11878,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:17",
     "updated_at": "2026-06-22 09:24:17",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12596,7 +11897,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12612,7 +11912,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:03",
     "updated_at": "2026-06-22 21:03:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12632,7 +11931,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12648,7 +11946,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:52",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12668,7 +11965,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12684,7 +11980,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:56",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12704,7 +11999,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12720,7 +12014,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:54",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12740,7 +12033,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12756,7 +12048,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:24",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12776,7 +12067,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12792,7 +12082,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:32",
     "updated_at": "2026-07-16 23:08:20",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12812,7 +12101,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12828,7 +12116,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:47",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12848,7 +12135,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12864,7 +12150,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:04",
     "updated_at": "2026-07-16 23:08:21",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12884,7 +12169,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -12900,7 +12184,6 @@
     "is_active": 0,
     "created_at": "2026-06-12 20:42:25",
     "updated_at": "2026-06-12 20:42:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -12920,7 +12203,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -12936,7 +12218,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -12956,7 +12237,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -12972,7 +12252,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -12992,7 +12271,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13008,7 +12286,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13028,7 +12305,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13044,7 +12320,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13064,7 +12339,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13080,7 +12354,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:15",
     "updated_at": "2026-06-11 15:22:15",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13100,7 +12373,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13116,7 +12388,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13136,7 +12407,6 @@
     "world_hex_q": 5,
     "world_hex_r": -15,
     "terrain_tags": "[\"cave\", \"mountains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -13152,7 +12422,6 @@
     "is_active": 0,
     "created_at": "2026-06-12 20:42:25",
     "updated_at": "2026-06-12 20:42:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -13172,7 +12441,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -13188,7 +12456,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 14:37:45",
     "updated_at": "2026-07-20 14:37:45",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13208,7 +12475,6 @@
     "world_hex_q": 32,
     "world_hex_r": -65,
     "terrain_tags": "[\"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -13224,7 +12490,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13244,7 +12509,6 @@
     "world_hex_q": 0,
     "world_hex_r": 6,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -13260,7 +12524,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13280,7 +12543,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -13296,7 +12558,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13316,7 +12577,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -13332,7 +12592,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13352,7 +12611,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -13368,7 +12626,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13388,7 +12645,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -13404,7 +12660,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13424,7 +12679,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -13440,7 +12694,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13460,7 +12713,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -13476,7 +12728,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13496,7 +12747,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"swamp\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -13512,7 +12762,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13532,7 +12781,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -13548,7 +12796,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 10:59:34",
     "updated_at": "2026-07-20 10:59:34",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 0,
@@ -13568,7 +12815,6 @@
     "world_hex_q": 26,
     "world_hex_r": -59,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -13584,7 +12830,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13604,7 +12849,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\", \"tundra\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -13620,7 +12864,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13640,7 +12883,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "floating",
     "region": "siwe_granie"
   },
   {
@@ -13656,7 +12898,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:15",
     "updated_at": "2026-06-11 15:22:15",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13676,7 +12917,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13692,7 +12932,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:14",
     "updated_at": "2026-06-11 15:22:14",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13712,7 +12951,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13728,7 +12966,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:15",
     "updated_at": "2026-06-11 15:22:15",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13748,7 +12985,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13764,7 +13000,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:15",
     "updated_at": "2026-06-11 15:22:15",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13784,7 +13019,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"dungeon\", \"cave\", \"ruins\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13800,7 +13034,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:15",
     "updated_at": "2026-06-11 15:22:15",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13820,7 +13053,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13836,7 +13068,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:15",
     "updated_at": "2026-06-11 15:22:15",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -13856,7 +13087,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "martwe_pustkowia"
   },
   {
@@ -13872,7 +13102,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 06:02:30",
     "updated_at": "2026-06-22 06:02:30",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -13892,7 +13121,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -13908,7 +13136,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 08:44:44",
     "updated_at": "2026-06-22 08:44:44",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -13928,7 +13155,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -13944,7 +13170,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 09:24:18",
     "updated_at": "2026-06-22 09:24:18",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -13964,7 +13189,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -13980,7 +13204,6 @@
     "is_active": 0,
     "created_at": "2026-06-22 21:03:05",
     "updated_at": "2026-06-22 21:03:05",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14000,7 +13223,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": null
   },
   {
@@ -14016,7 +13238,6 @@
     "is_active": 0,
     "created_at": "2026-06-30 21:49:53",
     "updated_at": "2026-07-16 23:11:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14036,7 +13257,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14052,7 +13272,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:35:57",
     "updated_at": "2026-07-16 23:11:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14072,7 +13291,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14088,7 +13306,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:36:55",
     "updated_at": "2026-07-16 23:11:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14108,7 +13325,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14124,7 +13340,6 @@
     "is_active": 0,
     "created_at": "2026-07-02 13:44:26",
     "updated_at": "2026-07-16 23:11:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14144,7 +13359,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14160,7 +13374,6 @@
     "is_active": 0,
     "created_at": "2026-07-03 12:42:33",
     "updated_at": "2026-07-16 23:11:03",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14180,7 +13393,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14196,7 +13408,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:42:48",
     "updated_at": "2026-07-17 06:22:25",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14216,7 +13427,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14232,7 +13442,6 @@
     "is_active": 0,
     "created_at": "2026-07-09 09:45:07",
     "updated_at": "2026-07-16 23:11:04",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "admin_manual",
     "canonical": 0,
@@ -14252,7 +13461,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14268,7 +13476,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14288,7 +13495,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -14304,7 +13510,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14324,7 +13529,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -14340,7 +13544,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14360,7 +13563,6 @@
     "world_hex_q": 15,
     "world_hex_r": 14,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -14376,7 +13578,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14396,7 +13597,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -14412,7 +13612,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14432,7 +13631,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -14448,7 +13646,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14468,7 +13665,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -14484,7 +13680,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14504,7 +13699,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -14520,7 +13714,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14540,7 +13733,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -14556,7 +13748,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14576,7 +13767,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -14592,7 +13782,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14612,7 +13801,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -14628,7 +13816,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14648,7 +13835,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -14664,7 +13850,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14684,7 +13869,6 @@
     "world_hex_q": 21,
     "world_hex_r": 1,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -14700,7 +13884,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14720,7 +13903,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14736,7 +13918,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14756,7 +13937,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -14772,7 +13952,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14792,7 +13971,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -14808,7 +13986,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14828,7 +14005,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -14844,7 +14020,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14864,7 +14039,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -14880,7 +14054,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14900,7 +14073,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -14916,7 +14088,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14936,7 +14107,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -14952,7 +14122,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -14972,7 +14141,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -14988,7 +14156,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15008,7 +14175,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15024,7 +14190,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15044,7 +14209,6 @@
     "world_hex_q": 18,
     "world_hex_r": -28,
     "terrain_tags": "[\"cave\", \"mountains\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -15060,7 +14224,6 @@
     "is_active": 1,
     "created_at": "2026-07-20 15:13:28",
     "updated_at": "2026-07-20 15:30:43",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15080,7 +14243,6 @@
     "world_hex_q": 28,
     "world_hex_r": -63,
     "terrain_tags": "[\"plains\", \"tundra\"]",
-    "placement": "placed",
     "region": "siwe_granie"
   },
   {
@@ -15096,7 +14258,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15116,7 +14277,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15132,7 +14292,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15152,7 +14311,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15168,7 +14326,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15188,7 +14345,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15204,7 +14360,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15224,7 +14379,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15240,7 +14394,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15260,7 +14413,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15276,7 +14428,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15296,7 +14447,6 @@
     "world_hex_q": 37,
     "world_hex_r": 18,
     "terrain_tags": "[\"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -15312,7 +14462,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15332,7 +14481,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -15348,7 +14496,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15368,7 +14515,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -15384,7 +14530,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15404,7 +14549,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -15420,7 +14564,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15440,7 +14583,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -15456,7 +14598,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15476,7 +14617,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -15492,7 +14632,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15512,7 +14651,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\",\"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -15528,7 +14666,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15548,7 +14685,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -15564,7 +14700,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15584,7 +14719,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   },
   {
@@ -15600,7 +14734,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
     "updated_at": "2026-06-11 15:22:11",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15620,7 +14753,6 @@
     "world_hex_q": 24,
     "world_hex_r": 13,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -15636,7 +14768,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15656,7 +14787,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -15672,7 +14802,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15692,7 +14821,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -15708,7 +14836,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15728,7 +14855,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "kresy"
   },
   {
@@ -15744,7 +14870,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15764,7 +14889,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"castle\", \"hills\"]",
-    "placement": "floating",
     "region": "koronne_niziny"
   },
   {
@@ -15780,7 +14904,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15800,7 +14923,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -15816,7 +14938,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15836,7 +14957,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "placed",
     "region": "koronne_niziny"
   },
   {
@@ -15852,7 +14972,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15872,7 +14991,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15888,7 +15006,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
     "updated_at": "2026-06-11 15:22:10",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15908,7 +15025,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15924,7 +15040,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15944,7 +15059,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15960,7 +15074,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -15980,7 +15093,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"cave\", \"mountains\", \"hills\"]",
-    "placement": "floating",
     "region": "wybrzeze_lez"
   },
   {
@@ -15996,7 +15108,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -16016,7 +15127,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -16032,7 +15142,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -16052,7 +15161,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -16068,7 +15176,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -16088,7 +15195,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -16104,7 +15210,6 @@
     "is_active": 0,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -16124,7 +15229,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -16140,7 +15244,6 @@
     "is_active": 0,
     "created_at": "2026-06-11 15:22:09",
     "updated_at": "2026-06-11 15:22:09",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -16160,7 +15263,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"ruins\", \"plains\"]",
-    "placement": "floating",
     "region": "kresy"
   },
   {
@@ -16176,7 +15278,6 @@
     "is_active": 1,
     "created_at": "2026-06-11 15:22:13",
     "updated_at": "2026-06-11 15:22:13",
-    "ai_generated": 0,
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -16196,7 +15297,6 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "placement": "floating",
     "region": "czarnobor"
   }
 ]

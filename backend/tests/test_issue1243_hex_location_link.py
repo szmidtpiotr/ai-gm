@@ -29,8 +29,7 @@ CREATE TABLE IF NOT EXISTS game_locations (
     key TEXT UNIQUE NOT NULL, label TEXT NOT NULL,
     parent_key TEXT DEFAULT NULL, location_type TEXT DEFAULT 'macro',
     is_active INTEGER NOT NULL DEFAULT 1,
-    world_hex_q INTEGER, world_hex_r INTEGER,
-    placement TEXT NOT NULL DEFAULT 'floating'
+    world_hex_q INTEGER, world_hex_r INTEGER
 );
 """
 
@@ -51,12 +50,12 @@ def _hex(c, q, r, location_key=None, map_level=0):
 
 def _loc(c, key, wq=None, wr=None, **kw):
     c.execute(
-        "INSERT INTO game_locations (key,label,parent_key,location_type,is_active,world_hex_q,world_hex_r,placement) "
-        "VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO game_locations (key,label,parent_key,location_type,is_active,world_hex_q,world_hex_r) "
+        "VALUES (?,?,?,?,?,?,?)",
         (
             key, kw.get("label", key), kw.get("parent_key"),
             kw.get("location_type", "macro"), kw.get("is_active", 1),
-            wq, wr, kw.get("placement", "placed" if wq is not None else "floating"),
+            wq, wr,
         ),
     )
 
@@ -70,8 +69,8 @@ def test_link_writes_both_canon_and_cache():
     from app.services.hex_location_link import link_location_to_hex
     assert link_location_to_hex(c, "brzezino", 39, 9) is True
     assert c.execute("SELECT location_key FROM world_hexes WHERE q=39 AND r=9").fetchone()["location_key"] == "brzezino"
-    row = c.execute("SELECT world_hex_q, world_hex_r, placement FROM game_locations WHERE key='brzezino'").fetchone()
-    assert (row["world_hex_q"], row["world_hex_r"], row["placement"]) == (39, 9, "placed")
+    row = c.execute("SELECT world_hex_q, world_hex_r FROM game_locations WHERE key='brzezino'").fetchone()
+    assert (row["world_hex_q"], row["world_hex_r"]) == (39, 9)
 
 
 def test_link_only_if_empty_does_not_steal_claimed_hex():

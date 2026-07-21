@@ -232,7 +232,7 @@ def run(db_path: Path = DEFAULT_DB) -> dict:
     cur = conn.cursor()
 
     # 1. Fetch all locations
-    cur.execute('SELECT key, placement, world_hex_q, world_hex_r, region FROM game_locations')
+    cur.execute('SELECT key, world_hex_q, world_hex_r, region FROM game_locations')
     locations = cur.fetchall()
 
     updated_locs = 0
@@ -257,9 +257,12 @@ def run(db_path: Path = DEFAULT_DB) -> dict:
 
     # 2. Sync world_hexes for placed locations
     cur.execute(
-        'SELECT key, world_hex_q, world_hex_r, region FROM game_locations '
-        'WHERE placement="placed" AND world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL '
-        'AND region IS NOT NULL'
+        # #1525: „osadzona" = wskazana przez heks (kanon); cache q/r jest jego lustrem.
+        'SELECT g.key, g.world_hex_q, g.world_hex_r, g.region FROM game_locations g '
+        'WHERE g.world_hex_q IS NOT NULL AND g.world_hex_r IS NOT NULL '
+        'AND g.region IS NOT NULL '
+        'AND EXISTS (SELECT 1 FROM world_hexes h WHERE h.map_level=0 AND h.is_active=1 '
+        '            AND h.location_key = g.key)'
     )
     placed = cur.fetchall()
 

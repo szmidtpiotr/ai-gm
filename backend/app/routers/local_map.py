@@ -119,9 +119,9 @@ def _ensure_settlement_local_map(
             i += 1
         conn.execute(
             "INSERT INTO game_locations (key,label,location_type,world_hex_q,world_hex_r,"
-            "approved,review_status,is_active,created_by,ai_generated) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (hub_key, label, "macro", int(q), int(r), 1, "permanent", 1, "auto_generated", 0),
+            "approved,review_status,is_active,created_by) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (hub_key, label, "macro", int(q), int(r), 1, "permanent", 1, "auto_generated"),
         )
         conn.execute("UPDATE world_hexes SET location_key=? WHERE id=?", (hub_key, hx["id"]))
         conn.commit()

@@ -363,9 +363,9 @@ RAW_MIGRATIONS = [
     "ALTER TABLE world_hexes ADD COLUMN map_level INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE hex_type_config ADD COLUMN spawn_weight INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE hex_type_config ADD COLUMN has_submap INTEGER NOT NULL DEFAULT 0",
-    # game_locations hex placement columns (world builder overlay)
-    "ALTER TABLE game_locations ADD COLUMN world_hex_q INTEGER",
-    "ALTER TABLE game_locations ADD COLUMN world_hex_r INTEGER",
+    # #1525: schemat `game_locations` żyje w JEDNYM miejscu — migrations_admin.py
+    # (`_migrate_game_locations_schema`). Kolumny world_hex_q/r, terrain_tags i
+    # region przeniesione stamtąd; `placement` skasowany (kanon = heks).
     # S11 — seed spawn_weight for natural terrain (0 = hand-placed, not generated)
     "UPDATE hex_type_config SET spawn_weight = 30 WHERE hex_type = 'plains'",
     "UPDATE hex_type_config SET spawn_weight = 28 WHERE hex_type = 'forest'",
@@ -374,13 +374,9 @@ RAW_MIGRATIONS = [
     "UPDATE hex_type_config SET spawn_weight =  7 WHERE hex_type = 'swamp'",
     "UPDATE hex_type_config SET spawn_weight =  3 WHERE hex_type = 'ruins'",
     "UPDATE hex_type_config SET spawn_weight =  2 WHERE hex_type = 'cave'",
-    # U28 — Placement engine: terrain_tags + placement na game_locations, location_spawn_chance na hex_type_config
-    "ALTER TABLE game_locations ADD COLUMN terrain_tags TEXT NOT NULL DEFAULT '[]'",
-    "ALTER TABLE game_locations ADD COLUMN placement TEXT NOT NULL DEFAULT 'floating'",
+    # U28 — Placement engine: location_spawn_chance na hex_type_config
+    # (terrain_tags → migrations_admin; `placement` skasowany w #1525)
     "ALTER TABLE hex_type_config ADD COLUMN location_spawn_chance REAL NOT NULL DEFAULT 0.15",
-    # U28 — backfill placement='placed' dla lokacji już linkowanych przez world_hexes
-    "UPDATE game_locations SET placement='placed'"
-    " WHERE key IN (SELECT location_key FROM world_hexes WHERE location_key IS NOT NULL AND is_active=1)",
     # U28 — location_spawn_chance per hex_type (wartości startowe — kalibracja po U32b)
     "UPDATE hex_type_config SET location_spawn_chance=1.0 WHERE hex_type IN ('town','castle')",
     "UPDATE hex_type_config SET location_spawn_chance=0.8 WHERE hex_type='dungeon'",
@@ -488,7 +484,7 @@ RAW_MIGRATIONS = [
     "ALTER TABLE party_messages ADD COLUMN whisper_to TEXT",
     # RM1 (#1028) — region tag on world map + locations
     "ALTER TABLE world_hexes ADD COLUMN region TEXT NOT NULL DEFAULT 'kresy'",
-    "ALTER TABLE game_locations ADD COLUMN region TEXT",
+    # game_locations.region → migrations_admin.py (#1525, jedno miejsce na schemat)
     # PT9 (#1119) — nocna napaść przy obozie: boost zależny od terenu (0.20 cywilizowany / 0.35 dziki)
     "ALTER TABLE hex_type_config ADD COLUMN camp_encounter_boost REAL NOT NULL DEFAULT 0.20",
     "UPDATE hex_type_config SET camp_encounter_boost = 0.35 WHERE hex_type IN ('forest','mountains','mountain','swamp','cave','ruins','volcanic','tundra','desert','heath')",

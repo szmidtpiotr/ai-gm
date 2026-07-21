@@ -658,6 +658,8 @@ def resolve_declared_move_target(
     except Exception:
         pass
 
+    from app.services.hex_location_link import is_placed_row
+
     rows = conn.execute(
         "SELECT key, label, location_type, parent_key, world_hex_q FROM game_locations "
         "WHERE is_active = 1 AND label IS NOT NULL"
@@ -671,7 +673,7 @@ def resolve_declared_move_target(
     for r in rows:
         if not _label_matches_tokens(r["label"], cand_tokens):
             continue
-        is_placed = r["world_hex_q"] is not None
+        is_placed = is_placed_row(r)  # #1525: jeden test „stoi na mapie"
         is_hub_sub = hub_key is not None and r["parent_key"] == hub_key
         is_floating_no_hex = (r["location_type"] == "macro") and not is_placed
         # #1254: inside a settlement, never fall onto a floating macro-without-hex.
@@ -1227,14 +1229,14 @@ def resolve_chain_travel(
             arrived_data = hexes.get(arrived_hex, {})
             _hex_location_key = arrived_data.get("location_key")
 
-            # #549: Replace ai_generated legacy locations with DB-seeded ones on arrival
+            # #549: Replace GM-runtime legacy locations with DB-seeded ones on arrival
             if _hex_location_key:
                 _ai_check = conn.execute(
-                    "SELECT ai_generated FROM game_locations"
+                    "SELECT created_by FROM game_locations"
                     " WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
                     (_hex_location_key,),
                 ).fetchone()
-                if _ai_check and _ai_check["ai_generated"] == 1:
+                if _ai_check and (_ai_check["created_by"] or "") == "gm_runtime":
                     _prev_location_key = _hex_location_key
                     _aq, _ar = arrived_hex[0], arrived_hex[1]
                     _hex_type = arrived_data.get("hex_type", "plains")
@@ -2097,8 +2099,8 @@ def resolve_starting_hex(
                 conn.execute(
                     """INSERT OR IGNORE INTO game_locations
                        (key, label, safe_for_rest, canonical, created_by, is_active,
-                        approved, review_status, ai_generated, source_campaign_id)
-                       VALUES (?,?,1,0,'gm_runtime',1,1,'approved',0,?)""",
+                        approved, review_status, source_campaign_id)
+                       VALUES (?,?,1,0,'gm_runtime',1,1,'permanent',?)""",
                     (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
                 )
             logger.info(

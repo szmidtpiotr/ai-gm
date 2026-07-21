@@ -110,8 +110,8 @@ def _ensure_opening_location_fallback(
         conn.execute(
             """
             INSERT INTO game_locations
-              (key, label, description, location_type, ai_generated, approved, is_active)
-            VALUES (?, ?, ?, 'macro', 1, 1, 1)
+              (key, label, description, location_type, created_by, approved, is_active)
+            VALUES (?, ?, ?, 'macro', 'gm_runtime', 1, 1)
             """,
             (key, label, description),
         )

@@ -786,12 +786,14 @@ async def place_location_on_hex(
     conn = _get_db_connection()
     try:
         loc = conn.execute(
-            "SELECT key, placement FROM game_locations WHERE key=? AND is_active=1",
+            "SELECT key FROM game_locations WHERE key=? AND is_active=1",
             (location_key,),
         ).fetchone()
         if not loc:
             raise HTTPException(status_code=404, detail="Location not found")
-        if loc["placement"] == "placed":
+        # #1525: „już osadzona?" pyta kanon (heks), nie skasowaną kolumnę.
+        from app.services.hex_location_link import is_location_placed
+        if is_location_placed(conn, location_key):
             raise HTTPException(status_code=409, detail="Location already placed on a hex")
         hex_row = conn.execute(
             "SELECT q, r, location_key FROM world_hexes WHERE q=? AND r=? AND is_active=1",

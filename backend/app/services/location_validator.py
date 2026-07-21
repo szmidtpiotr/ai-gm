@@ -12,6 +12,7 @@ from rapidfuzz import fuzz
 from app.core.logging import get_logger
 from app.migrations_admin import DB_PATH
 from app.services.llm_service import generate_chat
+from app.services.hex_location_link import is_placed_row
 from app.services.location_config_service import get_bool_flag
 from app.services.location_context_injector import _collect_related_location_ids
 from app.services.location_intent_parser import LocationIntent
@@ -170,10 +171,23 @@ def _apply_create_parent_key_fallback(
         conn.close()
 
 
+#: #1525 — proweniencja „autorska" (seed/admin/Kuźnia) kontra generowana w locie.
+AUTHORED_CREATED_BY = {"seed", "admin_manual", "admin_kreator", "forge"}
+
+
+def _is_authored(loc: dict) -> bool:
+    """Czy lokacja pochodzi z autorskiej ścieżki (nie z runtime'owego GM-a).
+
+    Zastępuje dawny test na skasowanej fladze AI — jedna prawda o źródle
+    rekordu żyje teraz w `created_by` (#1525).
+    """
+    return (loc.get("created_by") or "admin_manual") in AUTHORED_CREATED_BY
+
+
 def _find_all_locations() -> list[dict]:
     """Pobiera aktywne lokalizacje do fuzzy match.
 
-    Issue #39: include pending_review (approved=0, ai_generated=1) rows. Otherwise
+    Issue #39: include pending_review (approved=0, created_by='gm_runtime') rows. Otherwise
     every GM-issued action='create' that names an already-pending place produces a
     duplicate, since the existing copy is invisible to the fuzzy matcher.
     """
@@ -232,9 +246,10 @@ def _fuzzy_match_location(target_label: str, locations: list[dict]) -> Optional[
     """
     Fuzzy match po label — zwraca najlepszy match jeśli score >= threshold.
 
-    Canonical (ai_generated=0) locations win over ai_generated ones at equal score.
-    This prevents the fuzzy matcher from selecting pending/unreviewed AI locations
-    when a canonical match exists with the same or better score (#522).
+    Canonical (autorskie: seed/admin) locations win over GM-runtime ones at equal
+    score. This prevents the fuzzy matcher from selecting pending/unreviewed AI
+    locations when a canonical match exists with the same or better score (#522).
+    #1525: proweniencja czytana z `created_by` — stara flaga AI skasowana.
 
     Returns:
         Najlepsza pasująca lokalizacja lub None
@@ -245,10 +260,10 @@ def _fuzzy_match_location(target_label: str, locations: list[dict]) -> Optional[
 
     for loc in locations:
         score = fuzz.ratio(target_label.lower(), loc["label"].lower())
-        is_canonical = not loc.get("ai_generated", False)
+        is_canonical = _is_authored(loc)
         if score < FUZZY_MATCH_THRESHOLD:
             continue
-        # Prefer: higher score; tiebreak: canonical over ai_generated
+        # Prefer: higher score; tiebreak: authored over GM-runtime
         if score > best_score or (score == best_score and is_canonical and not best_is_canonical):
             best_score = score
             best_match = loc
@@ -326,7 +341,7 @@ def _fuzzy_match_location_hub_aware(
     for loc in locations:
         label = loc.get("label") or ""
         score = fuzz.ratio(target_label.lower(), label.lower())
-        is_placed = loc.get("world_hex_q") is not None
+        is_placed = is_placed_row(loc)  # #1525: jeden test „stoi na mapie"
         is_hub_sub = (hub_id is not None and loc.get("parent_id") == hub_id) or (
             hub_key is not None and loc.get("parent_key") == hub_key
         )
@@ -338,7 +353,7 @@ def _fuzzy_match_location_hub_aware(
         if is_hub_sub:
             hub_sub_matched = True
         tier = 3 if is_hub_sub else (2 if is_placed else 1)
-        is_canonical = not loc.get("ai_generated", False)
+        is_canonical = _is_authored(loc)
         scored.append((tier, is_floating_no_hex, is_canonical, score, loc))
 
     if not scored:
@@ -422,7 +437,7 @@ def _slugify_location_key(label: str) -> str:
 
 def _create_new_location(
     intent: LocationIntent,
-    ai_generated: bool = False,
+    runtime_generated: bool = False,
     campaign_id: int | None = None,
 ) -> Optional[dict]:
     """
@@ -431,7 +446,7 @@ def _create_new_location(
     Returns:
         Utworzona lokalizacja lub None
     """
-    if intent.action != "create" and not ai_generated:
+    if intent.action != "create" and not runtime_generated:
         return None
 
     conn = _get_db_connection()
@@ -447,7 +462,7 @@ def _create_new_location(
         # Without a parent the location is unreachable from any session graph and
         # the player gets stranded. Only admin/canonical seeding can create
         # parentless macros.
-        if ai_generated and parent_id is None:
+        if runtime_generated and parent_id is None:
             logger.warning(
                 "create_location_refused_no_parent",
                 target_label=intent.target_label,
@@ -485,8 +500,8 @@ def _create_new_location(
             key = scoped
 
         # Stage 2B-Schema provenance: GM-driven auto-create vs. admin/explicit create.
-        created_by = "gm_runtime" if ai_generated else "admin_manual"
-        review_status = "pending_review" if ai_generated else "permanent"
+        created_by = "gm_runtime" if runtime_generated else "admin_manual"
+        review_status = "pending_review" if runtime_generated else "permanent"
         # LLM only fills description/biome/subtype on action=create. When validator
         # auto-creates as a fallback from action=move (unknown target), those fields
         # are None — give the Pending review queue at least the label as description
@@ -496,11 +511,11 @@ def _create_new_location(
             """
             INSERT INTO game_locations (
                 key, label, description, parent_id, parent_key, location_type,
-                ai_generated, approved,
+                approved,
                 created_by, review_status, canonical, source_campaign_id,
                 biome, location_subtype
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             """,
             (
                 key,
@@ -509,11 +524,10 @@ def _create_new_location(
                 parent_id,
                 intent.parent_key or None,
                 "sub" if parent_id else "macro",
-                1 if ai_generated else 0,
-                0 if ai_generated else 1,
+                0 if runtime_generated else 1,
                 created_by,
                 review_status,
-                campaign_id if ai_generated else None,
+                campaign_id if runtime_generated else None,
                 intent.biome,
                 intent.location_subtype,
             )
@@ -566,11 +580,11 @@ def persist_ai_generated_location(
             """
             INSERT INTO game_locations (
                 key, label, description, parent_id, location_type,
-                ai_generated, approved, is_active,
+                approved, is_active,
                 created_by, review_status, canonical, source_campaign_id,
                 biome, location_subtype
             )
-            VALUES (?, ?, ?, ?, ?, 1, 0, 1, 'gm_runtime', 'pending_review', 0, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 0, 1, 'gm_runtime', 'pending_review', 0, ?, ?, ?)
             """,
             (
                 key,
@@ -766,7 +780,7 @@ def validate_move(
             if not matched:
                 # Spróbuj znaleźć lub utworzyć lokalizację docelową (#522: canonical first)
                 all_locs = _find_all_locations()
-                canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
+                canonical_locs = [l for l in all_locs if _is_authored(l)]
                 matched = _fuzzy_match_location(intent.target_label, canonical_locs)
                 if not matched:
                     matched = _fuzzy_match_location(intent.target_label, all_locs)
@@ -780,7 +794,7 @@ def validate_move(
                 ), "move_ok", matched)
             
             if auto_create:
-                new_loc = _create_new_location(intent, ai_generated=True, campaign_id=campaign_id)
+                new_loc = _create_new_location(intent, runtime_generated=True, campaign_id=campaign_id)
                 if new_loc:
                     return _result_with_log(resolved_session_id, intent, ValidationResult(
                         allowed=True,
@@ -802,13 +816,13 @@ def validate_move(
         matched = _get_location_by_key(tk) if (intent.action == "move" and tk) else None
 
         if not matched:
-            # Fuzzy match — for action='move' prefer canonical (ai_generated=0) locations
-            # first. Only fall back to ai_generated ones when no canonical match exists,
+            # Fuzzy match — for action='move' prefer authored (seed/admin/forge)
+            # locations first. Only fall back to GM-runtime ones when none matches,
             # to avoid stranding the session on an unreviewed AI-invented place (#522).
-            # For action='create' we always search all locations (including ai_generated)
+            # For action='create' we always search all locations (including runtime ones)
             # so the LLM can discover already-pending duplicates before minting another (#39).
             all_locs = _find_all_locations()
-            canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
+            canonical_locs = [l for l in all_locs if _is_authored(l)]
             if intent.action == "move":
                 # #1254: hub-aware — prefer the current settlement's own sub-location
                 # (and placed-on-hex locations) over a similarly-named global floating
@@ -860,7 +874,7 @@ def validate_move(
             # A bare action='move' with an unknown target must not conjure a new location —
             # that's how orphan macros land in the DB and strand the session.
             if auto_create and intent.action == "create":
-                new_loc = _create_new_location(intent, ai_generated=True, campaign_id=campaign_id)
+                new_loc = _create_new_location(intent, runtime_generated=True, campaign_id=campaign_id)
                 if new_loc:
                     return _result_with_log(resolved_session_id, intent, ValidationResult(
                         allowed=True,

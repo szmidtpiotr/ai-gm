@@ -1,10 +1,10 @@
-"""TDD: #549 — legacy ai_generated locations replaced by DB-seeded on hex arrival.
+"""TDD: #549 — legacy GM-runtime locations replaced by DB-seeded on hex arrival.
 
 resolve_chain_travel must:
-1. When arrived hex has location_key pointing to ai_generated=1 location →
+1. When arrived hex has location_key pointing to a GM-runtime location →
    clear world_hexes.location_key and run placement engine.
 2. When arrived hex has no location_key → try placement engine.
-3. When arrived hex has approved, ai_generated=0 location → leave it unchanged.
+3. When arrived hex has an approved, authored location → leave it unchanged.
 """
 import json
 import sqlite3
@@ -34,10 +34,9 @@ def _make_db():
             id INTEGER PRIMARY KEY,
             key TEXT UNIQUE,
             label TEXT,
-            ai_generated INTEGER DEFAULT 0,
+            created_by TEXT DEFAULT 'admin_manual',
             approved INTEGER DEFAULT 1,
             is_active INTEGER DEFAULT 1,
-            placement TEXT DEFAULT 'placed',
             terrain_tags TEXT DEFAULT '[]',
             world_hex_q INTEGER,
             world_hex_r INTEGER
@@ -71,13 +70,13 @@ def _make_db():
 
 
 def test_ai_generated_location_replaced_by_db_seeded():
-    """Hex with ai_generated=1 location → placement engine replaces it."""
+    """Hex with a GM-runtime location → placement engine replaces it."""
     conn = _make_db()
 
     # Legacy AI-generated location on hex 0,0
     conn.execute(
-        "INSERT INTO game_locations (key, label, ai_generated, approved, placement, terrain_tags)"
-        " VALUES ('wschodnia_wioska', 'Wschodnia Wioska', 1, 0, 'placed', '[\"plains\"]')"
+        "INSERT INTO game_locations (key, label, created_by, approved, terrain_tags)"
+        " VALUES ('wschodnia_wioska', 'Wschodnia Wioska', 'gm_runtime', 0, '[\"plains\"]')"
     )
     conn.execute(
         "INSERT INTO world_hexes (q, r, hex_type, location_key) VALUES (0, 0, 'plains', 'wschodnia_wioska')"
@@ -87,8 +86,8 @@ def test_ai_generated_location_replaced_by_db_seeded():
     )
     # DB-seeded location available for placement
     conn.execute(
-        "INSERT INTO game_locations (key, label, ai_generated, approved, placement, terrain_tags)"
-        " VALUES ('stara_karczma', 'Stara Karczma', 0, 1, 'floating', '[\"plains\"]')"
+        "INSERT INTO game_locations (key, label, created_by, approved, terrain_tags)"
+        " VALUES ('stara_karczma', 'Stara Karczma', 'seed', 1, '[\"plains\"]')"
     )
     conn.execute(
         "INSERT INTO game_sessions (campaign_id, session_flags) VALUES (1, ?)",
@@ -98,14 +97,14 @@ def test_ai_generated_location_replaced_by_db_seeded():
 
     from app.services.placement_engine import try_place_location_on_hex
 
-    # Simulate what the fixed resolve_chain_travel does: detect ai_generated=1, clear, replace
+    # Simulate what the fixed resolve_chain_travel does: detect GM-runtime, clear, replace
     _hex_location_key = "wschodnia_wioska"
     _ai_check = conn.execute(
-        "SELECT ai_generated FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
+        "SELECT created_by FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
         (_hex_location_key,),
     ).fetchone()
     assert _ai_check is not None
-    assert _ai_check["ai_generated"] == 1, "Pre-condition: wschodnia_wioska is ai_generated"
+    assert _ai_check["created_by"] == "gm_runtime", "Pre-condition: wschodnia_wioska is GM-runtime"
 
     # Clear and run placement engine
     conn.execute(
@@ -120,11 +119,11 @@ def test_ai_generated_location_replaced_by_db_seeded():
     row = conn.execute("SELECT location_key FROM world_hexes WHERE q=0 AND r=0").fetchone()
     assert row["location_key"] == "stara_karczma", "world_hexes.location_key must be updated"
 
-    # Verify new location is ai_generated=0
+    # Verify new location is authored, not GM-runtime
     loc = conn.execute(
-        "SELECT ai_generated FROM game_locations WHERE key = ?", (new_key,)
+        "SELECT created_by FROM game_locations WHERE key = ?", (new_key,)
     ).fetchone()
-    assert loc["ai_generated"] == 0, "New location must not be ai_generated"
+    assert loc["created_by"] != "gm_runtime", "New location must not be GM-runtime"
 
 
 def test_hex_without_location_gets_placement():
@@ -138,8 +137,8 @@ def test_hex_without_location_gets_placement():
         "INSERT INTO world_hexes (q, r, hex_type) VALUES (3, 0, 'plains')"
     )
     conn.execute(
-        "INSERT INTO game_locations (key, label, ai_generated, approved, placement, terrain_tags)"
-        " VALUES ('pustelnia', 'Pustelnia', 0, 1, 'floating', '[\"plains\"]')"
+        "INSERT INTO game_locations (key, label, created_by, approved, terrain_tags)"
+        " VALUES ('pustelnia', 'Pustelnia', 'seed', 1, '[\"plains\"]')"
     )
     conn.commit()
 
@@ -151,26 +150,26 @@ def test_hex_without_location_gets_placement():
 
 
 def test_approved_db_location_not_replaced():
-    """Hex with approved, ai_generated=0 location → NOT replaced."""
+    """Hex with an approved, authored location → NOT replaced."""
     conn = _make_db()
 
     conn.execute(
-        "INSERT INTO game_locations (key, label, ai_generated, approved, placement, terrain_tags)"
-        " VALUES ('miasto_portowe', 'Miasto Portowe', 0, 1, 'placed', '[\"plains\"]')"
+        "INSERT INTO game_locations (key, label, created_by, approved, terrain_tags)"
+        " VALUES ('miasto_portowe', 'Miasto Portowe', 'seed', 1, '[\"plains\"]')"
     )
     conn.execute(
         "INSERT INTO world_hexes (q, r, hex_type, location_key) VALUES (4, 0, 'plains', 'miasto_portowe')"
     )
     conn.commit()
 
-    # Check: ai_generated=0 → should NOT trigger replacement
+    # Check: authored provenance → should NOT trigger replacement
     _hex_location_key = "miasto_portowe"
     _ai_check = conn.execute(
-        "SELECT ai_generated FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
+        "SELECT created_by FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
         (_hex_location_key,),
     ).fetchone()
     assert _ai_check is not None
-    assert _ai_check["ai_generated"] == 0, "miasto_portowe is NOT ai_generated → no replacement"
+    assert _ai_check["created_by"] != "gm_runtime", "miasto_portowe is authored → no replacement"
 
     # Location key unchanged
     row = conn.execute("SELECT location_key FROM world_hexes WHERE q=4 AND r=0").fetchone()

@@ -26,13 +26,14 @@ def db():
         );
         CREATE TABLE game_locations (
             id INTEGER PRIMARY KEY, key TEXT UNIQUE,
-            label TEXT, placement TEXT DEFAULT 'floating',
+            label TEXT,
             terrain_tags TEXT DEFAULT '[]',
             approved INTEGER DEFAULT 1, is_active INTEGER DEFAULT 1,
             location_type TEXT DEFAULT 'macro', location_subtype TEXT,
             biome TEXT, tier INTEGER DEFAULT 1,
             world_hex_q INTEGER, world_hex_r INTEGER,
-            region TEXT, description TEXT, parent_key TEXT, ai_generated INTEGER DEFAULT 0
+            region TEXT, description TEXT, parent_key TEXT,
+            created_by TEXT DEFAULT 'admin_manual'
         );
         INSERT INTO hex_type_config VALUES ('town', 1.0);
         INSERT INTO hex_type_config VALUES ('plains', 0.15);
@@ -44,11 +45,18 @@ def db():
 
 
 def _add_location(conn, key, tags, placement='floating', approved=1):
+    """#1525: „placed" = heks świata wskazuje lokację (kanon), nie kolumna."""
     conn.execute(
-        "INSERT INTO game_locations (key, label, placement, terrain_tags, approved, is_active)"
-        " VALUES (?,?,?,?,?,1)",
-        (key, key, placement, json.dumps(tags), approved)
+        "INSERT INTO game_locations (key, label, terrain_tags, approved, is_active)"
+        " VALUES (?,?,?,?,1)",
+        (key, key, json.dumps(tags), approved)
     )
+    if placement == 'placed':
+        conn.execute(
+            "INSERT INTO world_hexes (q,r,hex_type,map_level,region,is_active,location_key)"
+            " VALUES ((SELECT COALESCE(MAX(q),90)+1 FROM world_hexes),99,'town',0,'kresy',1,?)",
+            (key,),
+        )
     conn.commit()
 
 
@@ -63,8 +71,8 @@ def test_town_hex_gets_location(db):
     row = db.execute("SELECT location_key FROM world_hexes WHERE q=5 AND r=3").fetchone()
     assert row['location_key'] == 'karczma_1'
     # placement → placed
-    loc = db.execute("SELECT placement FROM game_locations WHERE key='karczma_1'").fetchone()
-    assert loc['placement'] == 'placed'
+    from app.services.hex_location_link import is_location_placed
+    assert is_location_placed(db, 'karczma_1')
 
 
 def test_location_not_placed_twice(db):
@@ -85,8 +93,8 @@ def test_hex_already_has_location_skipped(db):
     db.commit()
     result = try_place_location_on_hex(db, 5, 3, 'town', campaign_seed=1)
     assert result == 'existing_loc'  # zwraca istniejący klucz, nie nowy
-    loc = db.execute("SELECT placement FROM game_locations WHERE key='tawerna_1'").fetchone()
-    assert loc['placement'] == 'floating'  # nie ruszona
+    from app.services.hex_location_link import is_location_placed
+    assert not is_location_placed(db, 'tawerna_1')  # nie ruszona
 
 
 def test_no_matching_terrain_tags_returns_none(db):

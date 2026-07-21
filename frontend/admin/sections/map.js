@@ -602,7 +602,7 @@ const _ROW_REGISTRY = {
       <div class="modal-head"><span>👁 Lokacja: ${_esc(loc.label || locKey)}</span><button id="ld-x">✕</button></div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto">
         <div style="font-size:0.78rem;color:var(--t3)">Klucz: <code>${_esc(locKey)}</code>
-          ${loc.ai_generated ? '<span class="chip on" style="margin-left:8px;font-size:0.7rem">AI</span>' : ''}
+          ${['gm_runtime','auto_generated'].includes(loc.created_by) ? '<span class="chip on" style="margin-left:8px;font-size:0.7rem">AI</span>' : ''}
           <span class="chip" style="margin-left:6px;font-size:0.7rem">${source}</span></div>
         ${fld('Nazwa', 'ld-label', loc.label)}
         <label style="font-size:0.78rem;font-weight:600;color:var(--t2)">Opis</label>

@@ -48,6 +48,17 @@ def is_test_location_key(key: str | None) -> bool:
 # Pydantic Models
 # ============================================================================
 
+#: #1525 — jedyna lista legalnych wartości `game_locations.created_by`.
+#: Lustro tego, co zapisują realne ścieżki tworzenia; enum pola poniżej musi
+#: pozostać z nią zgodny (pilnuje tego test #1525).
+ALLOWED_CREATED_BY = {
+    "seed", "admin_manual", "admin_kreator", "gm_runtime", "forge", "auto_generated",
+}
+
+#: #1525 — trzy legalne statusy recenzji lokacji (baza wymusza to samo triggerem).
+LEGAL_REVIEW_STATUS = {"permanent", "pending_review", "discarded"}
+
+
 class LocationBase(BaseModel):
     """Base model dla lokalizacji."""
     key: Optional[str] = Field(default=None, min_length=1, max_length=100)
@@ -61,7 +72,13 @@ class LocationBase(BaseModel):
     npc_keys: List[str] = Field(default_factory=list)
     safe_for_rest: bool = False
     # Stage 2B-Schema provenance & reuse fields
-    created_by: str = Field(default="admin_manual", pattern="^(seed|admin_manual|admin_kreator|gm_runtime|import)$")
+    # #1525: enum = wartości, które kod NAPRAWDĘ zapisuje. `forge` (Kuźnia) i
+    # `auto_generated` (generator świata) były wcześniej cicho podmieniane na
+    # `gm_runtime` na wyjściu; martwy `import` (nikt go nie pisał) usunięty.
+    created_by: str = Field(
+        default="admin_manual",
+        pattern="^(seed|admin_manual|admin_kreator|gm_runtime|forge|auto_generated)$",
+    )
     location_subtype: Optional[str] = Field(default=None, max_length=50)
     biome: Optional[str] = Field(default=None, max_length=50)
     tier: int = Field(default=1, ge=1, le=5)
@@ -140,9 +157,11 @@ def row_to_location_dict(row: sqlite3.Row) -> dict:
             pass
     # Hardening: legacy dane spoza ograniczeń LocationResponse nie mogą wywalać
     # CAŁEJ listy ResponseValidationError-em (jeden zły wiersz = HTTP 500 całej tabeli).
-    # 1) created_by spoza enuma (np. 'auto_generated') → 'gm_runtime'.
-    _ALLOWED_CREATED_BY = {"seed", "admin_manual", "admin_kreator", "gm_runtime", "import"}
-    if result.get("created_by") not in _ALLOWED_CREATED_BY:
+    # 1) #1525: koniec CICHEJ podmiany. `forge`/`auto_generated` to legalne
+    #    wartości enuma i wychodzą z API bez zmiany. Podmiana zostaje wyłącznie
+    #    jako awaryjny bezpiecznik dla naprawdę legacy śmieci (migracja czyści bazę),
+    #    żeby jeden zły wiersz nie wywalał HTTP 500 na całej liście.
+    if result.get("created_by") not in ALLOWED_CREATED_BY:
         result["created_by"] = "gm_runtime"
     # 2) Puste stringi w polach z min_length=1 (key, parent_key) → None (Optional).
     for _opt_key in ("key", "parent_key", "location_subtype", "biome"):
@@ -715,7 +734,7 @@ async def patch_location(
             params.append(1 if data["canonical"] else 0)
         # #1524: npc_keys nie jest już zapisywane wprost — patrz _apply_npc_roster niżej.
         if "review_status" in data:
-            allowed = {"pending_review", "permanent", "discarded"}
+            allowed = LEGAL_REVIEW_STATUS
             val = str(data["review_status"]).strip()
             if val not in allowed:
                 raise HTTPException(status_code=422, detail=f"review_status must be one of {sorted(allowed)}")
@@ -725,11 +744,13 @@ async def patch_location(
             updates.append("approved = ?")
             params.append(1 if data["approved"] else 0)
 
-        # #1064 — manual label/description edit is an override: mark it
-        # ai_generated=1 so later lazy-enrichment (on player entry) skips it
-        # instead of silently overwriting the admin's text.
-        if ("label" in data or "description" in data) and "ai_generated" not in data:
-            updates.append("ai_generated = 1")
+        # #1064 — manual label/description edit is an override: lock the text so
+        # later lazy-enrichment (on player entry) skips it instead of silently
+        # overwriting the admin's version.
+        # #1525: this was the SECOND, smuggled meaning of `ai_generated`
+        # ("text already authored") — it now has its own column.
+        if ("label" in data or "description" in data) and "enrichment_locked" not in data:
+            updates.append("enrichment_locked = 1")
 
         roster = data["npc_keys"] if isinstance(data.get("npc_keys"), list) else None
 

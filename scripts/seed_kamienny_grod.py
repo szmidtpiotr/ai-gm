@@ -44,9 +44,9 @@ REGION = "siwe_granie"
 UPSERT_MACRO = """
 INSERT INTO game_locations
   (key, label, description, location_type, region, created_by, approved, canonical,
-   ai_generated, map_icon, tier, biome, location_subtype, safe_for_rest,
+   map_icon, tier, biome, location_subtype, safe_for_rest,
    visible_before_visit, review_status, is_active)
-VALUES (?,?,?,'macro',?, 'seed', 1, 1, 0, ?,?,?,?,?, ?, 'permanent', 1)
+VALUES (?,?,?,'macro',?, 'seed', 1, 1, ?,?,?,?,?, ?, 'permanent', 1)
 ON CONFLICT(key) DO UPDATE SET
   label=excluded.label, description=excluded.description, region=excluded.region,
   map_icon=excluded.map_icon, tier=excluded.tier, biome=excluded.biome,
@@ -57,9 +57,9 @@ ON CONFLICT(key) DO UPDATE SET
 UPSERT_SUB = """
 INSERT INTO game_locations
   (key, label, description, location_type, region, created_by, approved, canonical,
-   ai_generated, map_icon, tier, biome, location_subtype, safe_for_rest,
+   map_icon, tier, biome, location_subtype, safe_for_rest,
    visible_before_visit, review_status, is_active, parent_id, parent_key)
-VALUES (?,?,?,'sub',?, 'seed', 1, 1, 0, ?,?,?,?,?, 0, 'permanent', 1, ?, ?)
+VALUES (?,?,?,'sub',?, 'seed', 1, 1, ?,?,?,?,?, 0, 'permanent', 1, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
   label=excluded.label, description=excluded.description, region=excluded.region,
   map_icon=excluded.map_icon, tier=excluded.tier, biome=excluded.biome,

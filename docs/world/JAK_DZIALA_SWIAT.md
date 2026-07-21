@@ -108,7 +108,7 @@ Lokacje wchodzą do świata **czternastoma różnymi drzwiami**. To jedna z gł�
 
 ## Część 3 — Życie lokacji: statusy i poczekalnia
 
-Karta lokacji ma **siedem niezależnych przełączników**. To za dużo (Część 7), ale tak jest dziś:
+Karta lokacji miała **siedem niezależnych przełączników**. Fala 2 (#1525) skasowała dwa z nich, zostało **pięć**:
 
 | Przełącznik | Co znaczy | Kto go używa |
 |---|---|---|
@@ -117,8 +117,15 @@ Karta lokacji ma **siedem niezależnych przełączników**. To za dużo (Częś�
 | **kanoniczna** | czy to trwały element świata (a nie twór jednej kampanii) | mapa, seedy |
 | **status recenzji** | `permanent` (przyjęta) · `pending_review` (poczekalnia) · `discarded` (odrzucona) | panel Świat → Oczekujące |
 | **tymczasowa** | obozowisko — znika po odejściu | podróż |
-| **placement** | `floating` / `placed` | silnik osadzania |
-| **ai_generated** | stara flaga „stworzone przez AI" | resztki, patrz Część 7 |
+
+Skasowane w fali 2 (#1525):
+
+| Były przełącznik | Dlaczego zniknął |
+|---|---|
+| ~~**placement**~~ (`floating`/`placed`) | trzecia kopia odpowiedzi „czy stoi na mapie". Dziś liczy się ją z heksa (kanon), jednym helperem `is_location_placed`. |
+| ~~**ai_generated**~~ | druga kopia odpowiedzi „kto stworzył". Została jedna: **kto stworzył** (`created_by`). Jej przemycone drugie znaczenie — „tekst już napisany, nie nadpisuj" — dostało własny przełącznik `enrichment_locked`. |
+
+Dodatkowo status recenzji ma teraz **pilnowanego strażnika w samej bazie**: próba zapisania wartości spoza trzech legalnych kończy się błędem, zamiast po cichu wsadzać lokację w limbo.
 
 ### Ścieżka lokacji wymyślonej przez AI w trakcie gry
 
@@ -207,18 +214,20 @@ Rdzeń projektu jest zdrowy. Problemy siedzą w **warstwach historycznych, któr
 | Informacja | Ile kopii | Gdzie |
 |---|---|---|
 | ~~kto jest NPC w lokacji~~ | ~~**3**~~ → **1** | ✅ **naprawione w fali 1** (#1524): kanon = tabela przypisań `location_npc_assignments`; lista na karcie lokacji (`npc_keys`) to od teraz **kopia pochodna** odświeżana po każdym zapisie; legacy `npc_locations` nie jest już czytana ani zapisywana (pusta, DROP po weryfikacji). Zasada dodatkowa: **gospodarz siedzi w sub-lokacji**, makro-hub osady zostaje pusty. |
-| czy lokacja stoi na mapie | **3** | przełącznik `placement` · współrzędne na karcie · wskazanie z heksa |
+| ~~czy lokacja stoi na mapie~~ | ~~**3**~~ → **1** | ✅ **naprawione w fali 2** (#1525): kanon = wskazanie z heksa; współrzędne na karcie to jego lustro; `placement` skasowany, a wszystkie trzy równoległe testy „czy osadzona" zastąpił jeden helper. |
 | kto jest rodzicem | **2** | numer rodzica i nazwa rodzica — kod sprawdza oba, bo numer bywa pusty |
-| czy stworzyło AI | **2** | stara flaga `ai_generated` i nowe pole „kto stworzył" |
+| ~~czy stworzyło AI~~ | ~~**2**~~ → **1** | ✅ **naprawione w fali 2** (#1525): zostaje `created_by` (enum zna też realnie zapisywane `forge` i `auto_generated` — koniec cichej podmiany na `gm_runtime`); `ai_generated` skasowany. |
 
 **Dowód, że to nie teoria** — trzy pytania o to samo dawały trzy różne odpowiedzi:
 
 ```
-                                    PRZED (2026-07-21)    PO fali 0
-lokacji z przełącznikiem "placed"          60                39
-lokacji z wpisanymi współrzędnymi          56                39
-heksów świata wskazujących lokację         54                39
+                                    PRZED      PO fali 0    PO fali 2
+lokacji z przełącznikiem "placed"     60           39         — (kolumna skasowana)
+lokacji z wpisanymi współrzędnymi     56           39         40
+heksów świata wskazujących lokację    54           39         40
 ```
+
+Po fali 2 zostały **dwie** liczby zamiast trzech — i obie mówią to samo, bo druga jest wyłącznie lustrem pierwszej.
 
 Rozbieżność miała konkretne twarze: 11 lokacji twierdziło, że stoi na mapie, choć żaden heks ich nie znał (w tym sub-lokacje Trzech Kruków, Wołanki i Wołchynii, które **z definicji** nie powinny być „placed"), a 3 heksy świata wskazywały skasowane obozowiska i rekord testowy.
 
@@ -236,7 +245,9 @@ Prostowanie świata przy starcie (Część 6) leczy objawy co rano zamiast usun�
 Dokument `05_WORLD_BUILDER_AND_PERSISTENCE.md` opisuje model sprzed #1243: pozycjonowanie po martwych dziś kolumnach `map_x/map_y` i tabelę terenu, której nigdy nie zbudowano. Jedyny prawdziwy opis relacji heks↔lokacja siedział **w komentarzu w kodzie**. Ten plik, który właśnie czytasz, to naprawa tej choroby.
 
 ### Choroba 5 — siedem przełączników
-Większość ich kombinacji nie ma sensu. Status recenzji ma 5 realnych wartości, panel akceptuje 3.
+Większość ich kombinacji nie ma sensu. Status recenzji miał 5 realnych wartości, panel akceptuje 3.
+
+✅ **Częściowo naprawione w fali 2** (#1525): przełączników jest pięć zamiast siedmiu, a status recenzji ma dokładnie 3 legalne wartości — pilnowane przez samą bazę, nie przez dobrą wolę czternastu ścieżek zapisu.
 
 ### Dlaczego to wygląda na „ciągłe problemy"
 ~60 zgłoszeń o lokacjach w historii projektu. Ale wzorzec jest wyraźny: **bugi nie dotyczą rdzenia** (heksy, podróż, mapa lokalna, model osady działają) — dotyczą **szwów między duplikatami prawdy**. To argument za sprzątaniem, nie za trzecim przepisaniem.
@@ -251,7 +262,7 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 |---|---|---|
 | **0** ✅ (#1528) | czysty kanon wiązań heks↔lokacja + bezpiecznik seeda | geografia przestaje ginąć przy reseedzie |
 | **1** (#1524) | jeden system NPC: tabela przypisań = prawda, lista na karcie = automatyczna kopia, stara tabela skasowana | gospodarze przestają znikać i dublować się |
-| **2** | jedna prawda na informację: kasujemy `placement`, `ai_generated`, jeden rodzic, 3 legalne statusy | znikają rozjazdy 60/56/54 |
+| **2** ✅ (#1525) | jedna prawda na informację: skasowane `placement` i `ai_generated`, 3 legalne statusy pilnowane przez bazę | zniknęły rozjazdy 60/56/54 |
 | **3** | jedne drzwi: wszystkie 14 ścieżek przez jedną funkcję stemplującą flagi tak samo | koniec lokacji w limbo |
 | **4** | lampka w panelu admina zamiast cichej samonaprawy: lista rozjazdów + guzik „napraw" | widzisz problemy, zamiast systemu, który je zamiata |
 | **5** | ten dokument | wiesz, jak działa twoja gra ✅ |

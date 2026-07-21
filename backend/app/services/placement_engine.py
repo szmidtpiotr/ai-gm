@@ -20,7 +20,7 @@ def try_place_location_on_hex(
     Zwraca location_key jeśli osadzono lub hex miał już lokację, None jeśli hex pozostaje pusty.
 
     Deterministyczne per (q, r, campaign_seed) — ta sama kampania zawsze daje ten sam wynik.
-    Lokacja osadzona raz (placement='placed') nie wchodzi ponownie do puli.
+    Lokacja osadzona raz (wskazana przez heks — kanon #1243) nie wchodzi ponownie do puli.
     Filtruje kandydatów wg region — lokacje z innej krainy nie trafią na hex tej krainy.
     """
     existing = conn.execute(
@@ -47,9 +47,14 @@ def try_place_location_on_hex(
     # not the world map. Without this guard a floating sub with a matching
     # terrain_tag (a forest shrine) was stamped onto a random overworld forest
     # hex far from its parent, showing a settlement-style POI label in the wild.
+    # #1525: pula floating liczona z KANONU (żaden heks nie wskazuje lokacji),
+    # nie ze skasowanej kolumny `placement`.
+    from app.services.hex_location_link import not_placed_sql
+
     candidates = conn.execute(
         "SELECT key, terrain_tags FROM game_locations"
-        " WHERE approved=1 AND placement='floating' AND is_active=1"
+        " WHERE approved=1 AND is_active=1"
+        f" AND {not_placed_sql(conn)}"
         " AND COALESCE(location_type, '') != 'sub'"
         " AND (region = ? OR region IS NULL)",
         (region,),
@@ -79,12 +84,17 @@ def try_place_location_on_hex(
 
 
 def get_floating_locations(conn: sqlite3.Connection) -> list:
-    """Zwraca listę approved lokacji w stanie floating (niezakotwiczonych na hexach)."""
+    """Zwraca listę approved lokacji w stanie floating (niezakotwiczonych na hexach).
+
+    #1525: „floating" = żaden heks świata nie wskazuje tej lokacji (kanon #1243).
+    """
+    from app.services.hex_location_link import not_placed_sql
+
     rows = conn.execute(
         "SELECT key, label, location_type, location_subtype, terrain_tags, biome, tier,"
-        " description, parent_key, ai_generated, region"  # #590: full fields for preview/edit modal
+        " description, parent_key, created_by, region"  # #590: full fields for preview/edit modal
         " FROM game_locations"
-        " WHERE placement='floating' AND approved=1 AND is_active=1"
+        f" WHERE approved=1 AND is_active=1 AND {not_placed_sql(conn)}"
         " ORDER BY label",
     ).fetchall()
     result = []

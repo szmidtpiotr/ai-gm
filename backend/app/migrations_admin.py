@@ -831,7 +831,9 @@ ADMIN_MIGRATIONS = [
     # Use constant default (epoch) because SQLite ALTER TABLE doesn't support function defaults
     "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'",
     # Phase 8D-5 — Location auto-create review state and DEV default flag
-    "ALTER TABLE game_locations ADD COLUMN ai_generated INTEGER DEFAULT 0",
+    # (#1525: `ai_generated` skasowany — proweniencja = `created_by`, blokada
+    #  lazy-enrichmentu = `enrichment_locked`. Ta linia dopisywała kolumnę z
+    #  powrotem przy KAŻDYM starcie, więc DROP niżej kasował ją w kółko.)
     "ALTER TABLE game_locations ADD COLUMN approved INTEGER DEFAULT 1",
     # Phase 0-B1 — Add created_by, canonical, source_campaign_id tracking to game_locations
     "ALTER TABLE game_locations ADD COLUMN created_by TEXT DEFAULT 'admin_manual'",
@@ -2221,6 +2223,217 @@ ADMIN_SEEDS = [
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# #1525 (fala 2 „Sprzątania lokacji") — jedna prawda na informację
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Trzy duplikaty na `game_locations` znikają:
+#   • „czy stoi na mapie": `placement` DROP — kanon to `world_hexes.location_key`
+#     (#1243), a `world_hex_q/r` pozostaje jego cache'em.
+#   • „kto stworzył": `ai_generated` DROP — proweniencja żyje w `created_by`.
+#     Drugie, przemycone znaczenie tej flagi („tekst już autorski, nie nadpisuj
+#     go lazy-enrichmentem", #1064) dostaje własną kolumnę `enrichment_locked`.
+#   • „status recenzji": 3 legalne wartości, wymuszone triggerem.
+
+#: Jedyne legalne wartości `game_locations.review_status`.
+LEGAL_LOCATION_REVIEW_STATUS = ("permanent", "pending_review", "discarded")
+
+#: Jedyne legalne wartości `game_locations.created_by` (lustro API — patrz
+#: `routers/locations.py: ALLOWED_CREATED_BY`).
+LEGAL_LOCATION_CREATED_BY = (
+    "seed", "admin_manual", "admin_kreator", "gm_runtime", "forge", "auto_generated",
+)
+
+
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    try:
+        return any(r[1] == column for r in conn.execute(f"PRAGMA table_info({table})").fetchall())
+    except sqlite3.Error:
+        return False
+
+
+def migrate_location_review_status_values(conn: sqlite3.Connection) -> int:
+    """Sprowadza status recenzji do 3 legalnych wartości.
+
+    `approved` (sierocy writer w `hex_travel_service`) → `permanent`;
+    `pending` (legacy Kuźnia / template_start_anchor) → `pending_review`;
+    cokolwiek innego → `permanent` (rekord widoczny, nie ginie w limbo).
+    """
+    placeholders = ",".join("?" * len(LEGAL_LOCATION_REVIEW_STATUS))
+    n = 0
+    n += conn.execute(
+        "UPDATE game_locations SET review_status = 'permanent' WHERE review_status = 'approved'"
+    ).rowcount or 0
+    n += conn.execute(
+        "UPDATE game_locations SET review_status = 'pending_review' WHERE review_status = 'pending'"
+    ).rowcount or 0
+    n += conn.execute(
+        f"UPDATE game_locations SET review_status = 'permanent' "
+        f"WHERE review_status IS NULL OR review_status NOT IN ({placeholders})",
+        LEGAL_LOCATION_REVIEW_STATUS,
+    ).rowcount or 0
+    conn.commit()
+    return n
+
+
+def enforce_location_review_status(conn: sqlite3.Connection) -> None:
+    """Wymusza enum statusu recenzji na poziomie bazy.
+
+    SQLite nie umie dołożyć CHECK-a przez ALTER, a przebudowa `game_locations`
+    (30+ kolumn, FK z `game_sessions`) to niewspółmierne ryzyko dla jednego
+    ograniczenia — dlatego enum pilnują dwa triggery RAISE(ABORT). Efekt dla
+    zapisującego jest ten sam co CHECK: `sqlite3.IntegrityError`.
+    """
+    cond = " AND ".join(f"NEW.review_status != '{v}'" for v in LEGAL_LOCATION_REVIEW_STATUS)
+    msg = "review_status must be one of: " + ", ".join(LEGAL_LOCATION_REVIEW_STATUS)
+    for event in ("INSERT", "UPDATE OF review_status"):
+        name = "trg_game_locations_review_status_" + event.split()[0].lower()
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+        conn.execute(
+            f"""CREATE TRIGGER {name}
+                BEFORE {event} ON game_locations
+                FOR EACH ROW WHEN {cond}
+                BEGIN SELECT RAISE(ABORT, '{msg}'); END"""
+        )
+    conn.commit()
+
+
+def enforce_location_parent_pair(conn: sqlite3.Connection) -> int:
+    """Gwarantuje komplet OBU kolumn rodzica (`parent_id` + `parent_key`).
+
+    Obie zostają (FK jest szybki, klucz czytelny i przeżywa reseed), ale przestają
+    się rozjeżdżać: zamiast prosić czternaście ścieżek zapisu o dyscyplinę,
+    brakującą połówkę dopisuje sama baza. Efekt = „jeden writer" na poziomie
+    składowania — dowolne drzwi mogą podać którąkolwiek połowę (#1525).
+
+    Zwraca liczbę wierszy naprawionych backfillem.
+    """
+    n = conn.execute(
+        "UPDATE game_locations SET parent_id = ("
+        "    SELECT p.id FROM game_locations p WHERE p.key = game_locations.parent_key)"
+        " WHERE parent_key IS NOT NULL AND parent_id IS NULL"
+        "   AND EXISTS (SELECT 1 FROM game_locations p WHERE p.key = game_locations.parent_key)"
+    ).rowcount or 0
+    n += conn.execute(
+        "UPDATE game_locations SET parent_key = ("
+        "    SELECT p.key FROM game_locations p WHERE p.id = game_locations.parent_id)"
+        " WHERE parent_id IS NOT NULL AND parent_key IS NULL"
+    ).rowcount or 0
+
+    for event, missing, fill in (
+        ("INSERT", "parent_id", "id_from_key"),
+        ("UPDATE OF parent_key", "parent_id", "id_from_key"),
+        ("INSERT", "parent_key", "key_from_id"),
+        ("UPDATE OF parent_id", "parent_key", "key_from_id"),
+    ):
+        verb = event.split()[0].lower()
+        name = f"trg_game_locations_parent_{missing}_{verb}"
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+        if fill == "id_from_key":
+            when = "NEW.parent_key IS NOT NULL AND NEW.parent_id IS NULL"
+            body = ("UPDATE game_locations SET parent_id = "
+                    "(SELECT p.id FROM game_locations p WHERE p.key = NEW.parent_key) "
+                    "WHERE key = NEW.key;")
+        else:
+            when = "NEW.parent_id IS NOT NULL AND NEW.parent_key IS NULL"
+            body = ("UPDATE game_locations SET parent_key = "
+                    "(SELECT p.key FROM game_locations p WHERE p.id = NEW.parent_id) "
+                    "WHERE key = NEW.key;")
+        conn.execute(
+            f"""CREATE TRIGGER {name}
+                AFTER {event} ON game_locations
+                FOR EACH ROW WHEN {when}
+                BEGIN {body} END"""
+        )
+    conn.commit()
+    return n
+
+
+def _migrate_game_locations_schema(conn: sqlite3.Connection, _exec) -> None:
+    """Fala 2 (#1525): kolumny `game_locations` w JEDNYM miejscu + kasacja duplikatów."""
+    # ── Kolumny przeniesione z RAW_MIGRATIONS (`main.py`) — jedno miejsce ──
+    _exec("ALTER TABLE game_locations ADD COLUMN world_hex_q INTEGER", "loc-world-hex-q")
+    _exec("ALTER TABLE game_locations ADD COLUMN world_hex_r INTEGER", "loc-world-hex-r")
+    _exec("ALTER TABLE game_locations ADD COLUMN terrain_tags TEXT NOT NULL DEFAULT '[]'", "loc-terrain-tags")
+    _exec("ALTER TABLE game_locations ADD COLUMN region TEXT", "loc-region")
+
+    # ── „kto stworzył" — rozdzielenie dwóch znaczeń `ai_generated` ─────────
+    _exec(
+        "ALTER TABLE game_locations ADD COLUMN enrichment_locked INTEGER NOT NULL DEFAULT 0",
+        "1525-loc-enrichment-locked",
+    )
+    if _has_column(conn, "game_locations", "ai_generated"):
+        try:
+            # Stara flaga = 1 znaczyła „tekst już napisany (przez AI albo admina)" —
+            # dokładnie to, czego pilnuje lazy-enrichment. Przenosimy 1:1.
+            conn.execute(
+                "UPDATE game_locations SET enrichment_locked = COALESCE(ai_generated, 0)"
+            )
+            conn.commit()
+            logger.info("v2_migration_applied", label="1525-loc-enrichment-locked-backfill")
+        except Exception as e:
+            logger.warning("v2_migration_skipped", label="1525-loc-enrichment-locked-backfill", error=str(e))
+
+    # ── proweniencja: wartości spoza enuma → `admin_manual` ────────────────
+    try:
+        ph = ",".join("?" * len(LEGAL_LOCATION_CREATED_BY))
+        n = conn.execute(
+            f"UPDATE game_locations SET created_by = 'admin_manual' "
+            f"WHERE created_by IS NULL OR created_by NOT IN ({ph})",
+            LEGAL_LOCATION_CREATED_BY,
+        ).rowcount or 0
+        if n:
+            conn.commit()
+            logger.info("v2_migration_applied", label="1525-loc-created-by-enum", fixed=n)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="1525-loc-created-by-enum", error=str(e))
+
+    # ── status recenzji: 3 legalne wartości + strażnik w bazie ─────────────
+    try:
+        n = migrate_location_review_status_values(conn)
+        if n:
+            logger.info("v2_migration_applied", label="1525-loc-review-status-values", fixed=n)
+        enforce_location_review_status(conn)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="1525-loc-review-status", error=str(e))
+
+    # ── rodzic: oba pola zostają, ale zawsze w komplecie ──────────────────
+    try:
+        n = enforce_location_parent_pair(conn)
+        if n:
+            logger.info("v2_migration_applied", label="1525-loc-parent-pair", fixed=n)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="1525-loc-parent-pair", error=str(e))
+
+    # ── czyszczenie danych: heksy wskazujące martwe/nieistniejące lokacje ──
+    try:
+        n = conn.execute(
+            "UPDATE world_hexes SET location_key = NULL "
+            "WHERE map_level = 0 AND location_key IS NOT NULL AND location_key != '' "
+            "  AND NOT EXISTS (SELECT 1 FROM game_locations g "
+            "                  WHERE g.key = world_hexes.location_key AND g.is_active = 1)"
+        ).rowcount or 0
+        # Cache bez pokrycia w kanonie (sub-lokacje „na mapie świata", rekordy
+        # testowe) — gasimy pin; lokacja zostaje grywalna narracyjnie.
+        m = conn.execute(
+            "UPDATE game_locations SET world_hex_q = NULL, world_hex_r = NULL "
+            "WHERE world_hex_q IS NOT NULL AND ("
+            "  location_type = 'sub' OR is_active = 0 OR NOT EXISTS ("
+            "    SELECT 1 FROM world_hexes h WHERE h.map_level = 0 AND h.is_active = 1"
+            "      AND h.location_key = game_locations.key))"
+        ).rowcount or 0
+        if n or m:
+            conn.commit()
+            logger.info("v2_migration_applied", label="1525-loc-canon-cleanup",
+                        hexes_cleared=n, pins_cleared=m)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="1525-loc-canon-cleanup", error=str(e))
+
+    # ── kasacja duplikatów (na końcu: backfille wyżej z nich czytają) ──────
+    _exec("ALTER TABLE game_locations DROP COLUMN placement", "1525-loc-drop-placement")
+    _exec("ALTER TABLE game_locations DROP COLUMN ai_generated", "1525-loc-drop-ai-generated")
+
+
 def _rebuild_loot_entries_for_consumable_support(conn: sqlite3.Connection) -> None:
     """Allow NULL item_key when consumable_key is set (SQLite cannot relax NOT NULL via ALTER)."""
     cur = conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()
@@ -3590,63 +3803,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     # Stage 2B R4: temporary sub-locations (e.g. Rozbij obóz)
     _exec("ALTER TABLE game_locations ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0", "v2-locations-temporary")
 
-    # Backfill: derive created_by + canonical from legacy ai_generated boolean.
-    # Only runs if every row still has the default value (created_by='admin_manual' AND canonical=0),
-    # so re-runs of the migration are safe.
-    try:
-        row = conn.execute(
-            "SELECT COUNT(*) AS n FROM game_locations WHERE created_by != 'admin_manual' OR canonical != 0"
-        ).fetchone()
-        already_backfilled = row and int(row["n"] if isinstance(row, sqlite3.Row) else row[0]) > 0
-        if not already_backfilled:
-            conn.execute("""
-                UPDATE game_locations SET
-                    created_by = CASE WHEN ai_generated = 1 THEN 'gm_runtime' ELSE 'admin_manual' END,
-                    canonical  = CASE WHEN review_status = 'permanent' AND ai_generated = 0 THEN 1 ELSE 0 END
-            """)
-            conn.commit()
-            logger.info("v2_migration_applied", label="v2-locations-provenance-backfill")
-        else:
-            logger.debug("v2_migration_skipped", label="v2-locations-provenance-backfill", reason="already backfilled")
-    except Exception as e:
-        logger.warning("v2_migration_skipped", label="v2-locations-provenance-backfill", error=str(e))
-
-    # Stage 2B-Schema fix-up: catch rows the original backfill missed because they were
-    # inserted by location_validator AFTER the migration ran with stale defaults
-    # (created_by='admin_manual' + review_status='permanent' on AI-generated rows).
-    # Idempotent: guarded by ai_generated=1 plus default-only stamps; skipped silently
-    # once no rows match.
-    try:
-        cur = conn.execute("""
-            UPDATE game_locations
-               SET created_by = 'gm_runtime'
-             WHERE ai_generated = 1 AND created_by = 'admin_manual'
-        """)
-        n1 = cur.rowcount or 0
-        cur = conn.execute("""
-            UPDATE game_locations
-               SET review_status = 'pending_review'
-             WHERE ai_generated = 1 AND review_status = 'permanent' AND approved = 0
-        """)
-        n2 = cur.rowcount or 0
-        # #1407: unify the pending-review status string. Forge (adventure_forge)
-        # and template_start_anchor wrote 'pending', but the review LIST + approve
-        # flow query 'pending_review' → those rows were invisible in "Do
-        # zatwierdzenia" yet still counted by the map badge (31 pending, 0 shown).
-        cur = conn.execute("""
-            UPDATE game_locations
-               SET review_status = 'pending_review'
-             WHERE review_status = 'pending'
-        """)
-        n3 = cur.rowcount or 0
-        if n1 or n2 or n3:
-            conn.commit()
-            logger.info("v2_migration_applied",
-                        label="v2-locations-provenance-fixup",
-                        created_by_fixed=n1, review_status_fixed=n2,
-                        pending_status_unified=n3)
-    except Exception as e:
-        logger.warning("v2_migration_skipped", label="v2-locations-provenance-fixup", error=str(e))
+    # Historyczne backfille proweniencji — tylko dopóki legacy kolumna istnieje (#1525).
+    if _has_column(conn, "game_locations", "ai_generated"):
+        _legacy_ai_generated_backfill(conn)
 
     # Stage 2B-Schema fix-up #2: approve_entity('location') historically only flipped
     # review_status to 'permanent' but left approved=0, so the validator's
@@ -3667,6 +3826,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
                         approved_set=n)
     except Exception as e:
         logger.warning("v2_migration_skipped", label="v2-locations-approved-sync", error=str(e))
+
+    # ── #1525 (fala 2) — jedna prawda na informację ───────────────────────
+    _migrate_game_locations_schema(conn, _exec)
 
     # ── ALTER TABLE: npcs ─────────────────────────────────────────────────
 
@@ -8218,6 +8380,72 @@ def _ensure_companions_schema(conn: sqlite3.Connection) -> None:
         conn.commit()
     except sqlite3.OperationalError as e:
         logger.info("companions_schema_deferred", reason=str(e))
+
+
+def _legacy_ai_generated_backfill(conn: sqlite3.Connection) -> None:
+    """Historyczne backfille czytające skasowaną w #1525 flagę `ai_generated`.
+
+    Zostawione dla baz, które nigdy nie przeszły fali 2 (np. świeży klon PROD-a
+    sprzed migracji). Po `DROP COLUMN` blok nie ma się do czego odwołać, więc
+    wywołanie jest bramkowane obecnością kolumny.
+    """
+    # Backfill: derive created_by + canonical from legacy ai_generated boolean.
+    # Only runs if every row still has the default value (created_by='admin_manual' AND canonical=0),
+    # so re-runs of the migration are safe.
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM game_locations WHERE created_by != 'admin_manual' OR canonical != 0"
+        ).fetchone()
+        already_backfilled = row and int(row["n"] if isinstance(row, sqlite3.Row) else row[0]) > 0
+        if not already_backfilled:
+            conn.execute("""
+                UPDATE game_locations SET
+                    created_by = CASE WHEN ai_generated = 1 THEN 'gm_runtime' ELSE 'admin_manual' END,
+                    canonical  = CASE WHEN review_status = 'permanent' AND ai_generated = 0 THEN 1 ELSE 0 END
+            """)
+            conn.commit()
+            logger.info("v2_migration_applied", label="v2-locations-provenance-backfill")
+        else:
+            logger.debug("v2_migration_skipped", label="v2-locations-provenance-backfill", reason="already backfilled")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-locations-provenance-backfill", error=str(e))
+
+    # Stage 2B-Schema fix-up: catch rows the original backfill missed because they were
+    # inserted by location_validator AFTER the migration ran with stale defaults
+    # (created_by='admin_manual' + review_status='permanent' on AI-generated rows).
+    # Idempotent: guarded by ai_generated=1 plus default-only stamps; skipped silently
+    # once no rows match.
+    try:
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET created_by = 'gm_runtime'
+             WHERE ai_generated = 1 AND created_by = 'admin_manual'
+        """)
+        n1 = cur.rowcount or 0
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET review_status = 'pending_review'
+             WHERE ai_generated = 1 AND review_status = 'permanent' AND approved = 0
+        """)
+        n2 = cur.rowcount or 0
+        # #1407: unify the pending-review status string. Forge (adventure_forge)
+        # and template_start_anchor wrote 'pending', but the review LIST + approve
+        # flow query 'pending_review' → those rows were invisible in "Do
+        # zatwierdzenia" yet still counted by the map badge (31 pending, 0 shown).
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET review_status = 'pending_review'
+             WHERE review_status = 'pending'
+        """)
+        n3 = cur.rowcount or 0
+        if n1 or n2 or n3:
+            conn.commit()
+            logger.info("v2_migration_applied",
+                        label="v2-locations-provenance-fixup",
+                        created_by_fixed=n1, review_status_fixed=n2,
+                        pending_status_unified=n3)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-locations-provenance-fixup", error=str(e))
 
 
 def run_admin_migrations() -> None:

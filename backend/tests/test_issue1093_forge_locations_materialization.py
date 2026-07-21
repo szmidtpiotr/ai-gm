@@ -106,7 +106,10 @@ SAMPLE_NPCS = [
 # ─── #1092 RED: _auto_create_forge_locations inserts rows ───────────────────
 
 def test_auto_create_forge_locations_inserts_rows():
-    """_auto_create_forge_locations() must insert game_locations rows with review_status='pending'."""
+    """_auto_create_forge_locations() must insert game_locations rows with review_status='pending_review'.
+
+    #1525: Kuznia pisala sierocy status 'pending', ktorego panel recenzji nie zna
+    (rekordy wisialy w limbo — liczone w badge'u, niewidoczne na liscie)."""
     from app.routers.adventure_forge import _auto_create_forge_locations
 
     conn = _make_db()
@@ -122,7 +125,7 @@ def test_auto_create_forge_locations_inserts_rows():
     assert "kopalnia_czarnej_rudy" in keys
 
     for row in rows:
-        assert row["review_status"] == "pending", f"{row['key']} must have review_status=pending"
+        assert row["review_status"] == "pending_review", f"{row['key']} must have review_status=pending_review"
         assert row["is_active"] == 1, f"{row['key']} must be is_active=1"
         assert row["created_by"] == "forge", f"{row['key']} must have created_by=forge"
 

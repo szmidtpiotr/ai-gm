@@ -384,8 +384,8 @@ def main() -> int:
                 INSERT OR IGNORE INTO game_locations
                     (key, label, description, location_type, parent_id, parent_key,
                      biome, tier, safe_for_rest, map_icon, location_subtype,
-                     canonical, is_active, approved, review_status, created_by, ai_generated)
-                VALUES (?, ?, ?, 'macro', NULL, NULL, ?, ?, ?, ?, ?, 1, 1, 1, 'permanent', 'seed', 0)
+                     canonical, is_active, approved, review_status, created_by)
+                VALUES (?, ?, ?, 'macro', NULL, NULL, ?, ?, ?, ?, ?, 1, 1, 1, 'permanent', 'seed')
                 """,
                 (mkey, mlabel, mdesc, mbiome, mtier, mrest, micon, msubtype),
             )
@@ -403,8 +403,8 @@ def main() -> int:
                     INSERT OR IGNORE INTO game_locations
                         (key, label, description, location_type, parent_id, parent_key,
                          biome, tier, safe_for_rest, map_icon, location_subtype,
-                         canonical, is_active, approved, review_status, created_by, ai_generated)
-                    VALUES (?, ?, ?, 'sub', ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, 'permanent', 'seed', 0)
+                         canonical, is_active, approved, review_status, created_by)
+                    VALUES (?, ?, ?, 'sub', ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, 'permanent', 'seed')
                     """,
                     (skey, slabel, sdesc, macro_id, mkey, mbiome, mtier, ssafe, micon, ssubtype),
                 )

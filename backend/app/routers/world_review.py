@@ -412,7 +412,7 @@ def enrich_sublocs(key: str, req: EnrichSublocsRequest = None):
     """#996 — LLM-enrich labels/descriptions for auto-generated sub-locations.
 
     Calls the LLM with settlement context + sub-location subtypes and
-    stores thematic Polish names.  Sub-locs with ai_generated=1 are skipped
+    stores thematic Polish names.  Sub-locs with enrichment_locked=1 are skipped
     (idempotent).  On LLM failure the sub-locs keep their generic labels.
     """
     if req is None:

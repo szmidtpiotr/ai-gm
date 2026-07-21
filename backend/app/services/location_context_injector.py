@@ -180,7 +180,7 @@ def _find_location_candidates(
         return []
     placeholders = ",".join("?" * len(subtypes))
     rows = conn.execute(
-        f"""SELECT key, label, location_subtype, biome, placement, world_hex_q, world_hex_r
+        f"""SELECT key, label, location_subtype, biome, world_hex_q, world_hex_r
             FROM game_locations
             WHERE location_subtype IN ({placeholders})
               AND approved=1 AND is_active=1
@@ -245,7 +245,7 @@ def _find_label_candidates(
     if not msg_stems:
         return []
     rows = conn.execute(
-        """SELECT key, label, location_subtype, biome, placement, world_hex_q, world_hex_r
+        """SELECT key, label, location_subtype, biome, world_hex_q, world_hex_r
            FROM game_locations
            WHERE approved=1 AND is_active=1
              AND label IS NOT NULL AND TRIM(label) != ''""",

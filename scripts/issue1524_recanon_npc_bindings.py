@@ -180,8 +180,6 @@ def main() -> int:
             canonical=1,
             approved=1,
             review_status="permanent",
-            placement="placed",
-            ai_generated=0,
         )
         locs.append(inn)
         next_loc_id += 1
@@ -240,7 +238,6 @@ def main() -> int:
             canonical=1,
             approved=1,
             review_status="permanent",
-            ai_generated=0,
             world_hex_q=None,
             world_hex_r=None,
         )
