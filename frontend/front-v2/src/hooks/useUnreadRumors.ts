@@ -23,10 +23,12 @@ function seenCount(characterId: number): number {
   }
 }
 
-/** True gdy bohater ma plotki, których nie widział od ostatniego otwarcia Atlasu. */
-export function useUnreadRumors(): boolean {
+/** True gdy bohater ma plotki, których nie widział od ostatniego otwarcia Atlasu.
+ *  `enabled=false` (poza grą) nie strzela po Atlas — hook i tak MUSI być wołany
+ *  bezwarunkowo przez wołającego, inaczej rozjeżdża się kolejność hooków (#1517). */
+export function useUnreadRumors(enabled = true): boolean {
   const heroId = useAppStore((s) => s.currentHeroId);
-  const { data } = useAtlas(heroId ?? undefined);
-  if (!heroId || !data) return false;
+  const { data } = useAtlas(enabled ? heroId ?? undefined : undefined);
+  if (!enabled || !heroId || !data) return false;
   return data.rumors.entries.length > seenCount(heroId);
 }

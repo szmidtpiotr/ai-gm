@@ -23,10 +23,16 @@ export function TabBar({ inGame }: { inGame: boolean }) {
   const heroId = useAppStore((s) => s.currentHeroId) ?? undefined;
   const character = useCharacter(inGame ? heroId : undefined);
   const recipes = useCharacterRecipes(inGame ? heroId : undefined); // #1375 gating
+  // #1517 — WSZYSTKIE hooki przed `if (!inGame) return null`. TabBar siedzi w
+  // AppShell (poza <Outlet/>), więc SPA-nawigacja „poza grą → w grze" trafia w
+  // TEN SAM fiber: render nr 1 kończył się na 5 hookach (early return), render
+  // nr 2 wołał szósty (useUnreadRumors → zustand → useSyncExternalStore) i React
+  // wywalał #310. Po F5 pierwszy render był już `inGame`, więc licznik się zgadzał
+  // i błąd „znikał". Kolejność hooków musi być stała niezależnie od propsów.
+  const unreadRumors = useUnreadRumors(inGame);
   if (!inGame) return null;
 
   const vitals = readVitals(character.data?.sheet_json);
-  const unreadRumors = useUnreadRumors();
   const scrollable = [
     ...visibleSheetTabs(vitals.hasMana, !!recipes.data?.has_any),
     MAP_TAB,
