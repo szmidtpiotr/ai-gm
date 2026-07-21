@@ -546,6 +546,7 @@ function StepIdentity({
   backstory,
   setBackstory,
   blockedArchetypes = [],
+  race,
 }: {
   name: string;
   setName: (v: string) => void;

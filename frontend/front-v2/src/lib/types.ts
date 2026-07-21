@@ -550,6 +550,22 @@ export interface CombatActionResult {
   // resolve_offhand_followup). Pełny wynik ataku off-ręką: rzut/unik/obrażenia/łup/XP.
   // Frontend renderuje osobną kartę „DRUGI CIOS" + drugą sekwencję kości.
   offhand?: CombatActionResult | null;
+  // #1474 odskok elfa — darmowa próba wyjścia ze ZWARCIA po własnym strzale/czarze.
+  // Rozliczany przez backend PRZED advance_turn; frontend renderuje kartę ODSKOK.
+  elf_disengage?: {
+    success?: boolean;
+    dc?: number;
+    from?: string;
+    to?: string;
+    free_action?: boolean;
+    roll?: {
+      raw?: number;
+      dex_mod?: number;
+      skill_rank?: number;
+      proficiency?: number;
+      total?: number;
+    };
+  } | null;
   // sterowanie pętlą
   advance_turn?: string | "ended" | "awaiting_reaction";
   combat_state?: CombatState | null;

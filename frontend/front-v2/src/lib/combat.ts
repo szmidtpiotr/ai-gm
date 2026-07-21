@@ -272,6 +272,34 @@ export function rollFromEnemyZoneChange(r: CombatActionResult): RollCardData {
   };
 }
 
+/** #1474 — karta odskoku elfa: darmowa próba wyrwania się ze ZWARCIA po własnym
+ * strzale/czarze. Test Akrobatyki (k20 + ZRĘ + ranga + biegłość) vs DC; sukces
+ * przenosi na DYSTANS bez utraty tury, porażka zostawia w zwarciu bez kary. */
+export function rollFromElfDisengage(
+  d: NonNullable<CombatActionResult["elf_disengage"]>,
+): RollCardData {
+  const roll = d.roll || {};
+  const ok = !!d.success;
+  const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
+  const cells: RollCardData["cells"] = [
+    { k: "k20", v: String(Number(roll.raw ?? 0)) },
+    { k: "ZRĘ", v: signed(Number(roll.dex_mod ?? 0)) },
+  ];
+  if (Number(roll.skill_rank ?? 0))
+    cells.push({ k: "Akrobatyka", v: signed(Number(roll.skill_rank)) });
+  if (Number(roll.proficiency ?? 0))
+    cells.push({ k: "Biegłość", v: signed(Number(roll.proficiency)) });
+  cells.push({ k: "Suma", v: String(Number(roll.total ?? 0)), sum: true });
+  cells.push({ k: "DC", v: String(Number(d.dc ?? 0)) });
+  cells.push({
+    k: "Skutek",
+    v: ok ? "odskakujesz na dystans · tura zostaje" : "nie wyrywasz się ze zwarcia",
+    res: true,
+    tone: ok ? "ok" : "warn",
+  });
+  return { actor: "player", title: "ODSKOK", cells, fumble: false };
+}
+
 /** Etap d20 (na trafienie) dwuetapowej animacji kości: karta BEZ kości i wartości
  * obrażeń — pokazuje tylko czy cios siadł. Pełna karta (z −X HP) wyświetla się
  * dopiero po drugim etapie (kość obrażeń), żeby nie zdradzać wyniku przed rzutem. */

@@ -18,6 +18,7 @@ import {
   rollFromPlayerAttack,
   rollFromEnemyAttack,
   rollFromEnemyZoneChange,
+  rollFromElfDisengage,
   buildCombatEpilogueText,
   rollFromReaction,
   toHitStageCard,
@@ -226,6 +227,9 @@ export function CombatView({
   // #598 dual-wield: kolejka etapów kości dla ataku gracza (main → obrażenia →
   // off-hand d20 → obrażenia off-hand). Drenowana w onDiceDone; pusta poza turą gracza.
   const pendingStagesRef = useRef<DiceJob[]>([]);
+  // #1474: karta odskoku elfa czeka na koniec sekwencji kości ataku — odskok
+  // rozlicza się po ciosie, więc w logu ma się pojawić po jego kartach.
+  const disengageCardRef = useRef<RollCardData | null>(null);
   const pendingReactionRef = useRef<ReactionData | null>(null);
   // Kolejne okno reakcji (multiattack) do otwarcia PO animacji testu uniku/bloku.
   const pendingReactionNextRef = useRef<ReactionData | null>(null);
@@ -440,6 +444,11 @@ export function CombatView({
           const offCard = rollFromPlayerAttack(r.offhand, offLabel);
           stages.push(...stagesForAttack(r.offhand, offCard));
         }
+        // #1474: odskok elfa rozlicza się po ciosie — karta ląduje na końcu kolejki,
+        // po ewentualnym drugim ciosie, bo taka jest kolejność zdarzeń w silniku.
+        if (r.elf_disengage) {
+          disengageCardRef.current = rollFromElfDisengage(r.elf_disengage);
+        }
         const [first, ...rest] = stages;
         pendingStagesRef.current = rest;
         setDiceJob(first);
@@ -451,6 +460,7 @@ export function CombatView({
             : "DRUGI CIOS";
           cards.push(rollFromPlayerAttack(r.offhand, offLabel));
         }
+        if (r.elf_disengage) cards.push(rollFromElfDisengage(r.elf_disengage));
         setRolls((p) => [...p, ...cards]);
         setBusy(false);
       }
@@ -496,7 +506,10 @@ export function CombatView({
       setReaction(pendingReaction);
       return;
     }
-    if (diceJob) setRolls((p) => [...p, diceJob.card]);
+    const disengageCard = disengageCardRef.current;
+    disengageCardRef.current = null;
+    if (diceJob) setRolls((p) => [...p, diceJob.card, ...(disengageCard ? [disengageCard] : [])]);
+    else if (disengageCard) setRolls((p) => [...p, disengageCard]);
     setDiceJob(null);
     diceIncomingRef.current = false; // sekwencja kości domknięta — modal końca może wejść
     // Ostatni etap kości — teraz odsłoń realne HP (po modalu obrażeń).

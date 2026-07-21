@@ -161,6 +161,22 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest, authorizat
                 res["offhand"] = off
                 res["combat_state"] = off.get("combat_state", res.get("combat_state"))
 
+        # #1474: odskok elfa — darmowa próba wyjścia ze ZWARCIA PO własnym ataku, także
+        # PRZED advance_turn (sukces nie może kosztować tury). Serwis sam bramkuje rasę,
+        # strefę, żywych wrogów i limit 1/rundę → dla nie-elfa zwraca None.
+        # Odskok odpala się TYLKO po ataku dystansowym/czarze — elf, który świadomie
+        # bije w zwarciu (sztylet), zostaje tam, gdzie chciał być. Startowa reguła,
+        # do rewizji na Sandboxie razem z DC 12.
+        _dis_ok = str(res.get("weapon_type") or "").lower() in ("ranged", "spell")
+        if body.attacker == "player" and not res.get("blocked") and _dis_ok:
+            try:
+                dis = combat.resolve_elf_disengage(campaign_id)
+            except ValueError:
+                dis = None
+            if dis is not None:
+                res["elf_disengage"] = dis
+                res["combat_state"] = dis.get("combat_state", res.get("combat_state"))
+
         # #848: advance turn server-side after player attack so enemy turn is never lost on F5/reload.
         # Skip if blocked (turn not consumed: out_of_range, mana_insufficient, unsupported_effect).
         # Mirrors post_enemy_turn — advance only when combat still active.

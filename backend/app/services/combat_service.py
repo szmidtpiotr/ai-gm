@@ -9317,6 +9317,125 @@ def resolve_player_attack(
     return resolve_attack(campaign_id, roll_result, attacker="player", raw_d20=raw_d20)
 
 
+# ── #1474: Odskok elfa ───────────────────────────────────────────────────────
+# Elf leśny po własnym ataku może wyrwać się ze ZWARCIA bez tracenia tury — ale
+# tylko gdy przejdzie test Akrobatyki. Wartości STARTOWE (Numbers Policy #826),
+# strojne na Sandboxie razem z karą zwarcia (#1508).
+ELF_DISENGAGE_DC = 12          # DC Medium — d20 + DEX_mod + rank(acrobatics) + proficiency
+ELF_DISENGAGE_SKILL = "acrobatics"
+
+
+def resolve_elf_disengage(campaign_id: int) -> dict[str, Any] | None:
+    """#1474 — odskok elfa: darmowa próba wyjścia ze ZWARCIA po własnym ataku.
+
+    Wołane po ataku gracza, PRZED ``advance_turn`` (jak off-hand #598), więc sukces
+    NIE kosztuje tury. Test: ``d20 + DEX_mod + rank(acrobatics) + proficiency ≥ DC 12``.
+    Sukces → gracz przechodzi na DYSTANS; porażka → zostaje w zwarciu, bez dodatkowej
+    kary. Raz na rundę (marker runda+aktor, jak `extra_action` #607).
+
+    Zwraca ``None``, gdy odskok w ogóle nie wchodzi w grę: nie-elf, gracz już na
+    dystansie, nie jego tura, brak żywych wrogów, odskok już zużyty w tej rundzie.
+    Samobalansujące z #1508: doskok wroga pali mu turę, ale strzał elfa w zwarciu ma
+    −2, a sam odskok bywa nieudany.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row or str(row["current_turn"]) != "player":
+            return None
+        ch_id = int(row["character_id"])
+        if (_race_of(conn, ch_id) or "") != "elf":
+            return None
+
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        _ensure_zones(combatants)
+        p = _find_combatant(combatants, "player")
+        if not p or str(p.get("zone") or ZONE_ENGAGED) != ZONE_ENGAGED:
+            return None
+        if not _living_enemy_ids(combatants):
+            return None
+
+        round_n = int(row["round"] or 1)
+        marker = _condition_turn_marker(round_n, "player")
+        if str(p.get("elf_disengage_marker") or "") == marker:
+            return None
+        p["elf_disengage_marker"] = marker
+
+        ch = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (ch_id,)).fetchone()
+        sheet = parse_character_sheet(ch["sheet_json"]) if ch and ch["sheet_json"] else {}
+        try:
+            skill_rank = int((sheet.get("skills") or {}).get(ELF_DISENGAGE_SKILL, 0) or 0)
+        except (TypeError, ValueError):
+            skill_rank = 0
+        proficiency = proficiency_bonus(skill_rank)
+        dex_mod = _stat_mod(sheet, "DEX")
+
+        raw = roll_d20()
+        total = int(raw) + int(dex_mod) + skill_rank + proficiency
+        success = total >= ELF_DISENGAGE_DC
+
+        old_zone = str(p.get("zone") or ZONE_ENGAGED)
+        new_zone = ZONE_RANGED if success else old_zone
+        if success:
+            p["zone"] = new_zone
+
+        out: dict[str, Any] = {
+            "ok": True,
+            "success": bool(success),
+            "dc": ELF_DISENGAGE_DC,
+            "roll": {
+                "raw": int(raw), "dex_mod": int(dex_mod), "skill_rank": skill_rank,
+                "proficiency": proficiency, "total": int(total),
+            },
+            "from": old_zone,
+            "to": new_zone,
+            "free_action": True,
+        }
+
+        cid = int(row["id"])
+        log_combat_turn(
+            conn,
+            combat_id=cid,
+            campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor="player",
+            event_type="zone_change",
+            roll_value=int(total),
+            damage=None,
+            hp_after=int(p.get("hp_current", 0) or 0),
+            target_id="player",
+            target_name=str(p.get("name") or "Bohater"),
+            hit=bool(success),
+            narrative=json.dumps(
+                {"from": old_zone, "to": new_zone, "elf_disengage": True,
+                 "success": bool(success), "dc": ELF_DISENGAGE_DC},
+                ensure_ascii=False,
+            ),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+
+    # #754: rejestr rzutów — odskok jest testem umiejętności, nie atakiem.
+    try:
+        from app.services.dice_log_service import record_dice_roll as _rec_roll
+        _rec_roll(
+            campaign_id=campaign_id, roll_type="elf_disengage", character_id=ch_id,
+            combat_id=cid, actor="player", notation="1d20", raw_rolls=[int(raw)],
+            modifiers={"dex_mod": int(dex_mod), "skill_rank": skill_rank,
+                       "proficiency": proficiency},
+            total=int(total), dc=ELF_DISENGAGE_DC,
+            outcome="success" if success else "fail",
+            meta={"round": round_n},
+        )
+    except Exception:
+        pass
+
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
 def resolve_offhand_followup(campaign_id: int) -> dict[str, Any] | None:
     """#598 — drugi atak OFF-HAND w tej samej turze gracza.
 
