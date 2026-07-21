@@ -3616,8 +3616,7 @@
    "hex_type": "bridge",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "temp_camp_8888922_1783443573"
+   "encounter_chance": 0.15
   },
   {
    "q": 38,
@@ -5202,8 +5201,7 @@
    "hex_type": "snow",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "rozpruty_kurhan_straznikow"
+   "encounter_chance": 0.15
   },
   {
    "q": 2,
@@ -5243,8 +5241,7 @@
    "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "sanktuarium_peknietego_nieba"
+   "encounter_chance": 0.15
   },
   {
    "q": 7,
@@ -7183,8 +7180,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "trzech_krukow"
+   "encounter_chance": 0.15
   },
   {
    "q": 1,
@@ -7240,8 +7236,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "czarnstein"
+   "encounter_chance": 0.15
   },
   {
    "q": 8,
@@ -7490,8 +7485,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "blotstein"
+   "encounter_chance": 0.15
   },
   {
    "q": 39,
@@ -7596,8 +7590,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "spalona_kaplica_popielnych_slubow"
+   "encounter_chance": 0.15
   },
   {
    "q": 2,
@@ -8039,8 +8032,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
-   "encounter_pool": "[\"orc\"]",
-   "location_key": "wilczburg"
+   "encounter_pool": "[\"orc\"]"
   },
   {
    "q": 7,
@@ -8168,8 +8160,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "parent_immut_1783010966.947749"
+   "encounter_chance": 0.15
   },
   {
    "q": 23,
@@ -8417,8 +8408,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "cmentarz_bezimiennych"
+   "encounter_chance": 0.15
   },
   {
    "q": 5,
@@ -8795,8 +8785,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "milczaca_osada_dymnikow"
+   "encounter_chance": 0.15
   },
   {
    "q": 2,
@@ -9605,8 +9594,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "gospoda_pod_zlamanym_kolem"
+   "encounter_chance": 0.15
   },
   {
    "q": 3,
@@ -10198,8 +10186,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "temp_camp_9998881_1783614635"
+   "encounter_chance": 0.15
   },
   {
    "q": 27,
@@ -13584,8 +13571,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "gospoda_pod_z_amanym_rogiem"
+   "encounter_chance": 0.15
   },
   {
    "q": 1,
@@ -13834,8 +13820,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "temp_camp_77770013_1783790536"
+   "encounter_chance": 0.15
   },
   {
    "q": 32,
@@ -14172,7 +14157,7 @@
    "label": "Karczma Pod Trzema Krukami",
    "atmosphere": null,
    "encounter_chance": 0.15,
-   "location_key": "trzech_krukow_2"
+   "location_key": "trzech_krukow"
   },
   {
    "q": 24,

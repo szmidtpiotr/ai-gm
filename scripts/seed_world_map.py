@@ -80,6 +80,43 @@ def _build_insert_sql(hexes: list[dict]) -> str:
     return "\n".join(chunks)
 
 
+def assert_links_not_lost(hexes: list[dict], container: str, db: str, region: str | None = None) -> None:
+    """#1528 — nie pozwol po cichu wyzerowac geografii.
+
+    `world_hexes.location_key` (map_level=0) jest JEDYNYM zrodlem prawdy o polozeniu
+    lokacji (#1243). Plik seeda, ktory nie niesie wiazan, po wsianiu zostawia mape bez
+    geografii — a reconcile przy starcie odepnie wszystkie lokacje do `floating`.
+    Legacy fallback `docs/world/world_map_seed.json` ma dokladnie taki ksztalt (0 wiazan),
+    wiec bez tego guardu awaryjny seed cicho kasuje swiat.
+    """
+    incoming = sum(1 for h in hexes if h.get("location_key"))
+    scope = f" AND region='{region}'" if region else ""
+    current = int((dexec(
+        container,
+        f"SELECT count(*) FROM world_hexes WHERE map_level=0 AND location_key IS NOT NULL"
+        f" AND location_key != ''{scope};",
+        db=db,
+    ).stdout or "0").strip() or 0)
+
+    if current > 0 and incoming == 0:
+        print(
+            f"BLAD: plik seeda nie niesie ZADNEGO wiazania heks->lokacja, a mapa ma ich "
+            f"{current}{' w regionie ' + region if region else ''}. Wsianie skasowaloby "
+            f"geografie swiata. Odmawiam.\n"
+            f"       Napraw plik kanonu (scripts/snapshot_world_map.py) albo seeduj krainy "
+            f"z data/regions/*.json.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if current > 0 and incoming < current // 2:
+        print(
+            f"OSTRZEZENIE: plik niesie {incoming} wiazan, mapa ma {current} — "
+            f"seed usunie wiekszosc geografii.",
+            file=sys.stderr,
+        )
+
+
 def _stitch_hexes() -> list[dict]:
     """Zbierz heksy ze wszystkich live region-plików + legacy fallback."""
     region_files = sorted(REGIONS_DIR.glob("region_*.json"))
@@ -154,6 +191,8 @@ def main():
             print(f"world_hexes ma {cnt} heksów regionu '{a.region}' — pomijam. Użyj --force by nadpisać.")
             return
 
+        assert_links_not_lost(hexes, a.container, a.db, region=a.region)
+
         sql = (
             "BEGIN;\n"
             f"DELETE FROM world_hexes WHERE map_level=0 AND region='{a.region}';\n"
@@ -187,6 +226,8 @@ def main():
         if len(hexes) < MIN_HEX:
             print(f"BŁĄD: za mało heksów ({len(hexes)}) — safeguard odmawia.", file=sys.stderr)
             sys.exit(1)
+
+        assert_links_not_lost(hexes, a.container, a.db)
 
         sql = (
             "BEGIN;\n"
