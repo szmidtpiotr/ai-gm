@@ -755,6 +755,9 @@ i <b>⚓ Osadź</b> na pasującym terenie</td></tr>
 <li>Martwy pomysł → <b>✕</b>. Śmieć → usuń w <b>Lokacje</b> lub <b>🧹 Duplikaty</b>.</li>
 <li>Zatwierdzone ≠ na mapie: <b>⚓ Floating</b> → <b>⚓ Osadź</b>.</li>
 <li>Teren zmieniasz tylko w budowniczym; po dobrej edycji <b>💾 Zapisz mapę (kanon)</b>.</li>
+<li>Raz na jakiś czas zerknij w <b>🩺 Kontrola świata</b> — plakietka przy <b>Mapa</b> w menu
+    pokazuje, ile rozjazdów czeka. Czerwone etykiety naprawiasz kliknięciem, żółte
+    (brak gospodarza, duplikat nazwy) wymagają Twojej decyzji.</li>
 </ul>`,
       },
     ],
