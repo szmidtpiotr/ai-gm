@@ -46,6 +46,21 @@
   .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:256px 1fr;gap:48px}
 
   /* ── Pasek górny + backdrop (mobile) ── */
+
+  a.kronika-x{display:inline-block;font-size:.92em;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold-soft);padding-bottom:1px}
+  a.kronika-x:hover{border-bottom-style:solid}
+  /* pasek Biblioteka (#1520) */
+  .biblioteka{border-bottom:1px solid var(--gold-soft);background:linear-gradient(180deg,#1a150f,#15110c)}
+  .biblioteka .bib-in{max-width:1180px;margin:0 auto;padding:9px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .biblioteka .bib-t{font-family:sans-serif;font-style:italic;color:var(--gold-soft);font-size:12px;letter-spacing:2px;text-transform:uppercase}
+  .biblioteka .bib-links{display:flex;gap:9px;flex-wrap:wrap}
+  .biblioteka a.bib{display:flex;align-items:baseline;gap:7px;padding:6px 14px;border:1px solid var(--gold-soft);border-radius:3px;color:#cbbfa8;font-size:13.5px;text-decoration:none;transition:.18s;background:rgba(0,0,0,.25)}
+  .biblioteka a.bib b{color:#e8dcc4;font-weight:700}
+  .biblioteka a.bib span{font-size:12px;opacity:.75}
+  .biblioteka a.bib:hover{background:rgba(201,165,74,.10)}
+  .biblioteka a.bib.on{background:rgba(201,165,74,.13)}
+  .biblioteka a.bib.on b{color:var(--gold)}
+  @media(max-width:560px){.biblioteka .bib-t{display:none}.biblioteka a.bib span{display:none}}
   .topbar{display:none;position:fixed;top:0;left:0;right:0;height:54px;z-index:300;align-items:center;gap:12px;padding:0 12px;background:#15110c;border-bottom:1px solid var(--gold-soft)}
   .topbar .menu-btn{display:flex;align-items:center;justify-content:center;width:44px;height:40px;border-radius:8px;background:#1d1812;border:1px solid var(--gold-soft);color:var(--gold);font-size:20px;cursor:pointer;flex:0 0 auto}
   .topbar .topbar-t{font-family:sans-serif;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--gold-soft)}
@@ -303,7 +318,7 @@
   <nav>
     <a href="/showcase/#jak-gra">Jak się gra</a>
     <a href="/showcase/#multiplayer">Multiplayer</a>
-    <a href="/showcase/swiat.html">Świat</a>
+    <a href="/showcase/swiat.html">Kronika Świata</a>
     <button class="wb-tocbtn wb-here" id="wbTocBtn" aria-label="Spis treści Księgi Zasad">Księga Zasad</button>
     <a href="/showcase/#historia">Historia</a>
     <a href="/showcase/#faq">FAQ</a>
@@ -317,6 +332,13 @@ document.addEventListener('DOMContentLoaded',function(){
   if(btn) btn.addEventListener('click',function(e){ e.stopPropagation(); document.body.classList.toggle('drawer-open'); });
 });
 </script>
+<div class="biblioteka"><div class="bib-in">
+  <div class="bib-t">Biblioteka</div>
+  <div class="bib-links">
+    <a class="bib" href="/showcase/swiat.html"><b>Kronika Świata</b><span>gdzie grasz</span></a>
+    <a class="bib on" href="/rules/"><b>Księga Zasad</b><span>jak grać</span></a>
+  </div>
+</div></div>
 <header class="topbar"><button class="menu-btn" id="menuBtn" aria-label="Otwórz menu">☰</button><span class="topbar-t">Księga Zasad</span></header>
 <div class="toc-backdrop" id="backdrop"></div>
 
@@ -2359,6 +2381,8 @@ document.addEventListener('DOMContentLoaded',function(){
 
       <h2 id="rasy-czlowiek">Człowiek</h2>
       <p>Rasa domyślna. Żaden modyfikator statystyk — żadna cecha rasowa. Człowiek korzysta z pełnego zakresu zaklęć arcańskich uczonego i jest traktowany neutralnie przez NPC. To rasa wszechstronna: wszystkie archetypy osiągają pełnię możliwości bez kompromisów.</p>
+      <p style="margin-top:-.4em"><a class="kronika-x" href="/showcase/swiat.html#lud-ludzie">Historia i motywy ludu — Kronika Świata →</a></p>
+
       <div class="entry" style="margin:1.2em 0">
         <h4>Człowiek · modyfikatory</h4>
         <p>Brak. Statystyki ustalane przez archetype i rzuty.</p>
@@ -2367,6 +2391,8 @@ document.addEventListener('DOMContentLoaded',function(){
 
       <h2 id="rasy-krasnolud">Krasnolud</h2>
       <p>Lud kuzien i kopalń z Siwych Grani. Dwadzieścia lat temu opuścili Kopalnię Czarnego Hutmana, gdy nawiercili żyłę Rdzenia i obudzili coś, co wciąż stuka. Rozproszeni po świecie: kupiecka enklawa w stolicy, osiadłe rody we wsiach górniczych, samotne hołdy wyżej w górach — każdy nosi w sobie echo tamtego błędu.</p>
+      <p style="margin-top:-.4em"><a class="kronika-x" href="/showcase/swiat.html#lud-krasnoludy">Historia i motywy ludu — Kronika Świata →</a></p>
+
       <div class="entry" style="margin:1.2em 0">
         <h4>Krasnolud · modyfikatory statystyk</h4>
         <p>Stosowane PO bonusach archetypu:</p>
@@ -2464,6 +2490,8 @@ document.addEventListener('DOMContentLoaded',function(){
 
       <h2 id="rasy-elf">Elf leśny</h2>
       <p>Skryci strażnicy starych granic z <strong>Czarnoboru</strong>. Znają mapę pęknięć Rdzenia lepiej niż ktokolwiek — bo od pokoleń je <em>stroją</em>, zamiast wydzierać z nich moc. Żyją długo, chodzą lekko i pamiętają rzeczy, o których ludzie zdążyli zapomnieć dwa razy. <em>Mroczne elfy</em>, na które trafisz w walce, to ich kuzyni — stroiciele, którzy zaczęli pęknięcia rozdzierać.</p>
+      <p style="margin-top:-.4em"><a class="kronika-x" href="/showcase/swiat.html#lud-elfy">Historia i motywy ludu — Kronika Świata →</a></p>
+
       <div class="entry" style="margin:1.2em 0">
         <h4>Elf leśny · modyfikatory statystyk</h4>
         <p>Stosowane PO bonusach archetypu:</p>

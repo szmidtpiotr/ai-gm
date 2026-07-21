@@ -391,3 +391,76 @@ footer .brand{display:inline-block;margin-bottom:14px}
 .best-modal-meta{color:var(--ink-dim);font-size:13px;margin-bottom:12px}
 .best-modal-lore{font-family:var(--font-flavor);font-size:16px;line-height:1.6;color:var(--ink);white-space:pre-line}
 @media(max-width:620px){.best-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:11px}}
+
+/* ============ KRONIKA ŚWIATA (#1520) ============ */
+
+/* pasek Biblioteka — wspólny dla Kroniki i Księgi Zasad */
+.biblioteka{border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--bg2))}
+.biblioteka .bib-in{max-width:1180px;margin:0 auto;padding:10px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.biblioteka .bib-t{font-family:var(--font-flavor);font-style:italic;color:var(--gold-dk);font-size:13px;letter-spacing:2px;text-transform:uppercase}
+.biblioteka .bib-links{display:flex;gap:10px;flex-wrap:wrap}
+.biblioteka a.bib{display:flex;align-items:baseline;gap:8px;padding:7px 15px;border:1px solid var(--line);border-radius:3px;color:var(--ink-dim);font-size:14px;text-decoration:none;transition:.18s;background:rgba(26,22,18,.5)}
+.biblioteka a.bib b{font-family:var(--font-disp);color:var(--ink);font-weight:700}
+.biblioteka a.bib span{font-family:var(--font-flavor);font-style:italic;font-size:12.5px;color:var(--ink-dim)}
+.biblioteka a.bib:hover{border-color:var(--gold-dk);background:rgba(201,165,74,.07)}
+.biblioteka a.bib.on{border-color:var(--gold-dk);background:rgba(201,165,74,.10)}
+.biblioteka a.bib.on b{color:var(--gold)}
+@media(max-width:560px){.biblioteka .bib-t{display:none}.biblioteka a.bib span{display:none}}
+
+/* epigraf — cytat ze źródeł świata (ramka jak w podręczniku) */
+.epigraf{max-width:700px;margin:0 auto 30px;border-left:2px solid var(--gold-dk);padding:4px 0 4px 22px}
+.epigraf p{font-family:var(--font-flavor);font-style:italic;color:var(--ink);font-size:17px;line-height:1.6;margin:0}
+.epigraf cite{display:block;margin-top:8px;font-family:var(--font-flavor);font-style:normal;color:var(--ink-dim);font-size:13px}
+.epigraf cite::before{content:"— "}
+
+/* rozdziały ludów */
+.lud{max-width:860px;margin:0 auto 30px;border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.lud>summary{list-style:none;cursor:pointer;padding:20px 26px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;transition:.18s}
+.lud>summary::-webkit-details-marker{display:none}
+.lud>summary:hover{background:rgba(201,165,74,.05)}
+.lud>summary h3{font-family:var(--font-disp);font-weight:700;color:var(--gold);font-size:22px;margin:0}
+.lud>summary .lud-tag{font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;flex:1}
+.lud>summary .lud-chev{color:var(--gold-dk);font-size:13px;transition:transform .2s}
+.lud[open]>summary .lud-chev{transform:rotate(90deg)}
+.lud[open]>summary{border-bottom:1px solid var(--line)}
+.lud-body{padding:22px 26px 26px}
+.lud-row{padding:12px 0;border-bottom:1px solid rgba(201,165,74,.08)}
+.lud-row:last-child{border-bottom:none}
+.lud-row h4{font-family:var(--font-disp);color:var(--ink);font-size:14px;letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase}
+.lud-row p{color:var(--ink-dim);font-size:15.5px;line-height:1.72;margin-bottom:10px}
+.lud-row p:last-child{margin-bottom:0}
+.lud-row.why{border-top:1px solid var(--gold-dk);border-bottom:none;margin-top:6px;padding-top:14px}
+.lud-row.why h4{color:var(--gold)}
+
+/* nazwane rany — blizny historii */
+.rany{max-width:820px;margin:34px auto 0;display:grid;gap:16px}
+.rana{border:1px solid var(--line);border-left:3px solid var(--blood);border-radius:4px;padding:22px 24px;background:var(--panel)}
+.rana h4{font-family:var(--font-disp);color:var(--ink);font-size:18px;margin-bottom:10px}
+.rana p{color:var(--ink-dim);font-size:15.5px;line-height:1.72;margin-bottom:10px}
+.rana p:last-child{margin-bottom:0}
+
+/* tabele Kroniki (magia ludów, relacje frakcji) */
+.kr-tab{max-width:860px;margin:30px auto 0;overflow-x:auto}
+.kr-tab table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
+.kr-tab th,.kr-tab td{border:1px solid var(--line);padding:10px 12px;text-align:left;color:var(--ink-dim);vertical-align:top}
+.kr-tab th{font-family:var(--font-disp);color:var(--gold);font-size:13px;letter-spacing:.6px;text-transform:uppercase;background:rgba(26,22,18,.7)}
+.kr-tab tbody th{text-align:left;color:var(--ink);text-transform:none;font-size:14px}
+.kr-tab td b{color:var(--ink)}
+.kr-tab.rel table{min-width:600px;text-align:center}
+.kr-tab.rel td{text-align:center;font-size:17px}
+.kr-tab-leg{max-width:860px;margin:14px auto 0;color:var(--ink-dim);font-size:13.5px;font-family:var(--font-flavor);font-style:italic;text-align:center}
+
+/* nota „dla wędrowca" + odnośnik do Księgi Zasad */
+.wedrowiec{max-width:760px;margin:26px auto 0;border:1px dashed var(--gold-dk);border-radius:4px;padding:18px 22px;background:rgba(201,165,74,.045)}
+.wedrowiec h4{font-family:var(--font-disp);color:var(--gold);font-size:14px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+.wedrowiec p{color:var(--ink-dim);font-size:15px;line-height:1.7;margin:0}
+.xref{display:inline-block;margin-top:10px;font-size:13.5px;color:var(--gold-dk);text-decoration:none;border-bottom:1px dotted var(--gold-dk)}
+.xref:hover{color:var(--gold)}
+@media(max-width:760px){.napiecia{grid-template-columns:1fr}.codex-grid{grid-template-columns:1fr}}
+/* kodowanie relacji frakcji — figury zamiast emoji (pewne w każdym foncie) */
+.rel-w{color:#b4432f;font-size:15px}
+.rel-c{color:#8f4a34;font-size:12px}
+.rel-i{color:var(--gold-dk);font-size:13px}
+.rel-s{color:#7fa564;font-size:15px}
+.rel-q{color:var(--gold);font-weight:700}
+.kr-tab.rel td{font-size:15px}

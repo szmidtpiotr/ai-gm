@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Świat — AI-GM · Księga Świata</title>
+<title>Kronika Świata — AI-GM</title>
 <meta name="description" content="Księga Świata AI-GM: heroic-dark kraina po upadku Pradawnych. Gazetteer sześciu krain, osady, frakcje, ludy, pęknięty Rdzeń, historia i legendy — do poczytania dla graczy.">
 <link rel="canonical" href="https://aigm-dev.studio-colorbox.com/showcase/swiat.html">
 <link rel="icon" href="/graj/icon-192.png">
 <meta name="theme-color" content="#0a0908">
-<meta property="og:title" content="Świat — AI-GM · Księga Świata">
+<meta property="og:title" content="Kronika Świata — AI-GM">
 <meta property="og:description" content="Heroic-dark kraina po upadku Pradawnych. Gazetteer sześciu krain, osady, frakcje, ludy, pęknięty Rdzeń, historia i legendy.">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="pl_PL">
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/showcase.css?v=12">
+<link rel="stylesheet" href="assets/css/showcase.css?v=15">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
   <a class="brand" href="index.html">AI·GM<small>MISTRZ GRY</small></a>
   <div class="nav-links">
     <a href="index.html#jak-gra">Jak się gra</a>
-    <a href="swiat.html" class="active">Świat</a>
+    <a href="swiat.html" class="active">Kronika Świata</a>
     <a href="/rules/">Księga Zasad</a>
     <a href="index.html#historia">Historia</a>
     <a href="changelog.html">Co nowego</a>
@@ -35,42 +35,271 @@
   <button class="nav-toggle" aria-label="Menu">☰</button>
 </div></nav>
 
-<header class="hero" data-bg="assets/img/kraina-martwe-pustkowia.webp" style="min-height:auto;padding:96px 0 76px"><div class="wrap">
-  <div class="eyebrow">— księga świata —</div>
-  <h1 style="font-size:clamp(36px,6vw,66px)">Świat</h1>
-  <p class="sub">Heroic-dark kraina, która stygnie po upadku Pradawnych — gdzie mrok jest tłem i przeciwnikiem, nie wyrokiem. Oto kodeks do poczytania, nim ruszysz w drogę.</p>
-</div></header>
+<div class="biblioteka"><div class="bib-in">
+  <div class="bib-t">Biblioteka</div>
+  <div class="bib-links">
+    <a class="bib on" href="swiat.html"><b>Kronika Świata</b><span>gdzie grasz</span></a>
+    <a class="bib" href="/rules/"><b>Księga Zasad</b><span>jak grać</span></a>
+  </div>
+</div></div>
 
-<!-- ================= WSTĘP DO ŚWIATA ================= -->
+<header class="hero" data-bg="assets/img/kraina-martwe-pustkowia.webp" style="min-height:auto;padding:96px 0 76px"><div class="wrap">
+  <div class="eyebrow">— kronika świata —</div>
+  <h1 style="font-size:clamp(36px,6vw,66px)">Kronika Świata</h1>
+  <p class="sub">Heroic-dark kraina, która stygnie po upadku Pradawnych — gdzie mrok jest tłem i przeciwnikiem, nie wyrokiem. Oto księga świata do poczytania, nim ruszysz w drogę.</p>
+</div></header>
+<!-- ================= ŚWIAT W PIGUŁCE ================= -->
 <section class="sect" id="wstep"><div class="wrap">
   <div class="prose">
-    <p class="lead">Świat jest stary, mokry i nieżyczliwy. Imperium trzyma się strachem i podatkami, mrok przecieka z pradawnych ruin, a na pograniczu prawo sięga tak daleko, jak miecz najbliższego człowieka.</p>
-    <p>Lecz to <strong>nie</strong> kraina beznadziei. W przeciwieństwie do czystego grimdarku tutaj bohater realnie <strong>może zmienić los</strong>: ocalić wieś, złamać klątwę, odsłonić spisek, zatrzymać kult. Mrok jest tłem i przeciwnikiem — nie wyrokiem. Każda przygoda to jeden odzyskany skrawek światła w świecie, który o nim zapomniał. Nadzieja jest krucha i kosztowna, ale prawdziwa, a sprawczość bohatera realna.</p>
-    <p>Pod tym wszystkim — pod traktami, polami, ruinami i lodem — leży <strong>Rdzeń Pradawnych</strong>: pradawne źródło mocy, które ktoś kiedyś nadużył. To nadużycie pękło granicę między światem żywych a tym, co za nią leży. Z tych pęknięć przecieka wszystko, co świat ma najgorszego. Korona rządzi strachem, lecz prawdziwie rządzi ukryta Rada Czterech; Świątynia Światła toczy cichą wojnę z kultami, które czczą to, co śpi pod światem. A pod tym wszystkim, w pękniętym Rdzeniu, budzi się coś, czego żadna ze stron nie powstrzyma sama.</p>
-    <p>Ty jesteś jednym z niewielu, którzy mogą jeszcze coś zmienić — najemnik, uczony albo złodziej, który postanowił, że tej nocy mrok się nie posunie dalej.</p>
+    <p class="lead">W świecie, który stygnie po upadku Pradawnych, magia, nieumarli i groza przeciekają z pękniętego Rdzenia pod ziemią. Korona trzyma porządek strachem i podatkami, lecz prawdziwie rządzi ukryta Rada Czterech, a na pograniczu Świątynia Światła toczy cichą wojnę z kultami czczącymi to, co śpi pod światem. Ty jesteś jednym z niewielu, którzy mogą jeszcze coś zmienić — najemnik, uczony albo złodziej, który postanowił, że tej nocy mrok się nie posunie dalej.</p>
+  </div>
+  <div class="napiecia" style="margin-top:44px">
+    <div class="napiecie"><h4>Pod światem leży Rdzeń</h4><p>Pradawni — cywilizacja starsza niż człowiek — nauczyli się z niego czerpać, co ich zniszczyło. Nadużycie Rdzenia popękało granicę między światem żywych a tym, co za nią. Z pęknięć przecieka wszystko, co świat ma najgorszego: nieumarli, groza, dzika magia. Każdy cud i każda klątwa mają jedno źródło. Bogów się czci, ale nikt ich nie widział.</p></div>
+    <div class="napiecie"><h4>Imperium słabnie</h4><p>Po Wielkim Pęknięciu ludzkie królestwo wzniosło się jak latarnia porządku — dziś ta latarnia świeci na kredyt. Wsie płoną i nikt nie prowadzi śledztwa; kopalnie milkną i nikt nie schodzi sprawdzić dlaczego. Korony nie stać już na armie wszędzie — dlatego nastała era najemników i ludzi z ciemnym fachem. Era bohaterów z konieczności. Twoja era.</p></div>
+    <div class="napiecie"><h4>Nikt nie pilnuje pęknięć</h4><p>Gdy Korona i Rada Czterech walczą o tron, a Światło i kulty o dusze, mrok z Rdzenia wraca — i żadna ze stron nie potrafi powstrzymać go sama.</p></div>
+  </div>
+  <div class="prose" style="margin-top:40px">
+    <p><b>Sześć krain.</b> <b>Kresy</b> — wschodnie pogranicze, gdzie zaczyna się większość historii. <b>Koronne Niziny</b> — stolica, handel, podatki; najbezpieczniej w świecie i najwięcej noży w plecach. <b>Czarnobór</b> — las tak stary, że pamięta czasy sprzed Imperium. <b>Siwe Granie</b> — surowa północ, ojczyzna krasnoludów i wiatr, który niesie stukanie. <b>Wybrzeże Łez</b> — jedyna kraina, w której mrok daje jeść. <b>Martwe Pustkowia</b> — serce katastrofy Pradawnych.</p>
+    <p><b>Pięć ludów.</b> <b>Ludzie</b> dźwigają Imperium i większość jego win. <b>Krasnoludy</b> odeszły ze swoich najgłębszych kopalni i nie mówią, przed czym uciekły. <b>Elfy leśne</b> od pokoleń podtrzymują pieśń, która trzyma pęknięcia boru w ryzach — a pieśń ta zaczyna milknąć. <b>Piętnowani</b> to potomkowie kolonistów porzuconych na Pustkowiach, których krew oswoiła Rdzeń. <b>Wyspiarze</b> stracili ojczyznę za Sztormem Wiecznym — to jedyny lud, który nie ma dokąd wrócić.</p>
   </div>
 </div></section>
 
 <!-- ================= SPIS TREŚCI ================= -->
 <section class="sect" id="spis"><div class="wrap">
-  <nav class="gaz-toc" aria-label="Spis treści Księgi Świata">
+  <nav class="gaz-toc" aria-label="Spis treści Kroniki Świata">
     <h2>Spis treści</h2>
-    <p class="toc-sub">Księga jest długa — skacz, gdzie chcesz.</p>
+    <p class="toc-sub">Kronika jest długa — skacz, gdzie chcesz.</p>
     <ol>
+      <li><a href="#historia">Historia świata — epoki i nazwane rany</a></li>
+      <li><a href="#ludy">Ludy świata — pięć odpowiedzi na jedno pytanie</a></li>
+      <li><a href="#rdzen">Wiara i Rdzeń — co śpi pod światem</a></li>
+      <li><a href="#frakcje">Frakcje — kto z kim i o co</a></li>
+      <li><a href="#reputacja">Reputacja — czyny mają wagę</a></li>
       <li><a href="#kraina-kresy">Kresy — pogranicze i wsie</a></li>
       <li><a href="#kraina-niziny">Koronne Niziny — rdzeń cywilizacji</a></li>
       <li><a href="#kraina-czarnobor">Czarnobór — las i bagno</a></li>
       <li><a href="#kraina-granie">Siwe Granie — północ i mróz</a></li>
       <li><a href="#kraina-wybrzeze">Wybrzeże Łez — morze i bezprawie</a></li>
       <li><a href="#kraina-pustkowia">Martwe Pustkowia — ruiny Pradawnych</a></li>
-      <li><a href="#rdzen">Rdzeń i wiara — co śpi pod światem</a></li>
-      <li><a href="#frakcje">Frakcje — siły, które ciągną za sznurki</a></li>
-      <li><a href="#reputacja">Reputacja — czyny mają wagę</a></li>
-      <li><a href="#ludy">Ludy świata</a></li>
-      <li><a href="#historia">Historia świata — epoki</a></li>
-      <li><a href="#legendy">Legendy i haki</a></li>
+      <li><a href="#legendy">Legendy i haki — pytania bez odpowiedzi</a></li>
     </ol>
   </nav>
+</div></section>
+
+<!-- ================= HISTORIA ŚWIATA ================= -->
+<section class="sect gaz-anchor" id="historia"><div class="wrap">
+  <div class="sect-head"><div class="k">~ epoki ~</div><h2>Historia świata</h2></div>
+  <div class="prose">
+    <p class="lead">Spisano w skryptorium Klasztoru Iskry, na podstawie kronik Świątyni, pieśni elfów, ksiąg rodowych krasnoludów i zeznań ludzi, którzy wrócili z ruin. Tam, gdzie źródła milczą, milczy też Kronika — a milczy często. Czytaj więc jak mapę z białymi plamami: to, co pewne, zapisano atramentem. Reszta pozostaje pytaniem.</p>
+  </div>
+
+  <div class="timeline" style="margin-top:48px">
+    <div class="tl-item"><div class="when">Przed człowiekiem</div><h3>Epoka Pradawnych</h3>
+      <div class="epigraf" style="margin:12px 0 16px"><p>„Nie pytaj, kto zbudował te mury. Pytaj, dlaczego wszystkie drzwi są od środka."</p><cite>przysłowie poszukiwaczy z Obozu Gorączki</cite></div>
+      <p>Zanim pierwszy człowiek rozpalił pierwszy ogień, świat już miał gospodarzy. Nazywamy ich Pradawnymi, bo nie znamy ani ich prawdziwego imienia, ani twarzy. Nie zostawili grobów, które dałoby się otworzyć, ani pisma, które dałoby się odczytać. Zostawili co innego: świątynie o geometrii, od której bolą oczy; machiny podobne zarazem do rzeźby i szkieletu; trakty z kamienia, który nie pęka od mrozu, wiodące do miast, po których został tylko popiół.</p>
+      <p>Jedno wiemy o nich na pewno, bo świadczy o tym każda blizna świata: Pradawni znaleźli Rdzeń. Nauczyli się z niego czerpać — najpierw ostrożnie, potem śmielej, w końcu bez miary. <b>To ich zniszczyło.</b></p></div>
+
+    <div class="tl-item"><div class="when">Grzech pierworodny</div><h3>Wielkie Pęknięcie</h3>
+      <div class="epigraf" style="margin:12px 0 16px"><p>„…i sięgnęli głębiej, niż sięga dno, a wtedy dno sięgnęło po nich."</p><cite>najstarszy zachowany wers pieśni elfów; dalszych wersów elfy nie śpiewają obcym</cite></div>
+      <p>U szczytu potęgi Pradawni sięgnęli po Rdzeń zbyt głęboko, a granica między światem żywych a tym, co za nią, popękała jak lód pod ciężarem. Serce ich cywilizacji umarło w jedną epokę: ziemia wyjałowiała w szary popiół, tam gdzie pękło najmocniej stopiła się w taflę szkła, a wokół największych ran wystąpiła sól, biała po horyzont — jakby świat sam próbował zasypać to, co się otworzyło. Czy Pradawni wyginęli, czy Rdzeń przemienił ich w coś, co wciąż chodzi po ich ruinach — nikt rozsądny nie szuka odpowiedzi po zmroku.</p>
+      <p>Od tamtej pory świat przecieka. <b>Każda późniejsza wojna, każda wiara i każdy zakaz w tej Kronice jest odpowiedzią na Pęknięcie.</b></p></div>
+
+    <div class="tl-item"><div class="when">Wzlot ludzi</div><h3>Era Latarni</h3>
+      <div class="epigraf" style="margin:12px 0 16px"><p>„Postawimy światło tak wysoko, że zobaczą je ci, którzy jeszcze się nie urodzili."</p><cite>słowa przypisywane pierwszemu królowi; Wieża Heroldów, w której spisano ich źródło, stoi dziś pusta</cite></div>
+      <p>Na gruzach cudzego świata człowiek zbudował własny — i przez długi czas budował dobrze. Powstała Korona ze stolicą w Vilnogradzie i Świątynia Światła, której zadaniem od pierwszego dnia było łatać pęknięcia. Trakty połączyły krainy, prawo sięgnęło dalej niż kiedykolwiek; wieśniak mógł przejść pół kontynentu i w każdej karczmie płacić tą samą monetą. Krasnoludzkie rody drążyły wtedy Siwe Granie i wzniosły Kamienny Gród, a elfy Czarnoboru podtrzymywały pieśń stróżowych drzew. Ludzie o tym nie wiedzieli. Elfy nie widziały powodu, by mówić.</p>
+      <p>Na tę erę przypada też przedsięwzięcie zarazem najambitniejsze i najbardziej wstydliwe — <b>kolonizacja Martwych Pustkowi</b>: trakt przez cały Czarnobór, kolonia Aschfeld, Wieża Kronikarzy, całe rodziny werbowane z południowych prowincji. Potem przyszło <b>Wycofanie</b>. W jedno pokolenie Imperium porzuciło wszystko: trakt, kolonię, archiwum — i ludzi. Oficjalny powód: koszty. Prawdziwy: nieznany; zapisy Wieży urywają się w pół zdania. Porzuceni osadnicy nie zginęli. Ich potomkowie żyją tam do dziś — to Piętnowani.</p></div>
+
+    <div class="tl-item"><div class="when">Teraźniejszość</div><h3>Zmierzch Latarni</h3>
+      <div class="epigraf" style="margin:12px 0 16px"><p>„Za przejazd mostem — grosz. Za wóz — trzy. Za wieści z dołu rzeki nie płacę, bo i tak są złe."</p><cite>Pius, celnik z Mostu Czarnej Rzeki</cite></div>
+      <p>Imperium słabnie. Wszyscy to widzą i nikt tego nie ogłasza — upadek nie przychodzi z fanfarami, tylko z zaległym żołdem. Patrole wychodzą rzadziej i nie zawsze wracają. Bór Zmarłych rozrasta się rok po roku. Rok temu na Kresach spłonęła w jedną noc wieś Zgliszcza — czterdzieści jeden ofiar — a z Vilnogradu nie przyjechał nikt. Ani sędzia, ani ksiądz, ani choćby poborca. Na pograniczu zrozumiano tę lekcję szybko: kto pyta za głośno, znika, a kto czeka na Koronę, czeka do śmierci.</p>
+      <p>W stolicy szepcze się rzecz dziwniejszą od samego upadku: że prawdziwe decyzje od dawna nie zapadają na zamku. Że ktoś skupuje świat po kawałku — długi twierdz, weksle na żołd, rozkazy — cierpliwie, jak gracz ustawiający pionki, nim przeciwnik zauważy, że partia już trwa.</p>
+      <p>I tu Kronika przestaje mówić o świecie, a zaczyna mówić o tobie. Tam, gdzie kończy się trakt, jeden człowiek z mieczem, zaklęciem albo wytrychem może dziś przechylić szalę, której nie przechylą ani edykty, ani procesje. <b>Świat stygnie. Ale jeszcze nie ostygł.</b></p></div>
+  </div>
+
+  <h3 style="font-family:var(--font-disp);color:var(--gold);font-size:24px;text-align:center;margin:60px 0 0">Nazwane rany</h3>
+  <p style="text-align:center;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);max-width:660px;margin:10px auto 0">Cztery wydarzenia odcisnęły się na świecie tak głęboko, że mówi się o nich jak o bliznach na ciele — każde ma swoją nazwę, każde ma ocalałych i każde wciąż krwawi.</p>
+  <div class="rany">
+    <div class="rana"><h4>Schizma elfów</h4>
+      <p>Najstarsza z ran i jedyna, którą lud zadał sam sobie. Część elfów uznała wieczne strojenie wardów za niewolę: po co pokolenie za pokoleniem podtrzymywać pieśń nad pęknięciami, skoro można je rozedrzeć i wziąć moc wprost? Rozmowa skończyła się tam, gdzie kończą się takie rozmowy. Rozłam dokonał się na polanie, na którą elfy do dziś nie chodzą i gdzie trawa wciąż rośnie czarna.</p>
+      <p>Zdrajcy odeszli w głąb boru i ku Pustkowiom — świat zna ich dziś jako mroczne elfy, najstarszych sojuszników kultów. Kiedy elf mówi o nich „tamci", w jego głosie nie ma gniewu. Jest coś gorszego: żal po kimś, kto wciąż żyje.</p></div>
+    <div class="rana"><h4>Dwieście lat wojen granicznych</h4>
+      <p>Gdy ze wschodu ruszyły ludy barbarzyńskie, Korona odpowiedziała po swojemu: kamieniem. Na trakcie stanęła twierdza Strzegwacht i przez dwa stulecia granica trzymała się na jej murach — czasem tylko na nich. Wokół twierdzy narosło całe pogranicze: wsie drwali i górników, poborcy przy mostach, karczmy przy rozstajach, cmentarze pełne ludzi, którzy „polegli na warcie". Kresy, jakie znasz, są dzieckiem tej wojny.</p>
+      <p>A ostatnimi czasy starzy żołnierze na murach mówią rzecz, od której robi się zimno w izbie: barbarzyńcy nie tyle napierają, ile <b>uciekają</b>. Nie zdobywają ziemi. Zostawiają za sobą własną.</p></div>
+    <div class="rana"><h4>Głębokie Bicie</h4>
+      <p>Dwadzieścia lat temu krasnoludzka Kopalnia Czarnego Hutmana dowierciła się do żyły Rdzenia. Górnicy, którzy wyszli, nie opowiadali, co widzieli — a krasnolud, który nie chce mówić o kopalni, to rzecz niesłychana. To, co się obudziło, nie wyszło na powierzchnię. Ale <b>stuka</b>: miarowo, cierpliwie, dzień i noc, a stukanie niesie się żyłami srebra po całym paśmie.</p>
+      <p>Rody porzuciły Hutmana i hołdy wokół niego; w lód wbito młoty — po jednym za każdego, kto nie wyszedł — a starszyzna wyznaczyła Linię Soli: głębokość, poniżej której nikt już nie kopie. Część rodów odeszła wtedy z gór na zawsze. Pytani, czemu ich dziadowie zeszli, wszyscy odpowiadają tak samo: milczeniem.</p></div>
+    <div class="rana"><h4>Sztorm Wieczny</h4>
+      <p>Dwa pokolenia temu sztormy na południowych morzach przestały ustępować. Nie „pogorszyła się pogoda" — morze po prostu pewnego roku wstało i już się nie położyło. Ostatnie statki, które przedarły się przez ścianę wichru, przywiozły wyspiarzy: przemoczonych, milczących, z dziećmi na rękach i ojczyzną za plecami.</p>
+      <p>Od tamtej pory żaden żagiel nie przeszedł Sztormu w żadną stronę. Korona nazwała to pogodą i zamknęła sprawę. Marynarze, którzy widzieli ścianę Sztormu z bliska, mówią co innego: że coś się obudziło. Ojczyzna wyspiarzy jest odcięta — być może już nie istnieje.</p></div>
+  </div>
+</div></section>
+
+<!-- ================= LUDY ŚWIATA ================= -->
+<section class="sect gaz-anchor" id="ludy"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kto zamieszkuje świat ~</div><h2>Ludy świata</h2>
+    <p>Pięć ludów dzieli kontynent, lecz niewiele łączy je poza jego granicami. Każdy odpowiedział inaczej na to samo pytanie: jak żyć w świecie, który przecieka.</p></div>
+  <div class="prose" style="margin-bottom:38px">
+    <p>Ludzie stawiają mury i spisują prawa. Krasnoludy wyznaczają granice, których przekroczyć nie wolno. Elfy podtrzymują pieśń. Piętnowani nauczyli się żyć z tym, co innych zabija. Wyspiarze płyną dalej, bo nie mają dokąd wrócić. <span style="font-family:var(--font-flavor);font-style:italic">Rozwiń rozdział, by poznać lud.</span></p>
+  </div>
+  <details class="lud" id="lud-ludzie" open>
+    <summary><h3>Ludzie</h3><span class="badge-new">grywalne</span><span class="lud-tag">wszędzie i na wszystkie sposoby</span><span class="lud-chev">▸</span></summary>
+    <div class="lud-body">
+    <div class="lud-row"><h4>Skąd przyszli</h4><p>Nikt nie pamięta świata bez ludzi. Ich własne kroniki zaczynają się dopiero po Wielkim Pęknięciu, wraz z Erą Latarni; wszystko wcześniejsze rozmywa się w legendzie. Może właśnie dlatego budują tak zajadle — naród bez długiej pamięci musi zostawiać po sobie ślady.</p></div>
+    <div class="lud-row"><h4>Historia</h4><p>To ludzie wznieśli Imperium, latarnię porządku po katastrofie Pradawnych. Korona, Świątynia Światła, gildie, trakty i twierdze graniczne — cała cywilizacyjna maszyneria świata jest dziełem ludzkich rąk. Ludzkie są też jej winy: porzucona kolonia na Pustkowiach, święte drzewa Czarnoboru padające pod toporami, podatki duszące pogranicze mocniej niż mrok.</p></div>
+    <div class="lud-row"><h4>Jak żyją</h4><p>Człowiek bywa królem w Vilnogradzie, a potem poborcą na moście; przeoryszą klasztoru albo kultystą w piwnicy; kapitanem pirackim lub sołtysem wsi, która modli się tylko o to, by przetrwać zimę. Żaden inny lud nie mieści w sobie takich skrajności.</p></div>
+    <div class="lud-row"><h4>Motywy</h4><p>Ludźmi kieruje to, co zawsze: strach, ambicja, wiara i nadzieja. W Zmierzchu Latarni dochodzi do tego świadomość, że porządek budowany przez dwadzieścia pokoleń kruszy się na ich oczach. Jedni próbują ocalić, co się da. Drudzy rozkradają resztki. Trzeci szukają winnych.</p></div>
+    <div class="lud-row"><h4>Stosunek do innych</h4><p>Ludzie tolerują nieludzi na tyle, na ile ci okazują się użyteczni. Krasnoludzkie kantory w stolicy przyjmuje się dla złota, elfy zna głównie z pogranicznych targów, Piętnowani budzą lęk podszyty zabobonem, a wyspiarze uchodzą za obcych — przydatnych na pokładzie i podejrzanych na lądzie.</p></div>
+    <div class="lud-row why"><h4>Dlaczego zagrać</h4><p>Bo ten świat jest przede wszystkim ludzką historią o trzymaniu światła. Zaczynasz pośród wydarzeń, wszędzie możesz być u siebie i nic nie zostało ci przypisane z góry: ani ojczyzna, ani rola, ani strona konfliktu.</p></div>
+    </div>
+  </details>
+  <details class="lud" id="lud-krasnoludy">
+    <summary><h3>Krasnoludy</h3><span class="badge-new">grywalne</span><span class="lud-tag">góry, pamięć i zakaz, którego nie wolno złamać</span><span class="lud-chev">▸</span></summary>
+    <div class="lud-body">
+    <div class="lud-row"><h4>Skąd przyszli</h4><p>Z gór. Według własnych ksiąg rodowych krasnoludy były w Siwych Graniach „zanim spadł pierwszy śnieg". Od Ery Latarni rody drążyły pasmo, wydobywając srebro, sól i żelazo. Nad wszystkim stoi Kamienny Gród pod Krzyżem Gór: brama-most nad przepaścią, Wielka Kuźnia i Sala Rodów, gdzie wisi młot każdego rodu, jaki kiedykolwiek istniał. Prawie każdego.</p></div>
+    <div class="lud-row"><h4>Historia</h4><p>Rana, wokół której obraca się całe dzisiejsze życie krasnoludów, ma dwadzieścia lat i nazywa się Głębokim Biciem. Kopalnia Czarnego Hutmana dowierciła się do żyły Rdzenia; to, co się tam obudziło, stuka do dziś.</p><p>Potem nadszedł exodus. Hołdy porzucono, a w lodzie Cmentarza Młotów wbito młoty — po jednym za każdego, kto nie wyszedł. Wyznaczono Linię Soli, granicę głębokości, poniżej której starszyzna zakazała kopać. Sól, jak uczy krasnoludzka tradycja górnicza, pozostaje obojętna na Rdzeń: nie przewodzi tego, co stuka.</p></div>
+    <div class="lud-row"><h4>Jak żyją</h4><p>Kamienny Gród trwa i kuje. Siwotarczy, Młotodzierżcy, Solnobrodzi i Srebrnożylni dzielą władzę w Sali Rodów, a sól i srebro jadą karawanami na Kresy. Górnik nosi woreczek soli przy pasie tak, jak człowiek nosi święty symbol.</p></div>
+    <div class="lud-row"><h4>Motywy</h4><p>Starszyzna pod wodzą Balrika Siwotarczego nakazuje czekać, aż stukanie ucichnie, i nie schodzić pod sól. Ród Młotodzierżców, z Dagną na czele, chce zejść niżej i skończyć to, co się zaczęło. Pomiędzy nimi stoją Wygnańcy Lodu, ród wyklęty za złamanie innego zakazu — wchodzenia na lodowiec. Widzieli z bliska coś, czego boją się bardziej niż wyklęcia.</p></div>
+    <div class="lud-row"><h4>Stosunek do innych</h4><p>Z ludźmi łączy ich handel i szorstki szacunek. Elfy uchodzą w ich oczach za dziwne: „lud, który śpiewa do drzew, zamiast postawić porządny mur". Ich własna rdzeń-magia polega na czerpaniu prosto z żyły; jest mocna i ryzykowna, praktykowana z górniczą, nie uczoną dyscypliną. <a class="xref" href="/rules/#rasy-rdzen">Rdzeń-magia w Księdze Zasad →</a></p></div>
+    <div class="lud-row why"><h4>Dlaczego zagrać</h4><p>Bo dostajesz dylemat wpisany w krew: twój lud stoi między pamięcią a przetrwaniem, a obie strony sporu o Hutmana będą chciały właśnie ciebie. I dlatego, że nikt nie schodzi pod ziemię lepiej. <a class="xref" href="/rules/#rasy-krasnolud">Krasnolud w Księdze Zasad →</a></p></div>
+    </div>
+  </details>
+  <details class="lud" id="lud-elfy">
+    <summary><h3>Elfy leśne</h3><span class="badge-new">grywalne</span><span class="lud-tag">pieśń, która zaczyna milknąć</span><span class="lud-chev">▸</span></summary>
+    <div class="lud-body">
+    <div class="lud-row"><h4>Skąd przyszli</h4><p>Elfy nie opowiadają o swoim pochodzeniu. Mówią tylko, że były w Czarnoborze „nim las nauczył się zimy". Na długo przed Imperium nastroiły sieć stróżowych drzew — żywych wardów, które trzymają w ryzach pęknięcia Rdzenia biegnące pod borem.</p></div>
+    <div class="lud-row"><h4>Historia</h4><p>Strojenie nie jest władzą nad lasem. Jest nieustanną pielęgnacją, pieśnią podtrzymywaną przez pokolenia. Właśnie o tę pieśń elfy stoczyły swoją jedyną wojnę — wojnę domową, Schizmę, po której zdrajcy stali się mrocznymi elfami.</p><p>Potem przyszło coś gorszego od wojny: <b>bór zaczął milknąć</b>. Stróżowe drzewa gasną jedno po drugim, coraz szybciej, a pień wygasłego warda czernieje jak smoła. Bór Zmarłych to pierwszy zgasły krąg sieci. Dlaczego drzewa gasną, nie wie nikt. To pytanie wisi nad każdą elficką decyzją.</p></div>
+    <div class="lud-row"><h4>Jak żyją</h4><p>Żyją w koronach drzew. Ich główna osada znana jest ludziom jako Szept Koron, lecz prawdziwej, śpiewanej nazwy nie zapisuje się wcale. Handel z ludźmi biegnie przez Ostęp Graniczny, a obcy mogą nocować tylko w Gościnnym Drzewie. Elfowie żyją długo, mówią mało i pamiętają wszystko.</p></div>
+    <div class="lud-row"><h4>Motywy</h4><p>Krąg Starszych, z Nimriel na czele, chce zamknąć bór i dalej cierpliwie stroić. Zwiadowcy Cathela chcą wyjść i odnaleźć przyczynę gaśnięcia, nim zgaśnie wszystko. Jest też konflikt bez złoczyńcy: ludzcy drwale ścinają las, bo muszą wykarmić rodziny, i nieświadomie ścięli już stróżowe drzewa. Dla elfów to świętokradztwo. Dla drwali chleb.</p></div>
+    <div class="lud-row"><h4>Stosunek do innych</h4><p>Nieufność elfów wyrasta z doświadczenia: wszystko, co wpuściły do boru, wcześniej czy później coś w nim ścięło. Ludzi traktują jak żywioł — można z nim żyć, ale trzeba go pilnować. O mrocznych elfach nie mówią wcale.</p></div>
+    <div class="lud-row why"><h4>Dlaczego zagrać</h4><p>Bo jesteś zwiadowcą ginącego ludu w lesie, który umiera po kawałku — każda zbadana ścieżka i każde ocalone drzewo ważą więcej, niż człowiek potrafi zrozumieć. Elficka magia, strojenie, jest najsubtelniejszą formą sięgania po Rdzeń: kontrolą zamiast mocy. <a class="xref" href="/rules/#rasy-elf">Elf leśny w Księdze Zasad →</a></p></div>
+    </div>
+  </details>
+  <details class="lud" id="lud-pietnowani">
+    <summary><h3>Piętnowani</h3><span class="soon">wkrótce</span><span class="lud-tag">krew, która oswoiła Rdzeń</span><span class="lud-chev">▸</span></summary>
+    <div class="lud-body">
+    <div class="lud-row"><h4>Skąd przyszli</h4><p>Z południowych prowincji Imperium, choć sami w to nie wierzą. Są potomkami kolonistów, których Korona osiedliła na Martwych Pustkowiach w Erze Latarni, a potem porzuciła w jedno pokolenie, przy Wycofaniu. Odcięci na popielatych równinach, przy najpłytszym Rdzeniu świata, powinni byli zginąć. <b>Nie zginęli.</b></p></div>
+    <div class="lud-row"><h4>Historia</h4><p>Pokolenia życia przy pęknięciach przemieniły ich krew: popielata skóra, blade oczy, a Rdzeń płynie w ich żyłach oswojony, nie dziki. Sami Piętnowani wierzą, że ich ród był na Pustkowiach od zawsze — własna historia jest niepewna nawet dla nich, a prawda o Wycofaniu leży w urwanych archiwach Wieży Kronikarzy.</p><p>Nazwa „Piętnowani" przyszła z zewnątrz, od piętna, jakie w oczach przybyszów nosi ich wygląd. Przyjęli ją tak, jak przyjmuje się bliznę.</p></div>
+    <div class="lud-row"><h4>Jak żyją</h4><p>Żyją w Solnym Progu, enklawie na skraju wielkiej solnej równiny — jedynym miejscu Pustkowi, gdzie są woda i porządek. Zbierają najczystszą sól świata i wynajmują się jako przewodnicy po ruinach, bo tylko oni potrafią żyć na pustkowiach: wiedzą, gdzie nie pić, gdzie nie kopać i przy której studni nie wolno słuchać dłużej niż trzy oddechy.</p></div>
+    <div class="lud-row"><h4>Motywy</h4><p>Stawką jest przetrwanie tożsamości. Raszid, starszy enklawy, chce ukryć lud z powrotem w cieniu. Przewodniczka Lejla chce wyjść do świata, zanim świat sam przyjdzie po nich. Oboje wiedzą, że oczy Światła już na nich patrzą, a pytanie inkwizycji brzmi: czy piętno to skażenie?</p></div>
+    <div class="lud-row"><h4>Stosunek do innych</h4><p>Okazują ostrożną uprzejmość handlarza, który wie, że jest oglądany. Ludziom nie ufają, bo raz już zostali przez nich porzuceni. Z krasnoludami łączy ich sól oraz wzajemny szacunek ludzi, którzy znają własne granice.</p></div>
+    <div class="lud-row why"><h4>Dlaczego zagrać</h4><p>Bo magia, która innych pożera, w tobie jest oswojona — jesteś urodzonym pomostem między mieczem a zaklęciem. Nosisz też historię, której nie zna nawet twój własny lud.</p></div>
+    </div>
+  </details>
+  <details class="lud" id="lud-wyspiarze">
+    <summary><h3>Wyspiarze</h3><span class="soon">wkrótce</span><span class="lud-tag">lud bez domu</span><span class="lud-chev">▸</span></summary>
+    <div class="lud-body">
+    <div class="lud-row"><h4>Skąd przyszli</h4><p>Zza południowego morza, z ojczyzny, do której nie da się wrócić. Dwa pokolenia temu sztormy przestały ustępować; ostatnie statki, które przedarły się przez Sztorm Wieczny, przywiozły uchodźców. Od tamtej pory żaden statek nie przepłynął w żadną stronę.</p></div>
+    <div class="lud-row"><h4>Historia</h4><p>Ich historia jest krótsza od innych i cała pisana na wodzie. Dotarli, zeszli na ląd w Czarnogrodzie, zbudowali dzielnicę przy dokach — a potem rozeszli się po świecie. Najemnicy, marynarze, przemytnicy i sztauerzy: spotkasz ich w porcie Vilnogradu, w Zatoce Topielców i w obozach poszukiwaczy na Pustkowiach. To jedyny lud obecny wszędzie, bo jako jedyny nie ma dokąd wrócić. Krasnolud ma góry. Elf ma bór. Piętnowany ma pustkowie. <b>Wyspiarz ma pokład.</b></p></div>
+    <div class="lud-row"><h4>Jak żyją</h4><p>Żyją głośno, ciasno i solidarnie. Diaspora w Czarnogrodzie jest ich sercem: starszy Taio trzyma pamięć i spory, kapitanka Nakea trzyma szlaki, Malua trzyma doki. Kto skrzywdzi jednego wyspiarza w porcie, ma przeciw sobie wszystkie załogi w zasięgu sygnału.</p></div>
+    <div class="lud-row"><h4>Motywy</h4><p>Chcą zbudować dom z niczego albo odzyskać stary. Starsi patrzą na południe, licząc, że Sztorm kiedyś osłabnie. Młodzi mówią, że domem jest załoga, z którą pijesz. Wszyscy wiedzą, że lud rozsiany po cudzych portach przetrwa tylko tak długo, jak długo pamięta, kim jest.</p></div>
+    <div class="lud-row"><h4>Stosunek do innych</h4><p>Wyspiarz pracuje z każdym, kto płaci, i nie ufa nikomu, kto pyta o zbyt wiele. Na lądzie, poza portami, bywają traktowani jak przybłędy. Nauczyli się z tym żyć, nie wybaczając.</p></div>
+    <div class="lud-row why"><h4>Dlaczego zagrać</h4><p>Bo zaczynasz z niczym poza sprytem, krzepą i ludźmi, którzy staną za tobą murem — a cały świat jest twoim portem.</p></div>
+    </div>
+  </details>
+
+  <h3 style="font-family:var(--font-disp);color:var(--gold);font-size:24px;text-align:center;margin:54px 0 0">Drogi bohaterów</h3>
+  <p style="text-align:center;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);max-width:660px;margin:10px auto 26px">Niezależnie od ludu bohaterowie tego świata idą jedną z trzech dróg — a każdy lud nadaje im własny kształt.</p>
+  <div class="codex-grid">
+    <div class="codex-card"><h4>Wojownik</h4><p>W świecie, w którym Korony nie stać na armie, miecz jest towarem. Najemnicy, weterani twierdz granicznych, eskorta karawan — zwykli ludzie z bronią, którzy tej nocy stają między wsią a tym, co wychodzi z lasu. Krasnoludzki wojownik jest murem; elficki zwiadowca strzałą, która nie chybia i nie daje się dotknąć.</p></div>
+    <div class="codex-card"><h4>Uczony</h4><p>Magia nie jest darem bogów — to ostrożne, okruchowe czerpanie z Rdzenia, a każde nieudane zaklęcie jest chwilą, w której pęknięcie odgryza się magowi. Świątynia patrzy na uczonych podejrzliwie, Korona ceni ich jak broń. Cztery ludy, cztery szkoły tej samej mocy.</p></div>
+    <div class="codex-card"><h4>Łotrzyk</h4><p>Wyrasta z dzielnicy złodziei Vilnogradu, z przemytniczych zatok Wybrzeża i z każdego miejsca, gdzie prawo jest cieńsze niż sakiewka. Bywa jedynym, który wejdzie tam, gdzie miecz i magia zawiodą — i czasem wychodzi stamtąd z czymś, co ratuje więcej niż jego własną skórę.</p></div>
+  </div>
+</div></section>
+
+<!-- ================= WIARA I RDZEŃ ================= -->
+<section class="sect gaz-anchor" id="rdzen"><div class="wrap">
+  <div class="sect-head"><div class="k">~ co śpi pod światem ~</div><h2>Wiara i Rdzeń</h2><p>Jeden mechanizm tłumaczy całą fantastykę tego świata — i żadna wiara nie umie go dowieść.</p></div>
+  <div class="prose">
+    <p>Pod światem leży Rdzeń: pierwotne źródło mocy z czasów sprzed człowieka. Nie jest bogiem — nie słucha modlitw, nie zawiera przymierzy, nie obiecuje. Jest — i przecieka. Odkąd Pradawni nadużyli go i popękała granica między światem żywych a tym, co za nią, z pęknięć sączy się wszystko, czego świat się boi: nieumarli tam, gdzie Rdzeń leży płytko; groza i demony tam, gdzie ktoś umie rozedrzeć pęknięcie szerzej; dzika magia wszędzie, gdzie ktoś ośmiela się czerpać.</p>
+    <p>W tym świecie <b>bogowie nie są dowiedzeni</b>. Cuda się zdarzają. Klątwy działają. Błogosławieństwo potrafi zamknąć ranę. Ale nikt nigdy nie widział boga. Uczeni po cichu mówią, że wszystko, co ludzie nazywają cudem albo klątwą, ma jedno źródło — i jest nim Rdzeń. Kapłani odpowiadają, że to niczego nie wyklucza. Kronika nie rozstrzyga. Świat też nie.</p>
+  </div>
+  <div class="codex-grid" style="margin-top:44px">
+    <div class="codex-card"><h4>Światło — ci, co łatają</h4><p>Wiara państwowa Imperium: leczy, błogosławi i — jak mówią jej własne pisma — „łata pęknięcia świata". Jej sercem jest Klasztor Iskry z przeoryszą Matką Urszulą, uzdrowicielami i kronikarzami skupującymi relikwie Pradawnych. Czy stoi za nią bóg, czy dawno odkryty sposób uspokajania Rdzenia — nie wiadomo. Światło ma też drugą twarz: inkwizycję. Tam, gdzie kończy się leczenie, zaczyna się pytanie, co jest skażeniem.</p></div>
+    <div class="codex-card"><h4>Kulty Rdzenia — ci, co rozdzierają</h4><p>Tam, gdzie Światło pęknięcia łata, kulty je poszerzają — w wierze, że po drugiej stronie czeka moc, wieczność albo śpiący bóg. Działają w ruinach i piwnicach, ale też w salonach: kult potrafi nosić skórę gildii równie dobrze jak kaptur. Ich najstarszymi sprzymierzeńcami są mroczne elfy — upadli stroiciele. Morską odnogą kultów jest Świątynia Topielców, gdzie czci się Głębię.</p></div>
+    <div class="codex-card"><h4>Biała Bogini</h4><p>Północna legenda. Najwyższy lodowiec Siwych Grań nazywają Tronem Białej Bogini; stara opowieść mówi, że w lodzie śpi Pradawna albo fragment świadomości samego Rdzenia. Wokół pustego sanktuarium trwa wmarznięta procesja pielgrzymów sprzed pokoleń. Nikt nie wie, skąd przyszli. Sanktuarium jest puste — ale odśnieżone.</p></div>
+    <div class="codex-card"><h4>Wiara ludowa</h4><p>Kapliczki na rozstajach. Sól przy pasie. Znachorki, których zaklęcia działają <i>odrobinę za dobrze</i>. Pogranicze nie filozofuje: robi to, co od pokoleń trzyma mrok za progiem, i nie pyta dlaczego.</p></div>
+  </div>
+
+  <h3 style="font-family:var(--font-disp);color:var(--gold);font-size:24px;text-align:center;margin:60px 0 0">Cztery techniki, jedno źródło</h3>
+  <p style="text-align:center;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);max-width:660px;margin:10px auto 0">Cała magia świata czerpie z Rdzenia. Różni się tylko sposób, w jaki się po niego sięga.</p>
+  <div class="kr-tab">
+    <table>
+      <thead><tr><th>Lud</th><th>Technika</th><th>Charakter</th></tr></thead>
+      <tbody>
+        <tr><th>Ludzie</th><td><b>nauka</b></td><td>akademicka, wyważona droga środka — księgi, formuły, dyscyplina</td></tr>
+        <tr><th>Krasnoludy</th><td><b>żyła</b></td><td>czerpanie prosto z żyły Rdzenia: więcej mocy, groźniejsze załamania</td></tr>
+        <tr><th>Elfy</th><td><b>strojenie</b></td><td>pieśń i kontrola: subtelna, a gdy się łamie — „las odpowiada nie tak"</td></tr>
+        <tr><th>Piętnowani</th><td><b>oswojona krew</b></td><td>Rdzeń płynie w żyłach: załamania łagodniejsze, cena płacona jest społecznie</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="kr-tab-leg">Mroczne elfy to piąta droga, o której nie mówi się przy ogniu: strojenie odwrócone — rozdzieranie.</p>
+
+  <div class="lore-block"><h3>Sól — to, co Rdzeń omija</h3>
+    <p>Jedno w całej tej układance nie jest ani wiarą, ani magią. Krasnoludzka tradycja górnicza uczy, że sól jest obojętna na Rdzeń — nie przewodzi tego, co stuka. Dlatego Linia Soli w Graniach naprawdę działa, dlatego górnik nosi woreczek soli przy pasie, dlatego krąg soli zatrzymuje istoty z przecieku, a solona klinga rani je głębiej. Świat ma trzy klasy tego towaru: najczystszą sól-bliznę z Martwych Pustkowi, górską z Grań i najtańszą morską z warzelni Wybrzeża. Tam, gdzie sól jest czysta, mrok ma krótsze ręce.</p>
+    <a class="xref" href="/rules/#r8-sol">Sól Siwych Grań w Księdze Zasad →</a></div>
+</div></section>
+
+<!-- ================= FRAKCJE ================= -->
+<section class="sect gaz-anchor" id="frakcje"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kto z kim i o co ~</div><h2>Frakcje</h2><p>Jedna oś kosmiczna i dwa ludzkie konflikty, które się o nią ocierają.</p></div>
+  <div class="napiecia">
+    <div class="napiecie"><h4>Kosmiczne</h4><p>Cywilizacja przeciw mrokowi przeciekającemu z Rdzenia — wspólny wróg wszystkich, który powinien zjednoczyć ludzi, ale nie jednoczy.</p></div>
+    <div class="napiecie"><h4>Polityczne</h4><p>Korona przeciw Radzie Czterech: jawna władza miecza i podatku przeciw ukrytej władzy pieniądza. Każdy zleceniodawca z sygnetem ciągnie jeden z tych sznurków.</p></div>
+    <div class="napiecie"><h4>Religijne</h4><p>Świątynia Światła przeciw kultom Rdzenia — ci, co łatają pęknięcia, przeciw tym, co je rozdzierają. Wojna o dusze pogranicza.</p></div>
+  </div>
+  <div class="prose" style="margin-top:30px"><p>Gdy dwie pierwsze wojny pochłaniają wszystkich, nikt nie pilnuje pęknięć — i to z nich wraca to, co naprawdę może pochłonąć świat.</p></div>
+
+  <div class="codex-grid" style="margin-top:44px">
+    <div class="codex-card"><h4>Korona</h4><p>W Vilnogradzie zasiada król; za nim straż królewska, a na krańcach twierdze graniczne trzymające porządek „strachem i podatkami". Coraz częściej tylko strachem. Na dworze Kanclerz Dobrogost liczy, co jeszcze da się wycisnąć; Kapitan Henryk Miecław werbuje najemników; na murach Strzegwachtu Komendant Bożena Groźna nie spuszcza ręki z rękojeści.</p></div>
+    <div class="codex-card"><h4>Rada Czterech</h4><p>Anonimowi mecenasi — prawdziwa władza za tronem. Nikt nie zna ich twarzy; interesy załatwia się przez pośredników w rodzaju „Rachmistrzyni", która prowadzi rachunki Rady i przyjmuje raz w tygodniu. Rada nie planuje przewrotu — Rada go <i>kupuje, ratami</i>: weksle na żołd, długi twierdz, kupione rozkazy.</p></div>
+    <div class="codex-card"><h4>Świątynia Światła</h4><p>Wiara dominująca: leczy, błogosławi, łata. Z Klasztoru Iskry wyruszają misje na krańce świata, a skup relikwii idzie równolegle z inkwizycją — tam, gdzie wiara przechodzi w nadzór, a błogosławieństwo ma smak wyroku.</p></div>
+    <div class="codex-card"><h4>Kulty Rdzenia</h4><p>Czciciele tego, co śpi pod światem. Od kapturów w ruinach po kulty w skórze szacownych gildii: rozdzierają pęknięcia, przyzywają grozę i cierpliwie kuszą każdego, kto ma powód nienawidzić porządku. Nie spieszą się. Czekają.</p></div>
+    <div class="codex-card"><h4>Gildie kupieckie</h4><p>Volhynia i Vilnograd: aukcje, karawany, monopol na szlaki. Płacą Koronie za przywileje, Radzie za spokój, a najemnikom za usuwanie konkurencji. Kolejność zależy od miesiąca — i od tego, czyj weksel właśnie zapada.</p></div>
+    <div class="codex-card"><h4>Dzielnica złodziei</h4><p>Trzecia siła stolicy: zleceniodawcy z sygnetem, paserzy i ludzie, którzy wchodzą tam, gdzie nie można. Rządzi nią „Nocny Burmistrz" — o którym mówi się, że może wcale nie jest człowiekiem, lecz urzędem przechodnim. Kto go nosi dziś, jutro może już nie nosić.</p></div>
+    <div class="codex-card"><h4>Rada Piracka</h4><p>Pięć foteli w Zatoce Topielców, twierdzy na wyspie, gdzie prawo Korony kończy się na linii przyboju. Czterech kapitanów zajmuje swoje miejsca. Piąty fotel stoi pusty — i pół świata przestępczego ostrzy noże, żeby go zająć.</p></div>
+    <div class="codex-card"><h4>Rody krasnoludzkie</h4><p>W Sali Rodów starszyzna Siwotarczych trzyma zakazy, Młotodzierżcy chcą wracać pod ziemię, a Solnobrodzi liczą zyski z soli. Osobna, górska polityka — którą nizinne frakcje rozumieją słabo i lekceważą niesłusznie.</p></div>
+    <div class="codex-card"><h4>Krąg Starszych i zwiadowcy</h4><p>Władza Czarnoboru: Krąg chce las zamknąć, zwiadowcy — otworzyć. Dla świata zewnętrznego elfy mówią jednym głosem. Wewnątrz — dwoma, coraz głośniej.</p></div>
+    <div class="codex-card"><h4>Nieumarli i dzicz</h4><p>Nie frakcje, lecz żywioły. Lisze, wampiry, ghule i widma — przeciek z Rdzenia. Orkowie, gobliny, trolle i wilkołaki — dzicz, która napiera tam, gdzie cofa się straż. Nie negocjują. Nie handlują. Po prostu idą.</p></div>
+  </div>
+
+  <h3 style="font-family:var(--font-disp);color:var(--gold);font-size:24px;text-align:center;margin:60px 0 0">Tabela relacji</h3>
+  <p class="kr-tab-leg" style="margin-top:10px"><span class="rel-w">●</span> otwarta wrogość · <span class="rel-c">▲</span> cicha wojna · <span class="rel-i">◆</span> gra interesów · <span class="rel-s">○</span> współpraca · <span class="rel-q">?</span> nikt nie wie</p>
+  <div class="kr-tab rel">
+    <table>
+      <thead><tr><th></th><th>Korona</th><th>Rada IV</th><th>Światło</th><th>Kulty</th><th>Gildie</th><th>Złodzieje</th><th>Piraci</th></tr></thead>
+      <tbody>
+        <tr><th>Korona</th><td>·</td><td><span class="rel-c">▲</span></td><td><span class="rel-s">○</span></td><td><span class="rel-w">●</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-w">●</span></td><td><span class="rel-w">●</span></td></tr>
+        <tr><th>Rada IV</th><td><span class="rel-c">▲</span></td><td>·</td><td><span class="rel-i">◆</span></td><td><span class="rel-q">?</span></td><td><span class="rel-s">○</span></td><td><span class="rel-s">○</span></td><td><span class="rel-i">◆</span></td></tr>
+        <tr><th>Światło</th><td><span class="rel-s">○</span></td><td><span class="rel-i">◆</span></td><td>·</td><td><span class="rel-w">●</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-w">●</span></td><td><span class="rel-w">●</span></td></tr>
+        <tr><th>Kulty</th><td><span class="rel-w">●</span></td><td><span class="rel-q">?</span></td><td><span class="rel-w">●</span></td><td>·</td><td><span class="rel-c">▲</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-i">◆</span></td></tr>
+        <tr><th>Gildie</th><td><span class="rel-i">◆</span></td><td><span class="rel-s">○</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-c">▲</span></td><td>·</td><td><span class="rel-i">◆</span></td><td><span class="rel-c">▲</span></td></tr>
+        <tr><th>Złodzieje</th><td><span class="rel-w">●</span></td><td><span class="rel-s">○</span></td><td><span class="rel-w">●</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-i">◆</span></td><td>·</td><td><span class="rel-s">○</span></td></tr>
+        <tr><th>Piraci</th><td><span class="rel-w">●</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-w">●</span></td><td><span class="rel-i">◆</span></td><td><span class="rel-c">▲</span></td><td><span class="rel-s">○</span></td><td>·</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="wedrowiec">
+    <h4>Znak zapytania nie jest przeoczeniem</h4>
+    <p><span class="rel-q">?</span> przy Radzie i kultach to pytanie, które zadaje sobie pół świata: <b>czy któryś z Czterech już sięgnął po Rdzeń?</b> Nikt, kto twierdził, że zna odpowiedź, nie zdążył jej powtórzyć. Rody krasnoludzkie i elfy prowadzą politykę osobną: z Koroną i gildiami handlują, kulty i nieumarłych zwalczają bezwzględnie, a do sporów nizin się nie mieszają — na razie.</p>
+  </div>
+</div></section>
+
+<!-- ================= REPUTACJA ================= -->
+<section class="sect gaz-anchor" id="reputacja"><div class="wrap">
+  <div class="sect-head"><div class="k">~ czyny mają wagę ~</div><h2>Reputacja <span class="badge-new">nowe</span></h2>
+    <p>Świat pamięta. To, co bohater robi w danej krainie — wygrane przygody, upadki, a zwłaszcza porzucenia — buduje jego reputację w tym regionie. Nie jest to już tylko legenda dla barda: reputacja ma twarde, mechaniczne skutki.</p></div>
+  <div class="codex-grid">
+    <div class="codex-card"><h4>Reputacja regionalna</h4><p>Każda kraina liczy standing bohatera osobno (na start żywe są tylko Kresy). Skala od <b>znienawidzony</b> przez <b>neutralny</b> po <b>czczony</b>. Wpływ frakcyjny — osobna reputacja u gildii i rodów — nadejdzie z rozszerzeniem.</p></div>
+    <div class="codex-card"><h4>Ceny u kupców</h4><p>Dobra sława otwiera sakiewki: kupcy w regionie dają zniżki bohaterowi z wysoką reputacją, a naliczają narzut temu, o kim krążą złe wieści.</p></div>
+    <div class="codex-card"><h4>Postawa NPC i questy</h4><p>Mieszkańcy, zleceniodawcy i strażnicy odnoszą się do bohatera zgodnie z jego reputacją — od otwartej pomocy po wrogość. Część zleceń otwiera się dopiero przy odpowiednim standingu.</p></div>
+    <div class="codex-card"><h4>Rysa za porzucenie</h4><p>Farmienie łupu i porzucanie przygody nie uchodzi płazem. Zdobyte złoto i doświadczenie zostają (bohater jest ważniejszy niż kampania), ale każde porzucenie zostawia rysę — reputacja w tej krainie spada. Świat nie lubi tych, co znikają w środku roboty.</p></div>
+  </div>
+</div></section>
+<!-- ================= GAZETTEER — WSTĘP ================= -->
+<section class="sect" id="gazetteer"><div class="wrap">
+  <div class="sect-head"><div class="k">~ sześć krain ~</div><h2>Gazetteer</h2>
+    <p>Kontynent jest jeden, a wszystkie historie dzieją się na nim naraz. Sześć krain udziela sześciu odpowiedzi na to samo pytanie: jak daleko sięga światło.</p></div>
 </div></section>
 
 <!-- ================= KRESY (najpełniej) ================= -->
@@ -861,97 +1090,39 @@
     </div>
   </article>
 </div></section>
-
-<!-- ================= RDZEŃ I WIARA ================= -->
-<section class="sect gaz-anchor" id="rdzen"><div class="wrap">
-  <div class="sect-head"><div class="k">~ co śpi pod światem ~</div><h2>Rdzeń i wiara</h2><p>Jeden mechanizm tłumaczy całą fantastykę tego świata.</p></div>
-  <div class="lore-block"><h3>Rdzeń Pradawnych</h3>
-    <p>Pod światem leży Rdzeń — pradawne, pierwotne źródło mocy z czasów przed człowiekiem. Pradawni nauczyli się z niego czerpać i to ich zniszczyło, pękając granicę między światem żywych a tym, co za nią. Z pęknięć przecieka wszystko najgorsze: nieumarli, demony, dzika magia. Arkana Uczonego to ostrożne, okruchowe czerpanie z tego samego źródła — dlatego miscast bywa groźny: to chwila, gdy pęknięcie odgryza się magowi. Jeden mechanizm tłumaczy ruiny pełne umarłych, klątwy i „wnętrze martwego boga".</p></div>
-  <div class="prose" style="margin-top:36px">
-    <p><strong>Bogowie nie są dowiedzeni.</strong> Gra nigdy nie pokazuje boga, który realnie działa. Czci się ich, lecz nikt ich nie widział. To, co ludzie nazywają „cudem" albo „klątwą", ma jedno prawdziwe źródło — Rdzeń.</p>
-    <p><strong>Światło</strong> to wiara państwowa: świątynia leczy, błogosławi, „łata" pęknięcia rzeczywistości. Czy stoi za nią bóg, czy wyuczony sposób uspokajania Rdzenia — gra nie rozstrzyga. Działa, bo ludzie wierzą i bo ktoś dawno temu odkrył, jak to robić.</p>
-    <p><strong>Kulty Rdzenia</strong> robią odwrotnie: tam, gdzie Świątynia Światła pęknięcia łata, kulty je <em>poszerzają</em> — wierzą, że za nimi czeka moc, wieczność albo bóg. Ich magia płynie z ciemności Rdzenia.</p>
-    <p>Skrót dla pamięci: <strong>Światło</strong> = ci, co łatają pęknięty świat. <strong>Kulty</strong> = ci, co je rozdzierają. <strong>Rdzeń</strong> = to, co pod spodem — niedowiedzione i głodne.</p>
-  </div>
-</div></section>
-
-<!-- ================= FRAKCJE ================= -->
-<section class="sect gaz-anchor" id="frakcje"><div class="wrap">
-  <div class="sect-head"><div class="k">~ siły świata ~</div><h2>Frakcje</h2><p>Jedna kosmiczna oś, dwa ludzkie konflikty — wszystkie ciągną za te same sznurki.</p></div>
-  <div class="napiecia">
-    <div class="napiecie"><h4>Kosmiczne</h4><p>Cywilizacja kontra mrok przeciekający z Rdzenia. Wspólny, podskórny wróg wszystkich — który powinien zjednoczyć ludzi, lecz nie jednoczy, bo zżerają ich dwa inne spory.</p></div>
-    <div class="napiecie"><h4>Polityczne</h4><p>Korona kontra Rada Czterech. Jawna władza miecza i podatków przeciw ukrytej władzy pieniądza. Każda intryga, każdy zleceniodawca z sygnetem ciągnie jeden z tych sznurków.</p></div>
-    <div class="napiecie"><h4>Religijne</h4><p>Świątynia Światła kontra kulty Rdzenia. Ci, co łatają pęknięcia, przeciw tym, co je rozdzierają. Wojna o dusze pogranicza — i o to, kto kontroluje dostęp do Rdzenia.</p></div>
-  </div>
-  <div class="codex-grid" style="margin-top:40px">
-    <div class="codex-card"><h4>Korona / Imperium</h4><p>Król w Vilnogradzie, straż królewska (Kapitan Henryk Miecław), twierdze graniczne (Komendant Bożena Groźna). Trzyma się strachem i podatkami; nie stać jej już na armie wszędzie — dlatego nastała era najemników.</p></div>
-    <div class="codex-card"><h4>Rada Czterech</h4><p>Anonimowi mecenasi — prawdziwa władza za tronem. Pieniądz, intryga, zleceniodawcy z sygnetem. Kim są? Czy któryś już sięgnął po Rdzeń? Główna oś intrygi świata.</p></div>
-    <div class="codex-card"><h4>Świątynia Światła</h4><p>Wiara dominująca; Klasztor Iskry (Matka Urszula, Brat Kazimierz, Brat Tomasz Kronikarz). Błogosławieństwo, święte światło, leczenie. Łata pęknięcia i trzyma Rdzeń w ryzach.</p></div>
-    <div class="codex-card"><h4>Gildie kupieckie</h4><p>Volhynia i Vilnograd; gildmistrz Brat Aleksy Złotnik. Płacą za szlaki, eskorty i eliminację konkurencji. Pieniądz, który ciągnie za sznurek Rady.</p></div>
-    <div class="codex-card"><h4>Dzielnica złodziei</h4><p>Trzecia, nieformalna siła stolicy. Świat zleceń z sygnetem: roboty dla Rady albo gildii. Przemytnicy, szpiedzy, ostrza do wynajęcia.</p></div>
-    <div class="codex-card"><h4>Kulty Rdzenia / Mroku</h4><p>Mroczni kapłani, czarodzieje, kultiści. Przyzywają demony, rozdzierają pęknięcia, sięgają po nekrotyczną moc — wierząc, że pod spodem czeka moc albo bóg.</p></div>
-    <div class="codex-card"><h4>Nieumarli</h4><p>Lisze, wampiry (Mistrz Wampirów, Krwawy Hrabia), ghule, widma. To nie lud ani frakcja — to zagrożenie, przeciek z Rdzenia — najgęstszy w ruinach Martwych Pustkowi i w Borze Zmarłych.</p></div>
-    <div class="codex-card"><h4>Piractwo i bezprawie</h4><p>Zatoka Topielców jako miasto-twierdza bez prawa; Rada Piracka pięciu kapitanów. Łupy, okup, kontrabanda — i to, co fale wyrzucają na brzeg.</p></div>
-    <div class="codex-card"><h4>Dzicz i bestie</h4><p>Orkowie (Wódz Orków, szamani), gobliny, trolle, wilkołaki, harpie. Dzicz na rubieżach cywilizacji — nie frakcja, lecz odwieczne zagrożenie dzikich krain.</p></div>
-  </div>
-</div></section>
-
-<!-- ================= REPUTACJA ================= -->
-<section class="sect gaz-anchor" id="reputacja"><div class="wrap">
-  <div class="sect-head"><div class="k">~ czyny mają wagę ~</div><h2>Reputacja <span class="badge-new">nowe</span></h2>
-    <p>Świat pamięta. To, co bohater robi w danej krainie — wygrane przygody, upadki, a zwłaszcza porzucenia — buduje jego reputację w tym regionie. Nie jest to już tylko legenda dla barda: reputacja ma twarde, mechaniczne skutki.</p></div>
-  <div class="codex-grid">
-    <div class="codex-card"><h4>Reputacja regionalna</h4><p>Każda kraina liczy standing bohatera osobno (na start żywe są tylko Kresy). Skala od <b>znienawidzony</b> przez <b>neutralny</b> po <b>czczony</b>. Wpływ frakcyjny — osobna reputacja u gildii i rodów — nadejdzie z rozszerzeniem.</p></div>
-    <div class="codex-card"><h4>Ceny u kupców</h4><p>Dobra sława otwiera sakiewki: kupcy w regionie dają zniżki bohaterowi z wysoką reputacją, a naliczają narzut temu, o kim krążą złe wieści.</p></div>
-    <div class="codex-card"><h4>Postawa NPC i questy</h4><p>Mieszkańcy, zleceniodawcy i strażnicy odnoszą się do bohatera zgodnie z jego reputacją — od otwartej pomocy po wrogość. Część zleceń otwiera się dopiero przy odpowiednim standingu.</p></div>
-    <div class="codex-card"><h4>Rysa za porzucenie</h4><p>Farmienie łupu i porzucanie przygody nie uchodzi płazem. Zdobyte złoto i doświadczenie zostają (bohater jest ważniejszy niż kampania), ale każde porzucenie zostawia rysę — reputacja w tej krainie spada. Świat nie lubi tych, co znikają w środku roboty.</p></div>
-  </div>
-</div></section>
-
-<!-- ================= LUDY ================= -->
-<section class="sect gaz-anchor" id="ludy"><div class="wrap">
-  <div class="sect-head"><div class="k">~ kto zamieszkuje świat ~</div><h2>Ludy świata</h2>
-    <p>Świat jest przede wszystkim ludzką historią o trzymaniu światła. Frakcje nieludzkie to kanon lore — do gry wejdą w przyszłych rozszerzeniach.</p></div>
-  <div class="codex-grid">
-    <div class="codex-card"><h4>Ludzie</h4><p>Dominujący lud świata: Imperium, Korona, świątynia, gildie, kulty, piraci, najemnicy. Każdy znany bohater i przyjazny NPC — Marta, Henryk Miecław, Matka Urszula, Starszy Konrad — jest człowiekiem. Heroic-dark to przede wszystkim ludzka opowieść.</p></div>
-    <div class="codex-card"><h4>Krasnoludy <span class="badge-new">dostępne</span></h4><p>Górski lud kowali i górników z Siwych Grani. Grywalna rasa w kreatorze postaci. Rozproszeni: kupiecka enklawa w stolicy, osiadłe rody we wsiach górniczych, hołdy trwające wyżej w górach. Znają tajemnice Rdzenia i płacą za to krwią z uszu — ich Uczeni nie rzucają eleganckich zaklęć arkanów, lecz czerpią surowo wprost z żyły Rdzenia: własna pula czarów, mocniejsza niż ludzka, ale bardziej niestabilna i ryzykowna w użyciu. <a href="/rules/#rasy-rdzen">Rdzeń-magia w Księdze Zasad →</a></p></div>
-    <div class="codex-card"><h4>Elfy <span class="soon">wkrótce</span></h4><p>Leśne elfy — skryci, nieufni strażnicy starych granic w głębi Czarnoboru, znający mapę pęknięć Rdzenia. Mroczne elfy (już w grze jako wrogowie) to te, które dawno uległy Rdzeniowi i czczą pęknięcia — dla leśnych kuzynów to sprawa rodzinna, nie egzotyka.</p><p>Rasa jest już gotowa mechanicznie: dwie drogi — <b>Zwiadowca</b> (łuk, zmierzchowy wzrok, odskok ze zwarcia, zniknięcie w kniei) i <b>Uczony-Stroiciel</b>, który pęknięcia Rdzenia <i>stroi</i> zamiast z nich wydzierać moc: kontrola, ochrona i iluzje zamiast ognia, za to łagodniejsza cena za nieudany czar. Elfy otworzą się dla wszystkich razem z Czarnoborem. <a href="/rules/#rasy-elf">Elf leśny w Księdze Zasad →</a></p></div>
-    <div class="codex-card"><h4>Ludy dalekomorskie <span class="soon">wkrótce</span></h4><p>Wyspiarscy żeglarze i najemnicy nie-ludzkiej krwi z Wybrzeża Łez. Rzadcy i egzotyczni — przestrzeń na przyszłe rozszerzenia.</p></div>
-    <div class="codex-card"><h4>Bestie i dzicz</h4><p>Orkowie, gobliny, trolle, wilkołaki, harpie, jaszczuroludzie — dzicz, nie cywilizowane frakcje. Zagrożenie dzikich krain, nie partnerzy do rozmowy.</p></div>
-    <div class="codex-card"><h4>Nieumarli</h4><p>Lisze, wampiry, ghule, widma. To nie jest frakcja ani lud — to wrogowie, których napędza siła Rdzenia, najgęstsi tam, gdzie pęknięcie sięga powierzchni. Nie żyją; trwają.</p></div>
-  </div>
-</div></section>
-
-<!-- ================= HISTORIA ŚWIATA ================= -->
-<section class="sect gaz-anchor" id="historia"><div class="wrap">
-  <div class="sect-head"><div class="k">~ epoki ~</div><h2>Historia świata</h2></div>
-  <p class="hist-intro">Pięć epok od pierwszego grzechu po dzisiejszy zmierzch — i moment, w którym do tej opowieści wkraczasz ty.</p>
-  <div class="timeline">
-    <div class="tl-item"><div class="when">Przed człowiekiem</div><h3>Epoka Pradawnych</h3><p>Przed-ludzka cywilizacja opanowała moc Rdzenia i sięgnęła za daleko — i to ją zniszczyło. Zostały ruiny pełne zagadek i niebezpieczeństw, a po samych Pradawnych — być może Rdzeń ich przemienił — nie został żaden lud, tylko architektura przypominająca wnętrze martwego boga.</p></div>
-    <div class="tl-item"><div class="when">Grzech pierworodny</div><h3>Wielkie Pęknięcie</h3><p>Nadużycie Rdzenia popękało granicę między światem żywych a tym, co za nią. Odtąd mrok, nieumarli i groza przeciekają wszędzie, gdzie Rdzeń leży płytko. To „grzech pierworodny" świata — rana, której nikt nie umie zasklepić.</p></div>
-    <div class="tl-item"><div class="when">Wzlot ludzi</div><h3>Era Latarni</h3><p>Ludzkie Imperium wzniosło się jako latarnia porządku po Pęknięciu. Powstała Korona w Vilnogradzie i Świątynia Światła — instytucja, której zadaniem jest łatać pęknięcia i trzymać Rdzeń w ryzach. Krasnoludy i elfy przeżywały w tej erze własne, równoległe dzieje.</p></div>
-    <div class="tl-item"><div class="when">Dwa wieki</div><h3>Wojny graniczne</h3><p>Strzegwacht strzeże traktu od dwustu lat przed wschodnimi barbarzyńcami. Era twardych granic, garnizonów i myta — porządek kupiony krwią pogranicza, który teraz zaczyna pękać.</p></div>
-    <div class="tl-item"><div class="when">Teraźniejszość</div><h3>Zmierzch Latarni</h3><p>Imperium słabnie, podatki rosną, granice się cofają. Wsie płoną — jak Zgliszcza, spalone rok temu. Kopalnie pustoszeją (Czarny Hutman — krasnoludy odeszły dwadzieścia lat temu), Bór Zmarłych się rozrasta. Korony nie stać już na armie wszędzie — dlatego nastała era bohaterów-najemników. To moment, w którym zaczynasz grać: jeden człowiek może jeszcze przechylić szalę.</p></div>
-  </div>
-</div></section>
-
 <!-- ================= LEGENDY ================= -->
 <section class="sect gaz-anchor" id="legendy" style="border-bottom:none"><div class="wrap">
-  <div class="sect-head"><div class="k">~ tajemnice ~</div><h2>Legendy i haki</h2><p>Mity, które spinają świat — i czekają, aż ktoś sprawdzi, ile w nich prawdy.</p></div>
+  <div class="sect-head"><div class="k">~ pytania bez odpowiedzi ~</div><h2>Legendy i haki</h2>
+    <p>Świat pełen jest pytań, na które nikt nie zna odpowiedzi — a przynajmniej nikt, kto zdążyłby ją powtórzyć. Kronika spisuje je uczciwie: jako pytania.</p></div>
+
+  <h3 style="font-family:var(--font-disp);color:var(--gold);font-size:22px;text-align:center;margin-bottom:22px">Wielkie tajemnice świata</h3>
   <div class="codex-grid">
-    <div class="codex-card"><h4>Tron Białej Bogini</h4><p>Kto wejdzie najwyżej w Lodowy Pas, usłyszy jej głos — tak mówią. Kanon nie rozstrzyga, czy jest kimś, czy czymś. W lodzie wokół pustego sanktuarium stoi zamarznięta procesja pielgrzymów: nikt nie wie, skąd przyszli ani czemu szli w górę.</p></div>
-    <div class="codex-card"><h4>Krwawy Hrabia</h4><p>Wampir był niegdyś rycerzem Korony. Jego klątwa to ostrzeżenie, co spotyka tych, którzy targują się z Rdzeniem.</p></div>
-    <div class="codex-card"><h4>Twierdza Bezimiennego</h4><p>„Nikt z tych, co weszli, nie wrócił." Czołowy dungeon-mit świata — i cele zamknięte od wewnątrz.</p></div>
-    <div class="codex-card"><h4>Sekret Rady Czterech</h4><p>Kim są mecenasi rządzący zza tronu? Czy któryś z nich już sięgnął po Rdzeń? Główny hak intrygi politycznej.</p></div>
-    <div class="codex-card"><h4>Rdzeń pod Świątynią Pradawnych</h4><p>„Wnętrze martwego boga" — źródło, które zniszczyło Pradawnych. Ktoś może chcieć je obudzić. Oś końcowej, kosmicznej stawki świata.</p></div>
-    <div class="codex-card"><h4>Przed czym uciekły krasnoludy?</h4><p>Coś wciąż stuka w martwym Czarnym Hutmanie. Hak łączący przyszłą frakcję krasnoludów z metafizyką Rdzenia.</p></div>
-    <div class="codex-card"><h4>Coś dużego pod falami</h4><p>Dziadek Florian z Zatoki Topielców widział to na własne oczy. Możliwy ślad Pradawnego, którego pochłonęło morze.</p></div>
-    <div class="codex-card"><h4>Latarnia, co zapala się sama</h4><p>Opuszczona Latarnia Topielców w Czarnogrodzie nocą wabi statki na rafy. Kto stoi na jej szczycie z ogniem?</p></div>
-    <div class="codex-card"><h4>Czterdziesty drugi mieszkaniec</h4><p>W Zgliszczach wykopano czterdzieści jeden grobów, lecz spis dusz mówił o czterdziestu dwóch. Kogo brakuje — i czy na pewno zginął?</p></div>
+    <div class="codex-card"><h4>Sekret Rady Czterech</h4><p>Kim są mecenasi rządzący zza tronu w Vilnogradzie? Czego naprawdę chcą — i czy któryś z Czterech już sięgnął po Rdzeń? Trop prowadzi do pośrednika. Pośrednik zna tylko następnego pośrednika. Za każdym razem korytarz się wydłuża, a drzwi na końcu zostają zamknięte.</p></div>
+    <div class="codex-card"><h4>Rdzeń pod Świątynią Pradawnych</h4><p>Na Martwych Pustkowiach leży „wnętrze martwego boga": pęknięcie nad samym źródłem, które zniszczyło Pradawnych. Mówi się, że są tacy — kult albo ktoś znacznie wyżej — którzy chcieliby je obudzić. To stawka, przy której wszystkie inne wojny świata wyglądają jak przepychanka w karczmie.</p></div>
+    <div class="codex-card"><h4>Głębia</h4><p>Co mieszka pod dnem morza u Wybrzeża Łez? Dziadek Florian widział „coś dużego" pod falami — i na tym urwał. Świątynia Topielców temu czemuś się kłania. Najstarsi marynarze mówią, że morze pochłonęło kiedyś jednego z Pradawnych — i że nie wszystko, co pochłonięte, tonie.</p></div>
   </div>
+
+  <h3 style="font-family:var(--font-disp);color:var(--gold);font-size:22px;text-align:center;margin:54px 0 22px">Tajemnice krain</h3>
+  <div class="codex-grid">
+    <div class="codex-card"><h4>Tron Białej Bogini <span class="soon">Siwe Granie</span></h4><p>Czy w lodzie Lodowego Pasu śpi Pradawna, fragment świadomości Rdzenia — czy nic? Wokół pustego sanktuarium tkwią pielgrzymi wmarznięci w lód. Kim byli i dokąd szli, zanim lód ich dogonił? Mieszka tam jeden pustelnik. Nie pamięta, kiedy przyszedł. A ktoś — mimo to — odśnieża progi.</p></div>
+    <div class="codex-card"><h4>Lodowa Brama <span class="soon">Siwe Granie</span></h4><p>Wrota wmarznięte w lodowiec. Nikt nie wie, co za nimi; nikt nie pamięta, kto wydał zakaz wchodzenia na lód — tylko że zakaz stoi i nikt go nie kwestionuje głośno. Wygnańcy Lodu widzieli Bramę z bliska. Czegoś tam boją się bardziej niż własnego wyklęcia.</p></div>
+    <div class="codex-card"><h4>Stukanie w Czarnym Hutmanie <span class="soon">Siwe Granie</span></h4><p>Krasnoludy odeszły z kopalni dwadzieścia lat temu. Coś w niej stuka do dziś — miarowo, cierpliwie, głębiej niż sięga sól. Przed czym naprawdę uciekły rody? Starszy Konrad z Wolfsmark zna korytarze i mówi o nich tylko po trzecim kuflu.</p></div>
+    <div class="codex-card"><h4>Czarne Serce <span class="soon">Czarnobór</span></h4><p>Wiadomo, co tam jest: martwe korzenie Pradrzewa i największe pęknięcie krainy. Nie wiadomo — dlaczego pierwsze i najpotężniejsze ze stróżowych drzew zgasło. Samo? Przestrojone? A jeśli wygasło od środka — na czym stoi cała wiedza elfów? Bór nie wpuszcza nikogo, kto próbuje to sprawdzić.</p></div>
+    <div class="codex-card"><h4>Kto zapala Latarnię Topielców <span class="soon">Wybrzeże Łez</span></h4><p>Wieża stoi opuszczona od pokoleń. Nocą zapala się sama i ściąga statki na rafy. Duch latarnika? Kult? Głębia? Piraci z pochodnią? Każdy port ma swoją wersję i każda jest słabsza od pytania — i od światła, które wciąż wraca, kiedy nikt nie powinien go podtrzymywać.</p></div>
+    <div class="codex-card"><h4>Pierwszy Tron i Dwór Czwartego <span class="soon">Koronne Niziny</span></h4><p>Dlaczego Korona nagle porzuciła swoją pierwotną siedzibę — kroniki milczą, jakby ktoś wyciął karty. I czemu spalonej rezydencji rzekomego założyciela Rady od pokoleń nikt nie chce kupić, choć ziemia w stolicy jest na wagę złota?</p></div>
+    <div class="codex-card"><h4>Twierdza Bezimiennego <span class="soon">Martwe Pustkowia</span></h4><p>„Nikt z tych, co weszli, nie wrócił." To całe podanie. Wystarcza.</p></div>
+    <div class="codex-card"><h4>Zgliszcza <span class="soon">Kresy</span></h4><p>Wieś spłonęła w jedną noc, rok temu. Czterdzieści jeden ofiar. Żadnego śledztwa, żadnej odpowiedzi z Vilnogradu. Zostali ocalali na pogorzelisku i pytanie, którego nikt nie zadaje głośno dwa razy — bo za pierwszym razem i tak nie dostaje się odpowiedzi, a za drugim zaczyna się patrzeć w złą stronę.</p></div>
+    <div class="codex-card"><h4>Krwawy Hrabia <span class="soon">Martwe Pustkowia</span></h4><p>Wampir był niegdyś rycerzem Korony. Jego klątwa to ostrzeżenie, co spotyka tych, którzy targują się z Rdzeniem.</p></div>
+  </div>
+
+  <div class="lore-block"><h3>Roboty czekają</h3>
+    <p>Nie każda zagadka wymaga bohatera — ale każda kraina ma ludzi, którzy zapłacą za odwagę. Marta z Karczmy Pod Trzema Krukami ma robotę „akurat dla kogoś takiego jak ty". Sołtys Benedykt płaci za odnalezienie drwali, którzy nie wrócili z Boru. Brat Tomasz Kronikarz kupi każdy relikt Pradawnych i nie zapyta, skąd go masz. Kapitan Miecław i Komendant Groźna werbują do dyskretnych zadań na pograniczu. Dagna Młotodzierżca szuka rąk do sprawy, o której starszyzna nie chce słyszeć. A w Zatoce Topielców stoi pusty fotel — czeka na kogoś dość zuchwałego, by po niego sięgnąć.</p>
+    <p style="margin-top:14px"><b>Świat stygnie — ale jeszcze nie ostygł. Wszystko, co w nim zrobisz, zostanie zapamiętane.</b></p></div>
+
   <div style="text-align:center;margin-top:46px">
     <a class="btn btn-gold" href="/graj/">Wyrusz w ten świat →</a>
-    <div style="margin-top:18px"><a class="btn btn-ghost" href="index.html">← Powrót na stronę główną</a></div>
+    <div style="margin-top:18px"><a class="btn btn-ghost" href="/rules/">Księga Zasad — jak grać →</a></div>
+    <div style="margin-top:14px"><a class="btn btn-ghost" href="index.html">← Powrót na stronę główną</a></div>
   </div>
 </div></section>
 
