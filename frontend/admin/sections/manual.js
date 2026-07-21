@@ -209,7 +209,13 @@ którym podejmiesz tę decyzję <b>bez wychodzenia z zakładki</b>:</p>
       dziurę). Wybierasz i klikasz <b>Przypisz</b>. Jeśli nikt nie pasuje, niżej jest formularz
       nowego gospodarza (imię, rola, opis) z guzikiem <b>🤖 Podpowiedz</b>: AI proponuje postać
       pasującą do miejsca, krainy i rodzaju usługi — możesz ją przyjąć albo poprawić. Nic nie
-      zapisuje się bez Twojego kliknięcia.</li>
+      zapisuje się bez Twojego kliknięcia. Podpowiadacz zna <b>konwencję nazw</b> każdej krainy
+      (Kresy: mix słowiańsko-germański z przydomkiem · Siwe Granie: krasnoludzkie nordyckie imię
+      + polski przydomek · Czarnobór: miękkie elfickie · Martwe Pustkowia: brzmienie arabskie ·
+      Koronne Niziny: dworskie słowiańskie i pseudonimy-urzędy · Wybrzeże Łez: wyspiarskie) oraz
+      widzi, jak nazywają się postacie już stojące w tej krainie. Jeśli mimo to poda współczesne
+      polskie imię albo powtórzy kogoś, kto już istnieje, prosimy model o drugie podejście —
+      dopiero potem pokazujemy wynik.</li>
   <li><b>⚖ Porównaj i rozstrzygnij</b> (duplikat) — pokazuje obie karty obok siebie z faktami,
       które przesądzają wybór: źródło, status, obsada, liczba wnętrz, czy stoi na mapie. Klikasz
       <b>Zostaw tę, wygaś drugą</b>. Zaznaczone pole <b>Przenieś obsadę i wnętrza</b> przepina

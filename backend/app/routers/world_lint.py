@@ -184,13 +184,23 @@ def post_suggest_host(payload: SuggestHostRequest):
     from app.services.llm_service import (
         content_llm_enabled, generate_chat, resolve_content_llm_config,
     )
+    from app.services.world_naming_service import (
+        clean_person_label, looks_like_modern_polish_name, name_already_taken,
+        naming_prompt_block,
+    )
+
+    conn = _get_db()
+    try:
+        naming = naming_prompt_block(conn, ctx["region"])
+    finally:
+        conn.close()
+
     sys_prompt = (
-        "Jesteś twórcą postaci pobocznych do gry fantasy osadzonej w świecie Kresy "
-        "(klimat słowiańsko-germański, nazwy własne wymyślone, NIE realne polskie miasta). "
-        "Tworzysz gospodarza konkretnego miejsca usługowego: człowieka z imieniem, rzemiosłem "
+        "Jesteś twórcą postaci pobocznych do gry fantasy osadzonej w świecie Kresy. "
+        "Tworzysz gospodarza konkretnego miejsca usługowego: postać z imieniem, rzemiosłem "
         "i jednym charakterystycznym szczegółem.\n\n"
-        "ZASADY:\n"
-        "- Imię i nazwisko/przydomek pasujące do krainy; bez cudzysłowów i tytułów.\n"
+        f"{naming}\n\n"
+        "POZOSTAŁE ZASADY:\n"
         "- Rola z listy: neutral (zwykły mieszkaniec), merchant (handluje), "
         "quest_giver (daje zadania), ally (sojusznik).\n"
         "- Opis: JEDNO zdanie po polsku, konkret zamiast ogólników.\n"
@@ -204,30 +214,63 @@ def post_suggest_host(payload: SuggestHostRequest):
         + (f"Opis miejsca: {ctx['description'][:400]}\n" if ctx["description"] else "")
         + "\nZaproponuj gospodarza tego miejsca."
     )
-    try:
-        cfg = resolve_content_llm_config() if content_llm_enabled() else None
-        raw = generate_chat(
-            messages=[{"role": "system", "content": sys_prompt},
-                      {"role": "user", "content": user_prompt}],
-            llm_config=cfg, call_type="world_lint_host_suggest",
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Model nie odpowiedział: {exc}") from None
-
     import json
     import re
-    match = re.search(r"\{.*\}", raw or "", re.S)
-    if not match:
-        raise HTTPException(status_code=502, detail="Model nie zwrócił poprawnej propozycji.")
+
+    def _ask(extra_system: str = "") -> dict:
+        try:
+            cfg = resolve_content_llm_config() if content_llm_enabled() else None
+            raw = generate_chat(
+                messages=[{"role": "system", "content": sys_prompt + extra_system},
+                          {"role": "user", "content": user_prompt}],
+                llm_config=cfg, call_type="world_lint_host_suggest",
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Model nie odpowiedział: {exc}") from None
+        match = re.search(r"\{.*\}", raw or "", re.S)
+        if not match:
+            raise HTTPException(status_code=502, detail="Model nie zwrócił poprawnej propozycji.")
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=502, detail="Model nie zwrócił poprawnej propozycji."
+            ) from None
+
+    conn = _get_db()
     try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=502, detail="Model nie zwrócił poprawnej propozycji.") from None
+        data = _ask()
+        label = clean_person_label(data.get("label") or "")
+        naming_retry = ""
+        # Dwa sposoby, na jakie model psuje kanon nazw:
+        #  1. sięga po współczesne polskie imię („Agnieszka Kruk"),
+        #  2. kopiuje żywcem przykład, który dostał (few-shot kusi).
+        # Na każdy z nich dajemy JEDNO drugie podejście z twardszą instrukcją,
+        # zamiast wypuszczać złą propozycję na ekran.
+        if looks_like_modern_polish_name(label):
+            naming_retry = "modern_polish"
+        elif name_already_taken(conn, label):
+            naming_retry = "duplicate"
+        if naming_retry:
+            reason = ("to wspolczesne polskie imie/nazwisko"
+                      if naming_retry == "modern_polish"
+                      else "taka postac juz istnieje w swiecie")
+            data = _ask(
+                f"\n\nUWAGA: poprzednia propozycja ({label}) jest zla: {reason}. "
+                "Zaproponuj INNE, NOWE imie, scisle w stylu krainy opisanym wyzej."
+            )
+            label = clean_person_label(data.get("label") or "")
+        naming_warning = looks_like_modern_polish_name(label) or name_already_taken(conn, label)
+    finally:
+        conn.close()
+
     return {
-        "label": str(data.get("label") or "").strip(),
+        "label": label,
         "npc_type": data.get("npc_type") if data.get("npc_type") in
         ("neutral", "merchant", "quest_giver", "ally") else "neutral",
         "description": str(data.get("description") or "").strip(),
+        "naming_retry": naming_retry or None,
+        "naming_warning": naming_warning,
         "context": ctx,
     }
 
