@@ -339,7 +339,8 @@ Przy „Wszystkie (live)" przycisku nie ma — nie wiadomo, której krainy miał
 <p>Zmiana działa <b>natychmiast</b>: gracz w trakcie sesji od razu przestaje (albo zaczyna)
 przechodzić granicę. Decyzja jest trwała — przeżywa restart serwera.</p>
 <h4>Co jeszcze się zmienia</h4>
-<p>Rasy są przypisane do krain ojczystych (krasnolud → <b>Siwe Granie</b>). Gdy zamkniesz
+<p>Rasy są przypisane do krain ojczystych (krasnolud → <b>Siwe Granie</b>,
+elf leśny → <b>Czarnobór</b>). Gdy zamkniesz
 taką krainę, karta tej rasy w kreatorze bohatera <b>wyszarza się</b> z powodem
 („te ziemie są jeszcze zamknięte") — nie znika, więc gracz wie, że coś nadejdzie.
 Człowiek nie ma kotwicy i jest dostępny zawsze. Istniejący bohaterowie grają dalej
@@ -353,6 +354,18 @@ gdyby ktoś próbował wysłać go z pominięciem UI. Człowiek ma wszystkie trz
 <b>Karawanseraj na Trakcie</b> lub <b>Wyrobisko Srebrnej Żyły</b> — nazwa spoza tej trójki
 cofa start do szynku. Człowiek startuje jak dotąd. Jawny <i>start-hex</i> ustawiony
 w Kuźni wygrywa z kotwicą rasy, więc szablon może celowo postawić bohatera gdzie indziej.</p>
+<h4>Elf leśny (#1474)</h4>
+<p>Elf gra tylko <b>Zwiadowcą</b> albo <b>Uczonym-Stroicielem</b> — karty Wojownika nie ma
+w kreatorze po wybraniu tej rasy (backend też ją odrzuca). W kreatorze nazwy archetypów
+zmieniają się wraz z rasą: „Łotrzyk" czyta się u elfa jako <b>Zwiadowca</b>, „Uczony" jako
+<b>Uczony-Stroiciel</b> — klucze w bazie zostają te same.</p>
+<p>Czary elfa to osobna pula <b>szkoły Stroiciela</b> (kontrola, ochrona, iluzje), zamknięta
+polem <code>race_lock = elf</code> w <b>Zawartość → Czary</b>. Elf nie nauczy się czarów
+ludzkich ani krasnoludzkich i odwrotnie — tak samo jak przy Rdzeń-magii.</p>
+<p><b>Uwaga o starcie:</b> Czarnobór nie ma jeszcze zaseedowanej mapy, więc kampania elfa
+startuje na razie tam, gdzie kampania człowieka (Kresy). Kotwica startowa w krainie ojczystej
+dojdzie razem z wdrożeniem Czarnoboru (sesja CB-8). Sama rasa jest już zabramkowana statusem
+krainy: dopóki Czarnobór stoi na <b>coming</b>, kartę elfa widzi tylko konto z flagą Tester.</p>
 <p><b>Flagę Tester</b> nadajesz w <b>Gracze</b> → konto → „Tester (może zgłaszać błędy)".
 Tester dostaje też rasy krain w stanie <b>coming</b> — skoro może tam wejść, może nimi grać.</p>
 <h4>Wizytówka nadąża sama</h4>
