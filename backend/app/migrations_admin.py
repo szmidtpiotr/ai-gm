@@ -6287,6 +6287,163 @@ def _seed_race_utility_spells(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _seed_race_combat_balance(conn: sqlite3.Connection) -> None:
+    """#1519 — balans bojówki: +5 czarów walki elfowi i krasnoludowi, przycięcie duplikatów.
+
+    Diagnoza (stan przed): człowiek 32 czary bojowe, krasnolud 6, elf 6. W grze
+    głównie JEDNOOSOBOWEJ to nie jest kwestia smaku — nie ma drużyny, która załata
+    brak roli:
+      • elf kończył się na T3 (poziom 5) — od L7 zero nowych opcji, max 2d6 obrażeń,
+      • krasnolud miał najwyższe obrażenia w grze i jednocześnie żadnego własnego
+        leczenia, żadnej kontroli, żadnej reakcji i pierwszą tarczę dopiero na T2,
+      • człowiek miał komplet ról na każdym tierze (atak/AoE/obrona/heal/kontrola/
+        reakcja/przyzwanie).
+
+    Profile pozostają różne — wyrównujemy DOSTĘP DO RÓL, nie kopiujemy listy:
+      • elf = kontrola i przeżycie (unik, gruba tarcza, AoE spowalniające, leczenie),
+        obrażenia dalej poniżej krasnoluda (3d8 vs 4d8),
+      • krasnolud = przetrwanie dorzucone do jego młota (tarcza od L1, własne
+        leczenie, unieruchomienie, nietykalność na T5).
+
+    Wszystkie liczby STARTOWE (Numbers Policy), edytowalne w adminie i Sandboxie.
+    """
+    combat_spells = [
+        # ── Elf · szkoła Stroiciela ──────────────────────────────────────────
+        {
+            "key": "shadow_step", "label": "Uskok Cienia", "tier": 2, "mana_cost": 3,
+            "spell_type": "reaction", "damage_die": None, "heal_die": None, "aoe": 0,
+            "target_zone": "self",
+            "effect_json": '{"reaction":"blink","miss_chance":40,"rounds":2}',
+            "description": "Rozmywasz się między pniami — przez 2 rundy ciosy mijają cię "
+                           "w 40% przypadków. Stroiciel nie blokuje, tylko przestaje tam być.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "elder_bark", "label": "Kora Pradrzewa", "tier": 3, "mana_cost": 3,
+            "spell_type": "defense", "damage_die": None, "heal_die": None, "aoe": 0,
+            "target_zone": "self", "effect_json": '{"absorb":12}',
+            "description": "Skóra twardnieje w korę starego drzewa — pochłania 12 obrażeń, "
+                           "zanim popęka.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "thorn_rain", "label": "Deszcz Cierni", "tier": 4, "mana_cost": 4,
+            "spell_type": "attack_aoe", "damage_die": "2d6", "heal_die": None, "aoe": 1,
+            "target_zone": "any",
+            "effect_json": '{"on_hit_conditions":[{"key":"slowed","save":{"stat":"CON","dc":12}}]}',
+            "description": "Korony strzelają cierniem po wszystkich wrogach: 2d6 obrażeń "
+                           "i spowolnienie (rzut obronny KON DC 12).",
+            "race_lock": "elf",
+        },
+        {
+            "key": "green_rebirth", "label": "Zielone Odrodzenie", "tier": 4, "mana_cost": 4,
+            "spell_type": "heal", "damage_die": None, "heal_die": "3d6", "aoe": 0,
+            "target_zone": "self", "effect_json": None,
+            "description": "Rana zarasta młodym pędem — leczy 3d6. Głębokie strojenie ciała, "
+                           "nie doraźna łatka.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "song_of_the_crack", "label": "Pieśń Pęknięcia", "tier": 5, "mana_cost": 5,
+            "spell_type": "attack", "damage_die": "3d8", "heal_die": None, "aoe": 0,
+            "target_zone": "any",
+            "effect_json": '{"on_hit_conditions":[{"key":"stunned","save":{"stat":"WIS","dc":14}}]}',
+            "description": "Nastrajasz pęknięcie na jeden ton i puszczasz je w cel: 3d8 obrażeń "
+                           "i ogłuszenie (rzut obronny ROZ DC 14).",
+            "race_lock": "elf",
+        },
+        # ── Krasnolud · Rdzeń-magia ──────────────────────────────────────────
+        {
+            "key": "stone_stance", "label": "Kamienna Postawa", "tier": 1, "mana_cost": 2,
+            "spell_type": "defense", "damage_die": None, "heal_die": None, "aoe": 0,
+            "target_zone": "self", "effect_json": '{"absorb":6}',
+            "description": "Rozstawiasz stopy jak filar i ciągniesz kamień w kości — "
+                           "pochłania 6 obrażeń.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "ember_mend", "label": "Żarowe Zrastanie", "tier": 2, "mana_cost": 2,
+            "spell_type": "heal", "damage_die": None, "heal_die": "2d4", "aoe": 0,
+            "target_zone": "self", "effect_json": None,
+            "description": "Przypalasz ranę żarem żyły — boli jak kuźnia, ale zamyka. Leczy 2d4.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "rockbind", "label": "Okowy Skalne", "tier": 3, "mana_cost": 3,
+            "spell_type": "effect", "damage_die": None, "heal_die": None, "aoe": 0,
+            "target_zone": "any", "effect_json": '{"effect_type":"hobbled"}',
+            "description": "Podłoże zaciska się na nogach wroga — unieruchomienie bez obrażeń.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "clan_runes", "label": "Runy Rodu", "tier": 4, "mana_cost": 4,
+            "spell_type": "defense", "damage_die": None, "heal_die": None, "aoe": 0,
+            "target_zone": "self", "effect_json": '{"absorb":14}',
+            "description": "Runy rodu zapalają się na skórze i biorą na siebie 14 obrażeń. "
+                           "Przodkowie stają przed tobą.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "ancestral_bulwark", "label": "Rodowa Opoka", "tier": 5, "mana_cost": 6,
+            "spell_type": "reaction", "damage_die": None, "heal_die": None, "aoe": 0,
+            "target_zone": "self",
+            "effect_json": '{"reaction":"globe_invulnerability","rounds":2}',
+            "description": "Żyła zamyka się nad tobą kopułą kamienia — przez 2 rundy nic cię "
+                           "nie dosięga.",
+            "race_lock": "dwarf",
+        },
+    ]
+    for sp in combat_spells:
+        try:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_config_spells
+                    (key, label, tier, mana_cost, spell_type, damage_die, heal_die,
+                     target_zone, aoe, effect_json, description, is_active, race_lock)
+                VALUES
+                    (:key, :label, :tier, :mana_cost, :spell_type, :damage_die, :heal_die,
+                     :target_zone, :aoe, :effect_json, :description, 1, :race_lock)
+                """,
+                sp,
+            )
+        except Exception:
+            pass
+
+    # ── Przycięcie ludzkich duplikatów (#1519) ───────────────────────────────
+    # Wyłączamy TYLKO czary ściśle zdominowane (ta sama rola, gorsze liczby) i
+    # takich, których nie zna ŻADNA postać — inaczej gracz zostaje z czarem na
+    # karcie, którego silnik nie umie rzucić (`get_spell` filtruje is_active=1).
+    for key in ("frost_bolt", "lightning_arrow"):
+        try:
+            owned = conn.execute(
+                "SELECT COUNT(*) FROM character_spells WHERE spell_key = ?", (key,)
+            ).fetchone()[0]
+            if not owned:
+                conn.execute(
+                    "UPDATE game_config_spells SET is_active = 0 WHERE key = ?", (key,)
+                )
+        except Exception:
+            pass
+
+    # Duplikaty, które zamiast kasowania dostają WŁASNĄ rolę:
+    #  • acid_splash — kwas żre zbroję (opis to zapowiadał, mechanika nie robiła nic),
+    #  • magic_bolt — 2d6 za 2 many na T1 biło wszystko inne na tym tierze → T2.
+    #  • mend_bark (#1474) — leczenie było wpisane w kolumnę OBRAŻEŃ, więc silnik
+    #    leczył fallbackiem 2d6 zamiast 2d4 z Księgi Zasad.
+    for sql, params in (
+        ("UPDATE game_config_spells SET effect_json = ? WHERE key = 'acid_splash' "
+         "AND (effect_json IS NULL OR effect_json = '')", ('{"ignore_armor":true}',)),
+        ("UPDATE game_config_spells SET tier = 2 WHERE key = 'magic_bolt' AND tier = 1", ()),
+        ("UPDATE game_config_spells SET heal_die = '2d4', damage_die = NULL "
+         "WHERE key = 'mend_bark' AND heal_die IS NULL", ()),
+    ):
+        try:
+            conn.execute(sql, params)
+        except Exception:
+            pass
+    conn.commit()
+
+
 def _backfill_spell_race_lock(conn: sqlite3.Connection) -> None:
     """#1510 — każdy czar ma JAWNY race_lock; koniec z NULL = „domyślnie ludzie".
 
@@ -8169,6 +8326,7 @@ def run_admin_migrations() -> None:
         _seed_dwarf_spells(conn)  # #975 R6
         _seed_elf_spells(conn)  # #1474 — szkoła Stroiciela
         _seed_race_utility_spells(conn)  # #1518 — czary użytkowe elfa i krasnoluda
+        _seed_race_combat_balance(conn)  # #1519 — balans bojówki ras + przycięcie duplikatów
         _backfill_spell_race_lock(conn)  # #1510 — jawny race_lock na każdym czarze
         _purge_race_illegal_spells(conn)  # #1516 — czary spoza szkoły rasy + zestaw rasowy
         _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)

@@ -204,7 +204,8 @@ def spells_table_sql() -> str:
       rank2_json TEXT,
       rank3_json TEXT,
       is_active INTEGER DEFAULT 1,
-      effect_json TEXT
+      effect_json TEXT,
+      race_lock TEXT          -- #975 R6 / #1510: CSV ras dopuszczonych do nauki
     );
     """
 

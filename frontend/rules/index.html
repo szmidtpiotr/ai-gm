@@ -2412,6 +2412,11 @@ document.addEventListener('DOMContentLoaded',function(){
             <tr><td>rdzen_shield</td><td>Tarcza Rdzenia</td><td>Absorbuje następny cios wroga (czar obronny).</td></tr>
             <tr><td>deep_quake</td><td>Głębinowe wstrząsy</td><td>2k8 <strong>obszarowo</strong> + <strong>powala</strong> (bez rzutu obronnego); rzucający ZAWSZE traci 1k4 PŻ.</td></tr>
             <tr><td>black_vein</td><td>Czarna żyła</td><td>4k8 obrażeń + <strong>zatrucie Rdzenia</strong> (−2 PŻ/turę przez 3 tury, ignoruje odporności).</td></tr>
+            <tr><td>stone_stance</td><td>Kamienna Postawa <em>(poz. 1)</em></td><td>Pochłania <strong>6 obrażeń</strong>. Tarcza dostępna od pierwszego poziomu.</td></tr>
+            <tr><td>ember_mend</td><td>Żarowe Zrastanie <em>(poz. 3)</em></td><td>Leczy <strong>2k4</strong> — własne leczenie krasnoluda, bez proszenia ludzi o zaklęcie.</td></tr>
+            <tr><td>rockbind</td><td>Okowy Skalne <em>(poz. 5)</em></td><td><strong>Unieruchomienie</strong> wroga podłożem, bez obrażeń.</td></tr>
+            <tr><td>clan_runes</td><td>Runy Rodu <em>(poz. 7)</em></td><td>Pochłania <strong>14 obrażeń</strong> — runy przodków biorą cios na siebie.</td></tr>
+            <tr><td>ancestral_bulwark</td><td>Rodowa Opoka <em>(poz. 9)</em></td><td>Kopuła kamienia: <strong>2 rundy nietykalności</strong>.</td></tr>
           </tbody>
         </table>
         <p><strong>Miscast (Rdzeń-czerpanie):</strong> porażka zaklęcia na <em>Nat 1 i Nat 2</em> (nie tylko Nat 1). Narrator opisuje to inaczej niż ludzki miscast: żyła ziemi vibruje w kościach, krew z uszu lub nosa, zapach rozgrzanego metalu, stukot głębinowych machin.</p>
@@ -2484,16 +2489,21 @@ document.addEventListener('DOMContentLoaded',function(){
       <h2 id="rasy-strojenie">Magia strojenia</h2>
       <div class="entry">
         <h4>Cecha rasowa · Magia strojenia (Uczony-Stroiciel)</h4>
-        <p>Elf-uczony nie rzuca ludzkich zaklęć arkanów ani krasnoludzkich czarów Rdzenia. Uczy się <strong>szkoły Stroiciela</strong> — magii, która pęknięcia Rdzenia <em>stroi</em>, zamiast z nich wydzierać moc:</p>
+        <p>Elf-uczony nie rzuca ludzkich zaklęć arkanów ani krasnoludzkich czarów Rdzenia. Uczy się <strong>szkoły Stroiciela</strong> — magii, która pęknięcia Rdzenia <em>stroi</em>, zamiast z nich wydzierać moc. Kolumna „poziom" to poziom bohatera, od którego czar da się kupić:</p>
         <table class="mechanic-table" style="margin:0.8em 0">
-          <thead><tr><th>Nazwa</th><th>Poziom</th><th>Efekt</th></tr></thead>
+          <thead><tr><th>Nazwa</th><th>Poziom bohatera</th><th>Efekt</th></tr></thead>
           <tbody>
             <tr><td>Nastrojony Cierń</td><td>1</td><td>1k6 obrażeń + <strong>spowolnienie</strong> (rzut obronny KON DC 10).</td></tr>
             <tr><td>Zasłona Liści</td><td>1</td><td>Pochłania następny cios wroga (czar obronny).</td></tr>
-            <tr><td>Pęta Korzeni</td><td>2</td><td><strong>Unieruchomienie</strong> wroga, bez obrażeń.</td></tr>
-            <tr><td>Kora Zrasta</td><td>2</td><td>Leczy 2k4.</td></tr>
-            <tr><td>Fałszywy Gaj</td><td>3</td><td><strong>Dezorientacja obszarowa</strong> — iluzja miesza wrogom kierunki.</td></tr>
-            <tr><td>Cisza Koron</td><td>3</td><td>2k6 obrażeń + <strong>ogłuszenie</strong> (rzut obronny ROZ DC 12).</td></tr>
+            <tr><td>Pęta Korzeni</td><td>3</td><td><strong>Unieruchomienie</strong> wroga, bez obrażeń.</td></tr>
+            <tr><td>Kora Zrasta</td><td>3</td><td>Leczy 2k4.</td></tr>
+            <tr><td>Fałszywy Gaj</td><td>5</td><td><strong>Dezorientacja obszarowa</strong> — iluzja miesza wrogom kierunki.</td></tr>
+            <tr><td>Cisza Koron</td><td>5</td><td>2k6 obrażeń + <strong>ogłuszenie</strong> (rzut obronny ROZ DC 12).</td></tr>
+            <tr><td>Uskok Cienia</td><td>3</td><td>Przez 2 rundy ciosy mijają cię w <strong>40%</strong> przypadków — Stroiciel nie blokuje, tylko przestaje tam być.</td></tr>
+            <tr><td>Kora Pradrzewa</td><td>5</td><td>Pochłania <strong>12 obrażeń</strong>, zanim popęka.</td></tr>
+            <tr><td>Deszcz Cierni</td><td>7</td><td><strong>Obszarowo</strong> 2k6 + spowolnienie (rzut obronny KON DC 12).</td></tr>
+            <tr><td>Zielone Odrodzenie</td><td>7</td><td>Leczy <strong>3k6</strong> — głębokie strojenie ciała.</td></tr>
+            <tr><td>Pieśń Pęknięcia</td><td>9</td><td>3k8 obrażeń + <strong>ogłuszenie</strong> (rzut obronny ROZ DC 14). Szczyt szkoły.</td></tr>
           </tbody>
         </table>
         <p><strong>Czary startowe:</strong> Nastrojony Cierń, Zasłona Liści, Pęta Korzeni.</p>
@@ -2513,7 +2523,7 @@ document.addEventListener('DOMContentLoaded',function(){
             <tr><td>Nastrojenie Pęknięcia</td><td>5</td><td>Uspokajasz pęknięcie Rdzenia — ziemia przestaje krwawić mocą.</td></tr>
           </tbody>
         </table>
-        <p>Razem z bojową szóstką daje to elfowi <strong>13 czarów</strong> — tyle samo co krasnoludowi. Ludzka pula jest liczniejsza, bo to głównie warianty bojowe: ognia, mrozu i pioruna Stroiciel nie rzuca w ogóle.</p>
+        <p>Razem z bojówką daje to elfowi <strong>18 czarów</strong>, krasnoludowi <strong>19</strong>, człowiekowi <strong>36</strong>. Ludzka lista jest najdłuższa, bo to głównie warianty tego samego ciosu — ognia, mrozu i pioruna Stroiciel nie rzuca w ogóle. Liczy się co innego: <em>każda</em> rasa ma na swojej ścieżce komplet ról — czym uderzyć, czym się zasłonić, czym się wyleczyć i czym zatrzymać wroga. W grze prowadzonej w pojedynkę nie ma drużyny, która załata brakującą rolę.</p>
       </div>
 
       <h2 id="rasy-zniknięcie">Zniknięcie w kniei</h2>

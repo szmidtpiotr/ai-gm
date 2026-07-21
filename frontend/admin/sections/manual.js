@@ -373,8 +373,19 @@ czarów w walce biorą tę samą listę (backend odsiewa katalog po rasie bohate
 (typ <code>narrative</code>, bez obrażeń, rzucane poza walką) — elf: Rój Świetlików, Szept Kniei,
 Wzrok Pęknięć, Mowa Liści, Kojący Gaj, Stróżowe Drzewo, Nastrojenie Pęknięcia; krasnolud:
 Kuźniany Żar, Wyczucie Żyły, Pamięć Kamienia, Kowalski Uchwyt, Głęboka Droga, Kowadłowy Krąg,
-Czarna Cisza. Bilans pul: <b>człowiek 37 · elf 13 · krasnolud 14</b>. Efekt gra narrator —
-silnik liczy tylko manę, więc dodanie kolejnego takiego czaru to sam wpis w tabeli, bez kodu.</p>
+Czarna Cisza. Efekt gra narrator — silnik liczy tylko manę, więc dodanie kolejnego takiego
+czaru to sam wpis w tabeli, bez kodu.</p>
+<p><b>Balans bojówki ras (#1519):</b> gra jest w głównej mierze jednoosobowa, więc każda rasa
+musi mieć czym uderzyć, zasłonić się, wyleczyć i zatrzymać wroga — bez drużyny nie ma kto
+załatać brakującej roli. Elf dostał <i>Uskok Cienia</i> (T2 reakcja), <i>Korę Pradrzewa</i>
+(T3 tarcza 12), <i>Deszcz Cierni</i> (T4 AoE), <i>Zielone Odrodzenie</i> (T4 leczenie 3d6),
+<i>Pieśń Pęknięcia</i> (T5 3d8+ogłuszenie). Krasnolud: <i>Kamienna Postawa</i> (T1 tarcza 6),
+<i>Żarowe Zrastanie</i> (T2 leczenie), <i>Okowy Skalne</i> (T3 unieruchomienie),
+<i>Runy Rodu</i> (T4 tarcza 14), <i>Rodowa Opoka</i> (T5 nietykalność 2 rundy).
+Bilans czarów bojowych: <b>człowiek 34 · krasnolud 12 · elf 11</b> (pule całkowite 36/19/18).
+Wyłączone jako duplikaty: <code>frost_bolt</code>, <code>lightning_arrow</code> (ściśle gorsze
+od Ognistego Pocisku i Lodowej Lancy, nikt ich nie znał). <code>acid_splash</code> dostał rolę
+antypancerną, <code>magic_bolt</code> przeszedł na T2 (2d6 za 2 many bił wszystko na T1).</p>
 <p><b>Uwaga o starcie:</b> Czarnobór nie ma jeszcze zaseedowanej mapy, więc kampania elfa
 startuje na razie tam, gdzie kampania człowieka (Kresy). Kotwica startowa w krainie ojczystej
 dojdzie razem z wdrożeniem Czarnoboru (sesja CB-8). Sama rasa jest już zabramkowana statusem
