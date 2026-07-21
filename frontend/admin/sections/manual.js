@@ -369,6 +369,12 @@ Zaznaczenie kilku ras robi z czaru pulę wspólną. Puste zaznaczenie = zapis <c
 który silnik nadal czyta jako „tylko ludzie" — lepiej zaznaczyć świadomie.
 Zmiana działa od razu: kreator, zakładka <i>Czary</i>, modal awansu przy odpoczynku i lista
 czarów w walce biorą tę samą listę (backend odsiewa katalog po rasie bohatera).</p>
+<p><b>Czary użytkowe ras (#1518):</b> elf i krasnolud mają po <b>7 własnych czarów narracyjnych</b>
+(typ <code>narrative</code>, bez obrażeń, rzucane poza walką) — elf: Rój Świetlików, Szept Kniei,
+Wzrok Pęknięć, Mowa Liści, Kojący Gaj, Stróżowe Drzewo, Nastrojenie Pęknięcia; krasnolud:
+Kuźniany Żar, Wyczucie Żyły, Pamięć Kamienia, Kowalski Uchwyt, Głęboka Droga, Kowadłowy Krąg,
+Czarna Cisza. Bilans pul: <b>człowiek 37 · elf 13 · krasnolud 14</b>. Efekt gra narrator —
+silnik liczy tylko manę, więc dodanie kolejnego takiego czaru to sam wpis w tabeli, bez kodu.</p>
 <p><b>Uwaga o starcie:</b> Czarnobór nie ma jeszcze zaseedowanej mapy, więc kampania elfa
 startuje na razie tam, gdzie kampania człowieka (Kresy). Kotwica startowa w krainie ojczystej
 dojdzie razem z wdrożeniem Czarnoboru (sesja CB-8). Sama rasa jest już zabramkowana statusem

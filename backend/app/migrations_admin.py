@@ -6162,6 +6162,131 @@ def _seed_elf_spells(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _seed_race_utility_spells(conn: sqlite3.Connection) -> None:
+    """#1518 — czary UŻYTKOWE elfa i krasnoluda (po 7), własne, nie pożyczone od ludzi.
+
+    Problem: człowiek-Uczony ma 37 czarów, elf 6, krasnolud 7 — nie dlatego, że
+    tak chce kanon, tylko dlatego, że ludzka pula rosła od FAZY B. Decyzja
+    designerska: bojówka **zostaje rasowa** (ogień/mróz/nekromancja = tylko
+    człowiek, Rdzeń = tylko krasnolud, strojenie = tylko elf), a wyrównujemy
+    czarami **użytkowymi** pisanymi pod lore każdej rasy.
+
+    Kanon (LORE_v1_KANON §Rdzeń, Księga Zasad §Rasy): źródło mocy jest jedno —
+    Rdzeń pod światem. Elf pęknięcia **stroi** i czyta las Czarnoboru; krasnolud
+    czerpie z **żyły** i myśli kamieniem oraz kuźnią. Te same potrzeby (światło,
+    wykrywanie, obóz, orientacja) każda szkoła zaspokaja po swojemu — dlatego
+    osobne czary zamiast wspólnego `magic_light`.
+
+    Wszystkie mają `spell_type='narrative'`: silnik rozlicza je poza walką
+    (`cast_spell_out_of_combat`) jako koszt many + opis, a narrator gra efektem.
+    Zero nowej mechaniki — liczby STARTOWE, Sandbox-tunable.
+    """
+    utility_spells = [
+        # ── Elf · szkoła Stroiciela: knieja, pęknięcia, iluzja ───────────────
+        {
+            "key": "firefly_lantern", "label": "Rój Świetlików", "tier": 1, "mana_cost": 0,
+            "description": "Chmura żywych iskier idzie za tobą i świeci tam, gdzie patrzysz. "
+                           "Elfi odpowiednik lampy — nie płonie, więc nie zdradza zapachem dymu.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "whisper_of_thicket", "label": "Szept Kniei", "tier": 1, "mana_cost": 1,
+            "description": "Pytasz las, kto tędy przeszedł. Poszycie odpowiada śladem, złamaną "
+                           "gałęzią, milczeniem ptaków — pomoc w tropieniu i czytaniu okolicy.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "crack_sight", "label": "Wzrok Pęknięć", "tier": 2, "mana_cost": 1,
+            "description": "Widzisz, którędy Rdzeń przecieka do tego miejsca: gdzie leży magia, "
+                           "gdzie ziemia jest chora, gdzie stało coś, co nie powinno chodzić.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "leaf_speech", "label": "Mowa Liści", "tier": 2, "mana_cost": 1,
+            "description": "Rozmawiasz z drobnym zwierzęciem albo starym drzewem. Odpowiadają "
+                           "krótko i nie zawsze o tym, o co pytałeś — ale nigdy nie kłamią.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "grove_rest", "label": "Kojący Gaj", "tier": 3, "mana_cost": 2,
+            "description": "Nastrajasz polanę na sen: mgła tłumi dźwięk, zwierzę omija obóz. "
+                           "Odpoczynek w lesie lub na bagnie mija spokojnie.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "warden_tree", "label": "Stróżowe Drzewo", "tier": 4, "mana_cost": 3,
+            "description": "Budzisz jedno drzewo na strażnika — jak dawne wardy Czarnoboru. "
+                           "Ostrzega o tym, co nadchodzi, na długo zanim to zobaczysz.",
+            "race_lock": "elf",
+        },
+        {
+            "key": "tuning_the_crack", "label": "Nastrojenie Pęknięcia", "tier": 5, "mana_cost": 4,
+            "description": "Najwyższe strojenie: uspokajasz pęknięcie Rdzenia w tym miejscu. "
+                           "Ziemia przestaje krwawić mocą, a to, co się nią żywiło, traci karm.",
+            "race_lock": "elf",
+        },
+        # ── Krasnolud · Rdzeń-magia: kamień, żyła, kuźnia ────────────────────
+        {
+            "key": "forge_ember", "label": "Kuźniany Żar", "tier": 1, "mana_cost": 0,
+            "description": "Rozżarzasz okruch rudy w dłoni — świeci i grzeje jak węgiel z paleniska. "
+                           "Krasnoludzka lampa: pod ziemią nie gaśnie i nie chwieje się na przeciągu.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "vein_sense", "label": "Wyczucie Żyły", "tier": 1, "mana_cost": 1,
+            "description": "Kładziesz dłoń na kamieniu i czujesz, co jest za nim: metal, woda, "
+                           "pustka. Pomoc w szukaniu ukrytych przejść, sztolni i rudy.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "stone_memory", "label": "Pamięć Kamienia", "tier": 2, "mana_cost": 1,
+            "description": "Kamień pamięta, kto go kuł i kto przy nim umarł. Pokazuje ostatnie "
+                           "rzeczy, które się tu wydarzyły — obrazem, nie słowem.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "smiths_grip", "label": "Kowalski Uchwyt", "tier": 2, "mana_cost": 2,
+            "description": "Rozgrzewasz metal bez ognia i prostujesz go palcami. Naprawa sprzętu "
+                           "w polu, zerwany zawias, zakleszczony zamek.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "deep_road", "label": "Głęboka Droga", "tier": 3, "mana_cost": 2,
+            "description": "Czytasz układ tuneli, jakby ktoś je przy tobie drążył. Wiesz, dokąd "
+                           "prowadzi korytarz i gdzie ciągnie się dalej pod górą.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "anvil_ward", "label": "Kowadłowy Krąg", "tier": 4, "mana_cost": 3,
+            "description": "Wykuwasz w podłożu krąg run rodowych. Kto w niego wejdzie nieproszony, "
+                           "obudzi całą kompanię hukiem żyły.",
+            "race_lock": "dwarf",
+        },
+        {
+            "key": "black_silence", "label": "Czarna Cisza", "tier": 5, "mana_cost": 4,
+            "description": "Uciszasz żyłę na całą komorę. Echo Rdzenia gaśnie, a to, co szło "
+                           "za jego pulsem — nieumarli, robactwo głębin — traci trop.",
+            "race_lock": "dwarf",
+        },
+    ]
+    for sp in utility_spells:
+        try:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_config_spells
+                    (key, label, tier, mana_cost, spell_type, target_zone, aoe,
+                     description, is_active, race_lock)
+                VALUES
+                    (:key, :label, :tier, :mana_cost, 'narrative', 'self', 0,
+                     :description, 1, :race_lock)
+                """,
+                sp,
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def _backfill_spell_race_lock(conn: sqlite3.Connection) -> None:
     """#1510 — każdy czar ma JAWNY race_lock; koniec z NULL = „domyślnie ludzie".
 
@@ -8043,6 +8168,7 @@ def run_admin_migrations() -> None:
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
         _seed_elf_spells(conn)  # #1474 — szkoła Stroiciela
+        _seed_race_utility_spells(conn)  # #1518 — czary użytkowe elfa i krasnoluda
         _backfill_spell_race_lock(conn)  # #1510 — jawny race_lock na każdym czarze
         _purge_race_illegal_spells(conn)  # #1516 — czary spoza szkoły rasy + zestaw rasowy
         _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)
