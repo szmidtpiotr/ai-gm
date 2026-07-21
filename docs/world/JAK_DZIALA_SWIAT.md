@@ -239,6 +239,10 @@ Fala 4 (#1527) dołożyła w panelu zakładkę **Mapa → 🩺 Kontrola świata*
 
 Czego celowo **nie ma**: guzika „napraw wszystko" dla całej listy. Taki guzik odtworzyłby dokładnie tę chorobę, którą fala 4 leczy — ciche zamiatanie, tylko z jednym kliknięciem zamiast po nocach. Naprawa masowa zawsze dotyczy jednej reguły, którą człowiek świadomie wskazał, i nigdy nie obejmuje reguł treściowych.
 
+**Problemy „decyzja człowieka" — narzędzia zamiast ślepego zaułka.** To, że maszyna nie zgaduje treści, nie znaczy, że admin ma skakać po zakładkach. Wiersz „usługa bez gospodarza" ma guzik **👤 Obsadź gospodarza**: lista NPC, którzy nigdzie nie stoją (zajętych celowo nie proponujemy — przenoszenie gospodarza z innej karczmy tylko przesuwa dziurę), a pod nią formularz nowej postaci z podpowiedzią AI, która zna miejsce, krainę i rodzaj usługi. Wiersz duplikatu ma **⚖ Porównaj i rozstrzygnij**: obie karty obok siebie z faktami przesądzającymi wybór (źródło, status, obsada, wnętrza, pinezka na mapie) i decyzją „zostaw tę, wygaś drugą" plus opcją przeniesienia obsady i wnętrz. Karty stojącej na mapie nie da się wygasić — kanon heksa wymaga świadomego ruchu na Mapie.
+
+**Znacznik 🩺 poza Kontrolą świata.** Wiersze w zakładkach Lokacje, ⚓ Floating i Do zatwierdzenia noszą znacznik przy nazwie (czerwony = błąd struktury, pomarańczowy = brak treści), a rodzic w drzewie pokazuje **🩺N** — ile problemów czeka w zwiniętej gałęzi. Dzięki temu pracując nad lokacjami widać chorą kartę od razu, bez przełączania się do lintu i z powrotem.
+
 **Progi (wartości startowe, do strojenia):** podobieństwo nazw uznane za duplikat = **0.85**, limit listy = **200** pozycji.
 
 ---

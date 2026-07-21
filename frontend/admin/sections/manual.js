@@ -200,6 +200,27 @@ osobno zapisane w historii. Grupy „decyzja człowieka" nie dostają go nigdy.<
 <p><b>Czego celowo nie ma:</b> guzika „napraw wszystko" dla całej listy. Taki guzik odtworzyłby ciche
 zamiatanie — tylko z jednym kliknięciem zamiast po nocach. Naprawa masowa zawsze dotyczy jednej
 reguły, którą świadomie wskazałeś.</p>
+<h4>Problemy, których nie da się kliknąć — jak je naprawiać</h4>
+<p>Dwie reguły wymagają decyzji treściowej, więc zamiast guzika „Napraw" mają narzędzie,
+którym podejmiesz tę decyzję <b>bez wychodzenia z zakładki</b>:</p>
+<ul>
+  <li><b>👤 Obsadź gospodarza</b> — otwiera okno z listą NPC, którzy <b>nigdzie nie stoją</b>
+      (celowo nie proponujemy zajętych — przenoszenie gospodarza z innej karczmy tylko przesuwa
+      dziurę). Wybierasz i klikasz <b>Przypisz</b>. Jeśli nikt nie pasuje, niżej jest formularz
+      nowego gospodarza (imię, rola, opis) z guzikiem <b>🤖 Podpowiedz</b>: AI proponuje postać
+      pasującą do miejsca, krainy i rodzaju usługi — możesz ją przyjąć albo poprawić. Nic nie
+      zapisuje się bez Twojego kliknięcia.</li>
+  <li><b>⚖ Porównaj i rozstrzygnij</b> (duplikat) — pokazuje obie karty obok siebie z faktami,
+      które przesądzają wybór: źródło, status, obsada, liczba wnętrz, czy stoi na mapie. Klikasz
+      <b>Zostaw tę, wygaś drugą</b>. Zaznaczone pole <b>Przenieś obsadę i wnętrza</b> przepina
+      NPC i sub-lokacje do karty, która zostaje. Karty stojącej na mapie świata nie da się wygasić —
+      najpierw zdejmij ją z heksa.</li>
+</ul>
+<h4>Znacznik 🩺 w pozostałych zakładkach</h4>
+<p>Żeby nie przełączać się co chwilę, wiersze w zakładkach <b>Lokacje</b>, <b>⚓ Floating</b>
+i <b>Do zatwierdzenia</b> noszą znacznik <b>🩺</b> przy nazwie — najedź myszą, żeby zobaczyć, co
+konkretnie jest nie tak. Czerwony = błąd struktury, pomarańczowy = brak treści. Gdy problem siedzi
+w zwiniętej gałęzi drzewa, rodzic pokazuje <b>🩺N</b> — tyle problemów czeka w środku.</p>
 <h4>Kronika napraw</h4>
 <p>Przycisk <b>🕮 Historia napraw</b> pokazuje, co i kiedy zostało naprawione — osobno to, co zrobił
 start backendu (⚙️), a osobno to, co kliknąłeś sam (👤). Licznik problemów wisi jako plakietka

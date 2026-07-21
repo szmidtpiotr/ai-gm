@@ -53,13 +53,20 @@ __all__ = [
     "DUPLICATE_SIMILARITY_THRESHOLD",
     "LINT_LIST_LIMIT",
     "SERVICE_SUBTYPES",
+    "assign_host",
+    "create_host",
+    "duplicate_compare",
     "fix_world_lint_issue",
     "fix_world_lint_rule",
+    "host_candidates",
+    "host_suggestion_context",
+    "lint_flags",
     "lint_history",
     "lint_issue_count",
     "record_reconcile_report",
     "record_repair",
     "record_startup_cleanup",
+    "resolve_duplicate",
     "run_world_lint",
 ]
 
@@ -610,6 +617,294 @@ def fix_world_lint_rule(conn: sqlite3.Connection, rule: str) -> dict:
 
     logger.info("world_lint_bulk_fix", rule=rule, fixed=fixed, failed=failed)
     return {"rule": rule, "fixed": fixed, "failed": failed, "refused": False, "messages": messages}
+
+
+# ─── naprawa WSPOMAGANA (reguły treściowe — decyzja człowieka, ale bez ────────
+#     skakania po zakładkach)
+
+def lint_flags(conn: sqlite3.Connection) -> dict[str, list[dict]]:
+    """Mapa `klucz lokacji → jej problemy` — znacznik 🩺 w innych zakładkach.
+
+    Dzięki temu admin pracujący w Lokacjach / Floating / Do zatwierdzenia widzi
+    od razu, która karta jest chora, zamiast przełączać się do Kontroli świata
+    i z powrotem.
+    """
+    flags: dict[str, list[dict]] = {}
+    for issue in run_world_lint(conn, limit=10_000)["issues"]:
+        key = _location_key_of(issue)
+        if not key:
+            continue
+        flags.setdefault(key, []).append({
+            "rule": issue["rule"],
+            "label": issue["label"],
+            "severity": issue["severity"],
+            "fixable": issue["fixable"],
+        })
+    return flags
+
+
+def _location_key_of(issue: dict) -> str:
+    """Której lokacji dotyczy rozjazd (o ile dotyczy pojedynczej karty)."""
+    rule, target = issue["rule"], issue["target"]
+    if rule in ("service_without_host", "pin_not_backed_by_canon", "broken_sublocation_parent"):
+        return target
+    if rule in ("orphan_npc_assignment", "illegal_flag_value"):
+        return target.split("|", 1)[0]
+    return ""  # heks i duplikat (para) nie wskazują jednej karty
+
+
+def host_candidates(conn: sqlite3.Connection, location_key: str) -> list[dict]:
+    """NPC, których można obsadzić w tej lokacji — tylko ci, którzy NIGDZIE nie stoją.
+
+    Świadomie nie proponujemy NPC już obsadzonych: „naprawa" polegająca na
+    przeniesieniu gospodarza z innej karczmy tylko przesuwa dziurę.
+    """
+    if not _table_exists(conn, "npcs"):
+        return []
+    npc_type_col = "n.npc_type" if "npc_type" in _cols(conn, "npcs") else "'' AS npc_type"
+    rows = conn.execute(
+        f"SELECT n.key, n.label, {npc_type_col} FROM npcs n "
+        "WHERE n.is_active = 1 AND NOT EXISTS ("
+        "  SELECT 1 FROM location_npc_assignments a "
+        "  WHERE a.npc_key = n.key AND COALESCE(a.is_active, 1) = 1) "
+        "ORDER BY n.label"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _location_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM game_locations WHERE key = ? AND is_active = 1", (key,)
+    ).fetchone()
+
+
+def _resync_npc_keys(conn: sqlite3.Connection, location_key: str) -> None:
+    """Odśwież lustro `game_locations.npc_keys` (kanon = tabela przypisań, #1524)."""
+    import json as _json
+    keys = [r[0] for r in conn.execute(
+        "SELECT npc_key FROM location_npc_assignments "
+        "WHERE location_key = ? AND COALESCE(is_active, 1) = 1 ORDER BY npc_key",
+        (location_key,),
+    ).fetchall()]
+    conn.execute(
+        "UPDATE game_locations SET npc_keys = ? WHERE key = ?",
+        (_json.dumps(keys, ensure_ascii=False), location_key),
+    )
+
+
+def assign_host(conn: sqlite3.Connection, location_key: str, npc_key: str) -> dict:
+    """Obsadź istniejącego NPC w lokacji (wybór człowieka z listy kandydatów)."""
+    if _location_row(conn, location_key) is None:
+        return {"ok": False, "message": f"Nie ma aktywnej lokacji „{location_key}”."}
+    npc = conn.execute(
+        "SELECT key, label FROM npcs WHERE key = ? AND is_active = 1", (npc_key,)
+    ).fetchone()
+    if npc is None:
+        return {"ok": False, "message": f"Nie ma aktywnego NPC „{npc_key}”."}
+
+    conn.execute(
+        "INSERT INTO location_npc_assignments (location_key, npc_key, assignment_type, is_active) "
+        "VALUES (?,?,'resident',1) "
+        "ON CONFLICT(location_key, npc_key) DO UPDATE SET is_active = 1",
+        (location_key, npc_key),
+    )
+    _resync_npc_keys(conn, location_key)
+    conn.commit()
+    message = f"{npc['label']} objął(-ęła) posadę w „{location_key}”."
+    record_repair(conn, "manual_fix", "service_without_host", location_key, message)
+    logger.info("world_lint_host_assigned", location=location_key, npc=npc_key)
+    return {"ok": True, "npc_key": npc_key, "message": message}
+
+
+def _slugify(text: str) -> str:
+    trans = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+    base = str(text or "").translate(trans).lower()
+    out = "".join(ch if ch.isalnum() else "_" for ch in base)
+    while "__" in out:
+        out = out.replace("__", "_")
+    return out.strip("_")
+
+
+def create_host(
+    conn: sqlite3.Connection,
+    location_key: str,
+    *,
+    label: str,
+    npc_type: str = "neutral",
+    description: str = "",
+) -> dict:
+    """Utwórz nowego NPC i od razu obsadź go w lokacji (formularz z panelu)."""
+    label = str(label or "").strip()
+    if not label:
+        return {"ok": False, "message": "Gospodarz musi mieć imię."}
+    if _location_row(conn, location_key) is None:
+        return {"ok": False, "message": f"Nie ma aktywnej lokacji „{location_key}”."}
+    if npc_type not in ("neutral", "merchant", "quest_giver", "ally"):
+        npc_type = "neutral"
+
+    base = _slugify(label) or "gospodarz"
+    key, n = base, 1
+    while conn.execute("SELECT 1 FROM npcs WHERE key = ?", (key,)).fetchone():
+        n += 1
+        key = f"{base}_{n}"
+
+    cols = _cols(conn, "npcs")
+    fields = {"key": key, "label": label}
+    if "npc_type" in cols:
+        fields["npc_type"] = npc_type
+    if "description" in cols:
+        fields["description"] = description
+    if "review_status" in cols:
+        fields["review_status"] = "permanent"
+    placeholders = ",".join("?" * len(fields))
+    conn.execute(
+        f"INSERT INTO npcs ({','.join(fields)}) VALUES ({placeholders})",
+        list(fields.values()),
+    )
+    conn.commit()
+
+    assigned = assign_host(conn, location_key, key)
+    if not assigned["ok"]:
+        return assigned
+    return {
+        "ok": True, "npc_key": key,
+        "message": f"{label} utworzony(-a) i obsadzony(-a) w „{location_key}”.",
+    }
+
+
+def host_suggestion_context(conn: sqlite3.Connection, location_key: str) -> dict:
+    """Fakty o miejscu dla podpowiedzi AI — deterministyczne, bez wołania modelu.
+
+    Sam prompt buduje router; tutaj zbieramy to, co model MUSI wiedzieć, żeby
+    karczmarz z Kresów nie brzmiał jak karczmarz z Siwych Grań.
+    """
+    row = _location_row(conn, location_key)
+    if row is None:
+        return {}
+    subtype = (row["location_subtype"] if "location_subtype" in row.keys() else None) or ""
+    parent_label = ""
+    if "parent_key" in row.keys() and row["parent_key"]:
+        parent = conn.execute(
+            "SELECT label FROM game_locations WHERE key = ? AND is_active = 1",
+            (row["parent_key"],),
+        ).fetchone()
+        parent_label = parent["label"] if parent else ""
+    return {
+        "key": location_key,
+        "label": row["label"],
+        "region": (row["region"] if "region" in row.keys() else None) or "",
+        "subtype": subtype,
+        "role_pl": SERVICE_SUBTYPES.get(subtype, subtype),
+        "parent_label": parent_label,
+        "description": (row["description"] if "description" in row.keys() else "") or "",
+    }
+
+
+def duplicate_compare(conn: sqlite3.Connection, key_a: str, key_b: str) -> dict:
+    """Dwie karty obok siebie + fakty, na których człowiek oprze decyzję.
+
+    Nie oceniamy, która jest „lepsza" — pokazujemy, co każda ze sobą niesie
+    (obsada, wnętrza, pinezka na mapie, źródło, status recenzji).
+    """
+    return {"a": _duplicate_card(conn, key_a), "b": _duplicate_card(conn, key_b)}
+
+
+def _duplicate_card(conn: sqlite3.Connection, key: str) -> dict | None:
+    row = _location_row(conn, key)
+    if row is None:
+        return None
+    cols = row.keys()
+    npc_count = int(conn.execute(
+        "SELECT COUNT(*) FROM location_npc_assignments "
+        "WHERE location_key = ? AND COALESCE(is_active, 1) = 1", (key,),
+    ).fetchone()[0] or 0) if _table_exists(conn, "location_npc_assignments") else 0
+    children = int(conn.execute(
+        "SELECT COUNT(*) FROM game_locations WHERE parent_key = ? AND is_active = 1", (key,),
+    ).fetchone()[0] or 0) if "parent_key" in cols else 0
+    hexrow = conn.execute(
+        "SELECT q, r FROM world_hexes WHERE map_level = 0 AND is_active = 1 AND location_key = ?",
+        (key,),
+    ).fetchone() if _table_exists(conn, "world_hexes") else None
+    def _get(name: str, default=None):
+        return row[name] if name in cols else default
+    return {
+        "key": key,
+        "label": row["label"],
+        "location_type": _get("location_type", ""),
+        "location_subtype": _get("location_subtype", ""),
+        "region": _get("region", ""),
+        "created_by": _get("created_by", ""),
+        "review_status": _get("review_status", ""),
+        "description": (_get("description", "") or "")[:300],
+        "npc_count": npc_count,
+        "children_count": children,
+        "on_map": {"q": hexrow["q"], "r": hexrow["r"]} if hexrow else None,
+    }
+
+
+def resolve_duplicate(
+    conn: sqlite3.Connection, *, keep: str, drop: str, move_assets: bool = True
+) -> dict:
+    """Rozstrzygnij duplikat: zostaw jedną kartę, wygaś drugą.
+
+    Człowiek wybiera, którą zostawić — my tylko wykonujemy i pilnujemy, żeby przy
+    okazji nie zgubić obsady ani wnętrz. Karty stojącej na mapie NIE kasujemy:
+    kanon heksa jest własnością Piotra i wymaga świadomego ruchu na Mapie.
+    """
+    if keep == drop:
+        return {"ok": False, "reason": "same_card",
+                "message": "Do rozstrzygnięcia potrzebne są dwie różne karty."}
+    keep_row, drop_row = _location_row(conn, keep), _location_row(conn, drop)
+    if keep_row is None or drop_row is None:
+        return {"ok": False, "reason": "missing",
+                "message": "Jedna z kart już nie istnieje — odśwież listę."}
+
+    on_map = conn.execute(
+        "SELECT q, r FROM world_hexes WHERE map_level = 0 AND is_active = 1 AND location_key = ?",
+        (drop,),
+    ).fetchone()
+    if on_map is not None:
+        return {
+            "ok": False, "reason": "on_map",
+            "message": (f"„{drop_row['label']}” stoi na mapie świata (heks "
+                        f"{on_map['q']},{on_map['r']}). Najpierw zdejmij ją z heksa "
+                        f"w zakładce Mapa albo zostaw tę kartę zamiast drugiej."),
+        }
+
+    moved_npcs = moved_children = 0
+    if move_assets:
+        for row in conn.execute(
+            "SELECT npc_key FROM location_npc_assignments "
+            "WHERE location_key = ? AND COALESCE(is_active, 1) = 1", (drop,),
+        ).fetchall():
+            conn.execute(
+                "INSERT INTO location_npc_assignments (location_key, npc_key, assignment_type, is_active) "
+                "VALUES (?,?,'resident',1) "
+                "ON CONFLICT(location_key, npc_key) DO UPDATE SET is_active = 1",
+                (keep, row["npc_key"]),
+            )
+            moved_npcs += 1
+        conn.execute(
+            "UPDATE location_npc_assignments SET is_active = 0 WHERE location_key = ?", (drop,)
+        )
+        moved_children = conn.execute(
+            "UPDATE game_locations SET parent_key = ?, parent_id = ? "
+            "WHERE parent_key = ? AND is_active = 1",
+            (keep, keep_row["id"], drop),
+        ).rowcount or 0
+        _resync_npc_keys(conn, keep)
+        _resync_npc_keys(conn, drop)
+
+    conn.execute("UPDATE game_locations SET is_active = 0 WHERE key = ?", (drop,))
+    conn.commit()
+
+    message = (f"„{drop_row['label']}” ({drop}) wygaszona; została „{keep_row['label']}” ({keep})."
+               + (f" Przeniesiono: {moved_npcs} NPC, {moved_children} wnętrz." if move_assets else ""))
+    record_repair(conn, "manual_fix", "duplicate_label_in_region", f"{keep}|{drop}", message)
+    logger.info("world_lint_duplicate_resolved", keep=keep, drop=drop,
+                moved_npcs=moved_npcs, moved_children=moved_children)
+    return {"ok": True, "message": message,
+            "moved_npcs": moved_npcs, "moved_children": moved_children}
 
 
 # ─── naprawy ─────────────────────────────────────────────────────────────────

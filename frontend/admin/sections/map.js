@@ -5,7 +5,7 @@
  */
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
-import { confirmDialog } from '../shared/modal.js';
+import { confirmDialog, openModal, closeModal } from '../shared/modal.js';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 // Monolit używał _worldLoaded jako cache zakładek mapy — zachowane 1:1 (lokalne dla modułu).
@@ -420,12 +420,187 @@ const _ROW_REGISTRY = {
         <tr data-lint-id="${_esc(i.id)}">
           <td class="td-name">${_esc(i.label)}</td>
           <td style="color:var(--t3);font-size:0.78rem">${_esc(i.detail)}</td>
-          <td style="text-align:right;white-space:nowrap">${i.fixable
-            ? `<button class="btn btn-sm btn-secondary" onclick="window._worldLintFix('${_esc(i.id)}', this)">🔧 Napraw</button>`
-            : `<span style="color:var(--t3);font-size:0.75rem">decyzja człowieka</span>`}</td>
+          <td style="text-align:right;white-space:nowrap">${_lintRowAction(i)}</td>
         </tr>`).join('');
       return `${head}<div class="table-wrap"><table class="data-table"><tbody>${rows}</tbody></table></div>`;
     }).join('');
+  }
+
+  // Akcja w wierszu: jednoznaczne → „Napraw"; treściowe → narzędzie, które
+  // pozwala podjąć decyzję TU, bez skakania po zakładkach (#1527 runda 2).
+  function _lintRowAction(i) {
+    if (i.fixable) {
+      return `<button class="btn btn-sm btn-secondary" onclick="window._worldLintFix('${_esc(i.id)}', this)">🔧 Napraw</button>`;
+    }
+    if (i.rule === 'service_without_host') {
+      return `<button class="btn btn-sm btn-primary" onclick="window._worldLintHostModal('${_esc(i.target)}')">👤 Obsadź gospodarza</button>`;
+    }
+    if (i.rule === 'duplicate_label_in_region') {
+      const [, a, b] = i.target.split('|');
+      return `<button class="btn btn-sm btn-primary" onclick="window._worldLintDupModal('${_esc(a)}','${_esc(b)}')">⚖ Porównaj i rozstrzygnij</button>`;
+    }
+    return `<span style="color:var(--t3);font-size:0.75rem">decyzja człowieka</span>`;
+  }
+
+  // ── Obsadzenie gospodarza (reguła „usługa bez gospodarza") ────────────────
+  async function _openHostModal(locationKey) {
+    openModal(`Gospodarz dla: ${locationKey}`, `
+      <div id="host-modal-body">
+        <div style="color:var(--t3);font-size:0.8rem;padding:6px 0">Wczytuję kandydatów…</div>
+      </div>`, { width: 560 });
+    let candidates = [];
+    try {
+      const d = await apiFetch(`/api/admin/world/lint/host-candidates?location_key=${encodeURIComponent(locationKey)}`);
+      candidates = d.candidates || [];
+    } catch (e) { /* pusta lista = od razu tryb tworzenia */ }
+
+    const body = document.getElementById('host-modal-body');
+    if (!body) return;
+    body.innerHTML = `
+      <div class="form-field" style="margin-bottom:14px">
+        <label class="form-label">Wybierz NPC, który nigdzie nie stoi (${candidates.length})</label>
+        <div style="display:flex;gap:8px">
+          <select class="form-input" id="host-pick" style="flex:1" ${candidates.length ? '' : 'disabled'}>
+            ${candidates.length
+              ? candidates.map(c => `<option value="${_esc(c.key)}">${_esc(c.label)}${c.npc_type ? ` — ${_esc(c.npc_type)}` : ''}</option>`).join('')
+              : '<option>— brak wolnych NPC —</option>'}
+          </select>
+          <button class="btn btn-primary" id="host-assign-btn" ${candidates.length ? '' : 'disabled'}>Przypisz</button>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <strong style="font-size:0.85rem;color:var(--t1)">albo utwórz nowego gospodarza</strong>
+          <span style="flex:1"></span>
+          <button class="btn btn-secondary btn-sm" id="host-ai-btn">🤖 Podpowiedz</button>
+        </div>
+        <div class="form-field" style="margin-bottom:8px">
+          <label class="form-label">Imię</label>
+          <input class="form-input" id="host-label" placeholder="np. Hanka Rogowa">
+        </div>
+        <div class="form-field" style="margin-bottom:8px">
+          <label class="form-label">Rola</label>
+          <select class="form-input" id="host-type">
+            <option value="neutral">mieszkaniec</option>
+            <option value="merchant">kupiec / rzemieślnik</option>
+            <option value="quest_giver">dający zadania</option>
+            <option value="ally">sojusznik</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin-bottom:12px">
+          <label class="form-label">Opis (jedno zdanie)</label>
+          <textarea class="form-input" id="host-desc" rows="2" placeholder="np. Krzepka karczmarka o głosie jak dzwon."></textarea>
+        </div>
+        <button class="btn btn-primary" id="host-create-btn">Utwórz i obsadź</button>
+      </div>`;
+
+    document.getElementById('host-assign-btn')?.addEventListener('click', async (ev) => {
+      const npc_key = document.getElementById('host-pick')?.value;
+      if (!npc_key) return;
+      ev.target.disabled = true;
+      try {
+        const d = await apiFetch('/api/admin/world/lint/assign-host', {
+          method: 'POST', body: JSON.stringify({ location_key: locationKey, npc_key }),
+        });
+        showToast(d.message, 'success');
+        closeModal();
+        await _loadWorldLint();
+      } catch (e) { showToast(e.message, 'error'); ev.target.disabled = false; }
+    });
+
+    document.getElementById('host-ai-btn')?.addEventListener('click', async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = '🤖 Myślę…';
+      try {
+        const d = await apiFetch('/api/admin/world/lint/suggest-host', {
+          method: 'POST', body: JSON.stringify({ location_key: locationKey }),
+        });
+        document.getElementById('host-label').value = d.label || '';
+        document.getElementById('host-type').value = d.npc_type || 'neutral';
+        document.getElementById('host-desc').value = d.description || '';
+        showToast('Propozycja gotowa — popraw albo zapisz', 'success');
+      } catch (e) { showToast(e.message, 'error'); }
+      ev.target.disabled = false; ev.target.textContent = '🤖 Podpowiedz';
+    });
+
+    document.getElementById('host-create-btn')?.addEventListener('click', async (ev) => {
+      const label = document.getElementById('host-label')?.value.trim();
+      if (!label) { showToast('Gospodarz musi mieć imię', 'error'); return; }
+      ev.target.disabled = true;
+      try {
+        const d = await apiFetch('/api/admin/world/lint/create-host', {
+          method: 'POST',
+          body: JSON.stringify({
+            location_key: locationKey, label,
+            npc_type: document.getElementById('host-type')?.value || 'neutral',
+            description: document.getElementById('host-desc')?.value || '',
+          }),
+        });
+        showToast(d.message, 'success');
+        closeModal();
+        await _loadWorldLint();
+      } catch (e) { showToast(e.message, 'error'); ev.target.disabled = false; }
+    });
+  }
+
+  // ── Rozstrzygnięcie duplikatu ─────────────────────────────────────────────
+  async function _openDuplicateModal(keyA, keyB) {
+    const card = (k, other) => `
+      <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-weight:600;font-size:0.86rem;margin-bottom:6px" id="dup-label-${_esc(k)}">${_esc(k)}</div>
+        <div style="color:var(--t3);font-size:0.76rem;line-height:1.5" id="dup-info-${_esc(k)}">wczytuję…</div>
+        <button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%"
+                onclick="window._worldLintDupResolve('${_esc(k)}','${_esc(other)}')">Zostaw tę, wygaś drugą</button>
+      </div>`;
+    openModal('Duplikat — którą kartę zostawić?', `
+      <div style="display:flex;gap:12px">${card(keyA, keyB)}${card(keyB, keyA)}</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:0.8rem;color:var(--t2)">
+        <input type="checkbox" id="dup-move" checked>
+        Przenieś obsadę NPC i wnętrza do karty, która zostaje
+      </label>
+      <div style="color:var(--t3);font-size:0.74rem;margin-top:8px">
+        Wygaszona karta nie znika z bazy — przestaje być aktywna, więc gra jej nie użyje.
+        Karty stojącej na mapie świata nie da się wygasić: najpierw zdejmij ją z heksa.
+      </div>`, { width: 720 });
+
+    try {
+      const cmp = await apiFetch(
+        `/api/admin/world/lint/duplicate-compare?a=${encodeURIComponent(keyA)}&b=${encodeURIComponent(keyB)}`
+      );
+      [[keyA, cmp.a], [keyB, cmp.b]].forEach(([k, loc]) => {
+        const lab = document.getElementById(`dup-label-${k}`);
+        const inf = document.getElementById(`dup-info-${k}`);
+        if (!loc) { if (inf) inf.textContent = 'karta już nie istnieje'; return; }
+        if (lab) lab.textContent = loc.label || k;
+        if (inf) {
+          inf.innerHTML = [
+            `klucz: <code>${_esc(k)}</code>`,
+            `typ: ${_esc(loc.location_type || '?')}${loc.location_subtype ? ' / ' + _esc(loc.location_subtype) : ''}`,
+            `kraina: ${_esc(loc.region || '—')}`,
+            `źródło: ${_esc(loc.created_by || '?')} · status: ${_esc(loc.review_status || '?')}`,
+            `na mapie: ${loc.on_map ? `heks ${loc.on_map.q},${loc.on_map.r}` : 'nie'}`,
+            `obsada: ${loc.npc_count} NPC · wnętrza: ${loc.children_count}`,
+            loc.description ? `opis: ${_esc(loc.description.slice(0, 160))}…` : 'opis: brak',
+          ].join('<br>');
+        }
+      });
+    } catch (e) {
+      [keyA, keyB].forEach(k => {
+        const inf = document.getElementById(`dup-info-${k}`);
+        if (inf) inf.textContent = 'nie udało się wczytać karty';
+      });
+    }
+  }
+
+  async function _resolveDuplicate(keep, drop) {
+    const move = document.getElementById('dup-move')?.checked ?? true;
+    try {
+      const d = await apiFetch('/api/admin/world/lint/resolve-duplicate', {
+        method: 'POST', body: JSON.stringify({ keep, drop, move_assets: move }),
+      });
+      showToast(d.message, 'success');
+      closeModal();
+      await _loadWorldLint();
+    } catch (e) { showToast(e.message, 'error'); }
   }
 
   async function _fixWorldLintIssue(issueId, btn) {
@@ -547,6 +722,46 @@ const _ROW_REGISTRY = {
   let _locTreeExpanded = new Set();
   let _locByParent = {};
 
+  // ── Znaczniki 🩺 z Kontroli świata (#1527 runda 2) ────────────────────────
+  // Wiersze w Lokacjach / Floating / Do zatwierdzenia noszą ostrzeżenie, jeśli
+  // dana karta jest w lincie — koniec przełączania się co chwilę między zakładkami.
+  let _lintFlags = {};
+
+  async function _loadLintFlags(rerender) {
+    try {
+      const d = await apiFetch('/api/admin/world/lint/flags');
+      _lintFlags = d.flags || {};
+      if (rerender) rerender();
+    } catch (e) { /* brak znaczników nie może zablokować listy */ }
+  }
+
+  function _lintMark(key) {
+    const flags = _lintFlags[key];
+    if (flags && flags.length) {
+      const worst = flags.some(f => f.severity === 'error') ? 'var(--red)' : 'var(--amber)';
+      const tip = flags.map(f => '• ' + f.label).join('\n');
+      return ` <span title="${_esc(tip)}\n\nSzczegóły: zakładka 🩺 Kontrola świata"
+        style="cursor:help;color:${worst};font-size:0.85rem">🩺</span>`;
+    }
+    // Rodzic zdrowy, ale problem siedzi w zwiniętej gałęzi — bez tego trzeba by
+    // rozwijać drzewo na ślepo, żeby znaleźć chorą sub-lokację.
+    const inside = _lintDescendantCount(key);
+    if (!inside) return '';
+    return ` <span title="W środku: ${inside} ${inside === 1 ? 'problem' : 'problemów'} — rozwiń gałąź"
+      style="cursor:help;color:var(--t3);font-size:0.78rem">🩺${inside}</span>`;
+  }
+
+  function _lintDescendantCount(key, depth = 0) {
+    if (depth > 6) return 0;                       // bezpiecznik na cykl rodziców
+    const kids = (_locByParent && _locByParent[key]) || [];
+    let n = 0;
+    for (const kid of kids) {
+      n += (_lintFlags[kid.key] || []).length;
+      n += _lintDescendantCount(kid.key, depth + 1);
+    }
+    return n;
+  }
+
   function _renderLocTree() {
     const tbody = document.querySelector('#locations-table tbody');
     if (!tbody) return;
@@ -562,7 +777,7 @@ const _ROW_REGISTRY = {
       const regionLabel = l.region ? _esc(l.region) : '<span class="td-muted">(brak)</span>';
       return `<tr data-key="${_esc(l.key)}" data-rjson="${enc}">
         <td class="col-check"><input type="checkbox" class="loc-check" data-key="${_esc(l.key)}"></td>
-        <td class="td-sticky td-name"><span style="display:inline-block;width:${indent}px"></span>${caret}<span style="font-weight:${depth===0?'600':'normal'}">${_esc(l.label||l.key)}</span>${childCount}</td>
+        <td class="td-sticky td-name"><span style="display:inline-block;width:${indent}px"></span>${caret}<span style="font-weight:${depth===0?'600':'normal'}">${_esc(l.label||l.key)}</span>${childCount}${_lintMark(l.key)}</td>
         <td>${locBadge(l.location_type)}</td>
         <td class="td-region" data-region="${_esc(l.region||'')}" style="font-size:0.78rem;color:var(--t2)">${regionLabel}</td>
         <td class="td-muted">${_esc(l.biome||l.location_subtype||'—')}</td>
@@ -609,6 +824,7 @@ const _ROW_REGISTRY = {
       _renderLocTree();
       _wireRowActions('locations-table');
       _wireLocSelection();
+      _loadLintFlags(() => { _renderLocTree(); _wireRowActions('locations-table'); _wireLocSelection(); });
     } catch(e) { tbody.innerHTML = _errRow(8, e.message); }
   }
 
@@ -682,10 +898,11 @@ const _ROW_REGISTRY = {
         return;
       }
       items.forEach(loc => { _locDetailReg[loc.key] = loc; });  // #590
+      await _loadLintFlags();   // #1527 — znaczniki 🩺 zanim narysujemy wiersze
       tbody.innerHTML = items.map(loc => `
         <tr data-key="${_esc(loc.key)}">
           <td><code style="font-size:0.75rem">${_esc(loc.key)}</code></td>
-          <td>${_esc(loc.label || '—')}</td>
+          <td>${_esc(loc.label || '—')}${_lintMark(loc.key)}</td>
           <td>${_esc(loc.location_subtype || loc.location_type || '—')}</td>
           <td style="font-size:0.78rem;color:var(--t2)">${loc.region ? _esc(loc.region) : '<span class="td-muted">(brak)</span>'}</td>
           <td>${(loc.terrain_tags||[]).map(t => `<span class="chip on" style="font-size:0.7rem;padding:2px 6px">${_esc(t)}</span>`).join(' ')}</td>
@@ -917,6 +1134,7 @@ const _ROW_REGISTRY = {
         return;
       }
       locs.forEach(p => { _locDetailReg[p.key] = p; });  // #590
+      await _loadLintFlags();   // #1527 — znaczniki 🩺 dla wierszy poczekalni
       const mkLocRow = p => {
         const hasCoords = p.world_hex_q != null && p.world_hex_r != null;
         const coordCell = hasCoords
@@ -924,7 +1142,7 @@ const _ROW_REGISTRY = {
           : `<td class="td-muted" style="font-size:0.72rem">—</td>`;
         return `<tr>
         <td class="td-mono" style="font-size:0.72rem">${_esc(p.key)}</td>
-        <td class="td-sticky td-name">${_esc(p.label||p.key)}</td>
+        <td class="td-sticky td-name">${_esc(p.label||p.key)}${_lintMark(p.key)}</td>
         <td class="td-muted">${_esc(p.location_type||'—')}</td>
         <td style="font-size:0.78rem;color:var(--t2)">${p.region ? _esc(p.region) : '<span class="td-muted">(brak)</span>'}</td>
         <td class="td-muted">${_esc(p.biome||'—')}</td>
@@ -2967,6 +3185,9 @@ export async function init(panel) {
     _worldLintFix: (id, btn) => _fixWorldLintIssue(id, btn),
     _worldLintFixRule: (rule, btn) => _fixWorldLintRule(rule, btn),
     _worldLintToggleHistory: () => _toggleWorldLintHistory(),
+    _worldLintHostModal: (key) => _openHostModal(key),
+    _worldLintDupModal: (a, b) => _openDuplicateModal(a, b),
+    _worldLintDupResolve: (keep, drop) => _resolveDuplicate(keep, drop),
   });
 
   // Wire tab switching (data-mtap)
