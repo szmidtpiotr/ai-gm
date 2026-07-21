@@ -1887,6 +1887,31 @@ def _opposite_zone(z: str) -> str:
     return ZONE_RANGED if str(z) == ZONE_ENGAGED else ZONE_ENGAGED
 
 
+# #1508 (BALANS): strzelanie i czarowanie w ZWARCIU jest niewygodne — kara do rzutu
+# ataku. Bez tego strefa nie kosztuje nic dystansowca, a każdy mechanizm oddalania się
+# (odskok elfa #1474, Chwyt sztauera #1476) zamienia walkę z wrogiem wręcz w pętlę
+# kitingu: wróg doskakuje (traci turę, kontrakt #232) → gracz strzela i odskakuje.
+# Symetria gracz↔wróg jak w modelu obrony #826. Wartość STARTOWA — Sandbox-tunable.
+ENGAGED_RANGED_ATTACK_PENALTY = -2
+
+#: Typy „broni", które liczą się jako atak dystansowy/czar (kara #1508). Melee wolne.
+_ENGAGED_PENALTY_WEAPON_TYPES = ("ranged", "spell")
+
+
+def engaged_ranged_penalty(zone: str | None, weapon_type: str | None) -> int:
+    """#1508: kara do rzutu ataku za strzał/czar wykonany ze strefy ZWARCIE.
+
+    Zwraca ``ENGAGED_RANGED_ATTACK_PENALTY`` gdy atakujący stoi w ZWARCIU i używa
+    broni dystansowej albo czaru; w każdym innym przypadku 0. Nie dotyczy ataków
+    wręcz ani zdolności bez rzutu na trafienie.
+    """
+    if str(zone or ZONE_ENGAGED) != ZONE_ENGAGED:
+        return 0
+    if str(weapon_type or "melee").strip().lower() not in _ENGAGED_PENALTY_WEAPON_TYPES:
+        return 0
+    return ENGAGED_RANGED_ATTACK_PENALTY
+
+
 def _ensure_zones(combatants: list[dict]) -> bool:
     """Backfill `zone` on existing combatant rows that pre-date the zone system.
     Returns True if any combatant was mutated (caller should persist)."""
@@ -3312,6 +3337,15 @@ def _resolve_aoe_spell_in_combat(
         "linked_stat": "INT", "attack_bonus": 0, "damage_bonus": 0,
     }
     attack_roll = resolve_attack_roll_for_weapon(sheet, raw_roll=player_raw, weapon_row=_spell_weapon)
+    # #1508: czar rzucany ze ZWARCIA — ta sama kara co przy czarze jednocelowym.
+    _zone_pen_aoe = engaged_ranged_penalty(
+        (_find_active_player_combatant(combatants) or {}).get("zone"), "spell",
+    )
+    if _zone_pen_aoe:
+        attack_roll["engaged_ranged_penalty"] = _zone_pen_aoe
+        attack_roll["modifier"] = int(attack_roll.get("modifier") or 0) + _zone_pen_aoe
+        attack_roll["total"] = int(attack_roll.get("total") or 0) + _zone_pen_aoe
+        out["engaged_ranged_penalty"] = _zone_pen_aoe
     attack_total = int(attack_roll["total"])
     out["attack_roll"] = attack_roll
     out["attack_total"] = attack_total
@@ -7981,6 +8015,19 @@ def _resolve_player_attack_turn(
             roll_result = int(attack_roll["total"])
     elif roll_result is None:
         raise ValueError("missing player attack roll")
+    # #1508: strzał/czar ze ZWARCIA → −2 do rzutu ataku. Doliczane jak inne kary
+    # okolicznościowe (durability, wound) — do sumy, nie do statów.
+    _zone_pen_1508 = engaged_ranged_penalty(
+        (_find_combatant(combatants, _player_comb_id) or {}).get("zone"),
+        (weapon_row or {}).get("weapon_type"),
+    )
+    if _zone_pen_1508:
+        roll_result = int(roll_result) + _zone_pen_1508
+        out["engaged_ranged_penalty"] = _zone_pen_1508
+        if isinstance(attack_roll, dict):
+            attack_roll["engaged_ranged_penalty"] = _zone_pen_1508
+            attack_roll["modifier"] = int(attack_roll.get("modifier") or 0) + _zone_pen_1508
+            attack_roll["total"] = int(attack_roll.get("total") or 0) + _zone_pen_1508
     # Stage 3 Z2: surprise (zaskoczony) → +2 to attack total
     _surprise_fx = _apply_attack_bonuses(sheet, enemy)
     if _surprise_fx.get("atk_bonus"):
@@ -8622,6 +8669,14 @@ def _resolve_enemy_attack_turn(
     )
     attack_roll = raw + atk_b + wp
     out["wound_penalty"] = wp
+    # #1508: symetria — wróg dystansowy (łucznik/szaman) wciągnięty do ZWARCIA strzela
+    # z tą samą karą co gracz. Wróg walczący wręcz nietknięty (doskakuje i bije bez kary).
+    _zone_pen_enemy = (
+        engaged_ranged_penalty(e_zone, "ranged") if _prefers_ranged else 0
+    )
+    if _zone_pen_enemy:
+        attack_roll += _zone_pen_enemy
+        out["engaged_ranged_penalty"] = _zone_pen_enemy
     # G17 (#794): use first active (non-knocked) player; reload sheet for MP target
     p = _find_active_player_combatant(combatants)
     if not p:

@@ -2481,6 +2481,17 @@ Dwa różne zdarzenia, nie mylić:
 |---|---|---|
 | Akcja "Zbliż się / Cofnij się" (`change_player_zone`) | **TAK** — toggle strefy + `advance_turn()` | Ruch to decyzja strategiczna, musi kosztować turę |
 | Zablokowany atak melee na wroga w innej strefie | **NIE** — komunikat "poza zasięgiem", gracz próbuje znów | Kara za zły klik nie powinna palić tury |
+| Strzał / czar wykonany ze strefy ZWARCIE | **TAK** (normalna tura) — ale z **−2 do rzutu ataku** (#1508) | Dystansowiec musi płacić za pozostanie w zwarciu, inaczej strefa nic go nie kosztuje |
+
+**Kara zwarcia (#1508, wdrożone 2026-07-21):** atak bronią dystansową i czar rzucony ze strefy
+ZWARCIE dostają **−2 do rzutu ataku**. Wartość STARTOWA (Numbers Policy) —
+`combat_service.ENGAGED_RANGED_ATTACK_PENALTY`, strojna na Sandboxie. Symetria gracz↔wróg jak w
+modelu obrony #826: wróg dystansowy (łucznik/szaman/mag wg heurystyki `_default_zone_for_enemy`)
+wciągnięty do zwarcia strzela z tą samą karą. **Nie dotyczy** ataków wręcz ani zdolności bez rzutu
+na trafienie (czary kontroli rozstrzygane testem przeciwnym INT vs WIS/CON). Powód wdrożenia: bez
+tej kary wróg walczący wręcz pali całą turę na doskok (kontrakt #232), a gracz strzela bez
+konsekwencji — każdy mechanizm oddalania się (odskok elfa #1474, Chwyt sztauera #1476) zamieniał
+walkę w nieskończony kiting, w którym przeciwnik wręcz nigdy nie zadaje ciosu.
 
 Czyli strategia ruchu MA sens: by trafić wroga w innej strefie, gracz traci turę na zbliżenie. To koszt.
 
