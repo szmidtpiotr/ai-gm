@@ -110,6 +110,40 @@ test("REGRESSION #1527 — licznik do plakietki zgadza się z listą", async ({ 
   expect(count).toBe(d.total);
 });
 
+test("REGRESSION #1527 — raport podaje, ile w grupie da się naprawić masowo", async ({ page }) => {
+  const d = await lintReport(page);
+  expect(d.fixable_by_rule, "brak fixable_by_rule — panel nie narysuje guzika grupowego").toBeTruthy();
+
+  // Reguły treściowe NIGDY nie mogą mieć naprawy masowej.
+  expect(d.fixable_by_rule.service_without_host || 0).toBe(0);
+  expect(d.fixable_by_rule.duplicate_label_in_region || 0).toBe(0);
+
+  // Suma po grupach musi się zgadzać z globalnym licznikiem naprawialnych.
+  const sum = Object.values(d.fixable_by_rule).reduce((a, b) => a + b, 0);
+  expect(sum).toBe(d.fixable);
+});
+
+test("REGRESSION #1527 — naprawa masowa reguły treściowej jest odrzucana (400)", async ({ page }) => {
+  const token = await adminToken(page);
+  const r = await page.request.post("/api/admin/world/lint/fix-rule", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { rule: "service_without_host" },
+  });
+  expect(r.status(), "nie wolno masowo 'naprawiać' braku gospodarza (#1527)").toBe(400);
+});
+
+test("REGRESSION #1527 — nie istnieje endpoint 'napraw wszystko'", async ({ page }) => {
+  const token = await adminToken(page);
+  const r = await page.request.post("/api/admin/world/lint/fix-all", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {},
+  });
+  expect(
+    r.status(),
+    "globalny guzik 'napraw wszystko' odtworzyłby ciche zamiatanie (#1527)"
+  ).toBe(404);
+});
+
 test("REGRESSION #1527 — naprawa nienaprawialnej reguły jest odrzucana (400)", async ({ page }) => {
   const token = await adminToken(page);
   const d = await lintReport(page);

@@ -16,6 +16,7 @@ from app.core.db_runtime import resolve_db_path
 from app.services.world_lint_service import (
     LINT_LIST_LIMIT,
     fix_world_lint_issue,
+    fix_world_lint_rule,
     lint_history,
     lint_issue_count,
     run_world_lint,
@@ -32,6 +33,10 @@ def _get_db() -> sqlite3.Connection:
 
 class LintFixRequest(BaseModel):
     issue_id: str
+
+
+class LintFixRuleRequest(BaseModel):
+    rule: str
 
 
 @router.get("/lint")
@@ -64,6 +69,23 @@ def post_world_lint_fix(payload: LintFixRequest):
         conn.close()
     if not result["fixed"]:
         raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.post("/lint/fix-rule")
+def post_world_lint_fix_rule(payload: LintFixRuleRequest):
+    """Napraw całą grupę jednej reguły („Napraw wszystkie").
+
+    Celowo NIE ma endpointu „napraw wszystko" dla całego lintu — globalny guzik
+    odtworzyłby ciche zamiatanie, tylko z jednym kliknięciem zamiast crona.
+    """
+    conn = _get_db()
+    try:
+        result = fix_world_lint_rule(conn, payload.rule)
+    finally:
+        conn.close()
+    if result["refused"]:
+        raise HTTPException(status_code=400, detail=result["messages"][0])
     return result
 
 

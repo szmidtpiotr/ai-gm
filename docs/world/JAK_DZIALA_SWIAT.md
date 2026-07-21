@@ -207,7 +207,7 @@ Plus dosypywanie brakujących krain i terenów.
 
 > ⚠️ **To jest ważne i nieoczywiste:** krok 3 potrafi *odpiąć od mapy* lokację, którą coś zapisało „na skróty". Dlatego każde miejsce ustawiane na mapie musi przechodzić przez jedną oficjalną funkcję — inaczej rano wraca floating. To była przyczyna błędu #1305.
 
-**Od fali 4 (#1527) to prostowanie nie jest już nieme.** Wszystko, co start serwera naprawił, ląduje w **kronice napraw** (panel: Świat → 🩺 Kontrola świata → 🕮 Historia napraw). Widzisz tam datę, regułę, czego dotyczyła naprawa i co dokładnie zrobiła.
+**Od fali 4 (#1527) to prostowanie nie jest już nieme.** Wszystko, co start serwera naprawił, ląduje w **kronice napraw** (panel: Mapa → 🩺 Kontrola świata → 🕮 Historia napraw). Widzisz tam datę, regułę, czego dotyczyła naprawa i co dokładnie zrobiła.
 
 > 🔍 **Drugi cichy uzdrowiciel — znalezisko z fali 4.** Prostowanie mapy to nie było jedyne miejsce, które sprzątało po cichu. Osobne sprzątanie w migracji startowej gasi pinezki i zwalnia heksy **wcześniej** niż opisane wyżej prostowanie — czyli rozjazd znikał, zanim ten mechanizm zdążył go zobaczyć. Skutek praktyczny: kto szuka „kto mi to zmienił", musi patrzeć na oba. Oba raportują teraz do tej samej kroniki, rozróżniane podpisem: „⚙️ start backendu" (prostowanie mapy i migracja) vs „👤 panel" (twoje kliknięcie).
 
@@ -215,7 +215,7 @@ Plus dosypywanie brakujących krain i terenów.
 
 ## Część 6A — 🩺 Kontrola świata (lampka zamiast zamiatania)
 
-Fala 4 (#1527) dołożyła w panelu zakładkę **Świat → 🩺 Kontrola świata**. To odwrócenie logiki: zamiast po cichu prostować, system **pokazuje listę rozjazdów** i pozwala je naprawiać świadomie.
+Fala 4 (#1527) dołożyła w panelu zakładkę **Mapa → 🩺 Kontrola świata** (siedzi przy mapie, bo o mapie i osadzeniu lokacji mówi większość reguł). To odwrócenie logiki: zamiast po cichu prostować, system **pokazuje listę rozjazdów** i pozwala je naprawiać świadomie.
 
 **Siedem reguł:**
 
@@ -233,7 +233,11 @@ Fala 4 (#1527) dołożyła w panelu zakładkę **Świat → 🩺 Kontrola świat
 
 **Bramka krain:** reguła „usługa bez gospodarza" liczy się **wyłącznie dla krain otwartych** (status `live` — dziś Kresy i Siwe Granie). Filtr stoi na statusie, nie na liście nazw, więc Czarnobór i Martwe Pustkowia wejdą do lintu **automatycznie w dniu otwarcia**, bez zmiany w kodzie. Powodem ich wyłączenia nie jest lore — kanon obu krain **ma** osady i usługi — tylko stan świata: zero heksów i brak lokacji-hubów.
 
-**Pierwszy pomiar na żywej bazie DEV:** 45 rozjazdów, z czego 17 naprawialnych jednym kliknięciem. Licznik dokłada się do plakietki przy pozycji „Świat" w menu bocznym, więc widać go bez wchodzenia w zakładkę.
+**Pierwszy pomiar na żywej bazie DEV:** 45 rozjazdów, z czego 17 naprawialnych jednym kliknięciem. Licznik wisi jako plakietka przy pozycji „Mapa" w menu bocznym, więc widać go bez wchodzenia w zakładkę.
+
+**Naprawa masowa — per reguła, nigdy globalnie.** Lista jest pogrupowana po regule, bo tak wyglądają realne dane: 14 sub-lokacji osieroconych po skasowanym szablonie to *jeden* problem powtórzony czternaście razy, a nie czternaście decyzji. Nad każdą grupą deterministyczną jest **🔧 Napraw wszystkie (N)** — jedno potwierdzenie, ale każda naprawa ląduje w kronice **osobno** (grupa nie chowa się za zbiorczym „naprawiono 14 rzeczy").
+
+Czego celowo **nie ma**: guzika „napraw wszystko" dla całej listy. Taki guzik odtworzyłby dokładnie tę chorobę, którą fala 4 leczy — ciche zamiatanie, tylko z jednym kliknięciem zamiast po nocach. Naprawa masowa zawsze dotyczy jednej reguły, którą człowiek świadomie wskazał, i nigdy nie obejmuje reguł treściowych.
 
 **Progi (wartości startowe, do strojenia):** podobieństwo nazw uznane za duplikat = **0.85**, limit listy = **200** pozycji.
 
@@ -322,8 +326,8 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 | zatwierdzić twory AI | `/admin/` → Świat → Oczekujące |
 | zobaczyć mapę świata | `/admin/` → Mapa |
 | ustawić lokację na heksie | Mapa → klik w heks |
-| sprawdzić zdrowie świata | `/admin/` → Świat → **🩺 Kontrola świata** |
-| zobaczyć, co system naprawił sam | Świat → 🩺 Kontrola świata → **🕮 Historia napraw** |
+| sprawdzić zdrowie świata | `/admin/` → Mapa → **🩺 Kontrola świata** |
+| zobaczyć, co system naprawił sam | Mapa → 🩺 Kontrola świata → **🕮 Historia napraw** |
 
 ### Gdzie leży prawda
 | Pytanie | Odpowiedź |
@@ -332,7 +336,7 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 | co jest kanonem świata? | `data/seeds/content/game_locations.json` w gicie |
 | kto jest w lokacji? | tabela przypisań NPC (po fali 1 — jedyna) |
 | jak działa relacja heks↔lokacja? | ten dokument + `backend/app/services/hex_location_link.py` |
-| co jest dziś zepsute w świecie? | Świat → 🩺 Kontrola świata (reguły: `backend/app/services/world_lint_service.py`) |
+| co jest dziś zepsute w świecie? | Mapa → 🩺 Kontrola świata (reguły: `backend/app/services/world_lint_service.py`) |
 | kto zmienił mi pinezkę w nocy? | kronika napraw — „⚙️ start backendu" = automat, „👤 panel" = człowiek |
 
 ### Zasady bezpieczeństwa danych

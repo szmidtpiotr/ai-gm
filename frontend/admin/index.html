@@ -127,7 +127,7 @@
     import { apiFetch } from './shared/api.js';
     import { showToast } from './shared/toast.js';
     import { initSortableTable, enhanceTable } from './shared/table.js?v=8';
-    import { initCommandPalette } from './shared/command_palette.js?v=3';
+    import { initCommandPalette } from './shared/command_palette.js?v=4';
 
     // 18 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
     const SECTIONS = [
@@ -161,7 +161,7 @@
       const b = document.createElement('button');
       b.className = 'nav-item';
       b.dataset.section = s.key;
-      b.innerHTML = `<span class="nav-item-icon">${s.ico}</span><span>${s.label}${s.key === 'world' ? '<span class="nav-badge" id="world-nav-badge" style="display:none">0</span>' : ''}${s.key === 'content' ? '<span class="nav-badge" id="content-nav-badge" style="display:none" title="Duplikaty w treści (#1399)">0</span>' : ''}</span>`;
+      b.innerHTML = `<span class="nav-item-icon">${s.ico}</span><span>${s.label}${s.key === 'world' ? '<span class="nav-badge" id="world-nav-badge" style="display:none">0</span>' : ''}${s.key === 'content' ? '<span class="nav-badge" id="content-nav-badge" style="display:none" title="Duplikaty w treści (#1399)">0</span>' : ''}${s.key === 'map' ? '<span class="nav-badge" id="map-nav-badge" style="display:none" title="Kontrola świata — wykryte rozjazdy (#1527)">0</span>' : ''}</span>`;
       b.addEventListener('click', () => { location.hash = '#' + s.key; });
       nav.appendChild(b);
     });
@@ -229,7 +229,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=133`);
+        const mod = await import(`./sections/${key}.js?v=134`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)
@@ -333,19 +333,17 @@
     // Load pending items count for Świat badge
     async function _loadPendingCount() {
       try {
-        const [npcRes, enemyRes, weapRes, itemRes, lintRes] = await Promise.allSettled([
+        const [npcRes, enemyRes, weapRes, itemRes] = await Promise.allSettled([
           apiFetch('/api/admin/world/pending/npcs'),
           apiFetch('/api/admin/world/pending/enemies'),
           apiFetch('/api/admin/world/pending/weapons'),
           apiFetch('/api/admin/world/pending/items'),
-          apiFetch('/api/admin/world/lint/count'),   // #1527 — 🩺 Kontrola świata
         ]);
         const npcs    = npcRes.status==='fulfilled'   ? (npcRes.value?.items||npcRes.value||[])     : [];
         const enemies = enemyRes.status==='fulfilled' ? (enemyRes.value?.items||enemyRes.value||[]) : [];
         const weapons = weapRes.status==='fulfilled'  ? (weapRes.value?.items||weapRes.value||[])   : [];
         const items   = itemRes.status==='fulfilled'  ? (itemRes.value?.items||itemRes.value||[])   : [];
-        const lint    = lintRes.status==='fulfilled'  ? (lintRes.value?.count || 0)                : 0;
-        const total = npcs.length + enemies.length + weapons.length + items.length + lint;
+        const total = npcs.length + enemies.length + weapons.length + items.length;
         const badge = document.getElementById('world-nav-badge');
         if (badge) {
           badge.textContent = total || '';
@@ -353,6 +351,20 @@
         }
       } catch (e) {
         // Silent fail if pending count can't load
+      }
+    }
+
+    // Load world-lint count for Mapa badge (#1527 — 🩺 Kontrola świata)
+    async function _loadLintCount() {
+      try {
+        const d = await apiFetch('/api/admin/world/lint/count');
+        const badge = document.getElementById('map-nav-badge');
+        if (badge) {
+          badge.textContent = d.count || '';
+          badge.style.display = d.count ? '' : 'none';
+        }
+      } catch (e) {
+        // Silent fail if lint count can't load
       }
     }
 
@@ -371,7 +383,7 @@
     }
 
     // expose shared do debug (sekcje importują własne moduły, to tylko wygoda)
-    window.__adminShell = { apiFetch, showToast, SECTIONS, _loadPendingCount, _loadDupCount };
+    window.__adminShell = { apiFetch, showToast, SECTIONS, _loadPendingCount, _loadDupCount, _loadLintCount };
 
     // Wyszukiwarka funkcji — pole w sidebarze + Ctrl+K (nawiguje po hashu /tab).
     initCommandPalette();
@@ -385,6 +397,7 @@
       if (_savedUser) _updateUserDisplay(_savedUser);
       _loadPendingCount();
       _loadDupCount();
+    _loadLintCount();
       route();
     }
   </script>

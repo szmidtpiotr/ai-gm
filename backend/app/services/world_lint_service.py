@@ -54,6 +54,7 @@ __all__ = [
     "LINT_LIST_LIMIT",
     "SERVICE_SUBTYPES",
     "fix_world_lint_issue",
+    "fix_world_lint_rule",
     "lint_history",
     "lint_issue_count",
     "record_reconcile_report",
@@ -521,9 +522,17 @@ def run_world_lint(conn: sqlite3.Connection, *, limit: int = LINT_LIST_LIMIT) ->
     for issue in found:
         counts[issue["rule"]] = counts.get(issue["rule"], 0) + 1
 
+    #: ile w KAZDEJ grupie da sie naprawic jednym klikiem — panel rysuje z tego
+    #: guzik „Napraw wszystkie (N)" nad grupa (#1527, naprawa masowa per regula).
+    fixable_by_rule: dict[str, int] = {}
+    for issue in found:
+        if issue["fixable"]:
+            fixable_by_rule[issue["rule"]] = fixable_by_rule.get(issue["rule"], 0) + 1
+
     return {
         "issues": found[:limit],
         "counts": counts,
+        "fixable_by_rule": fixable_by_rule,
         "total": len(found),
         "truncated": len(found) > limit,
         "fixable": sum(1 for i in found if i["fixable"]),
@@ -562,6 +571,45 @@ def fix_world_lint_issue(conn: sqlite3.Connection, issue_id: str) -> dict:
         record_repair(conn, "manual_fix", rule, target, message)
         logger.info("world_lint_fix_applied", rule=rule, target=target)
     return {"fixed": ok, "rule": rule, "target": target, "message": message}
+
+
+def fix_world_lint_rule(conn: sqlite3.Connection, rule: str) -> dict:
+    """Napraw CALA grupe rozjazdow jednej reguly (guzik „Napraw wszystkie").
+
+    Swiadomie NIE ma odpowiednika „napraw wszystko" dla calego lintu — globalny
+    guzik odtworzylby ciche zamiatanie, tylko z jednym klikiem zamiast crona.
+    Naprawa masowa dziala wylacznie w obrebie JEDNEJ reguly, ktora czlowiek
+    swiadomie wskazal, i wylacznie dla regul deterministycznych: dosiew
+    gospodarza i wybor duplikatu do zostawienia nadal nalezy do czlowieka.
+
+    Kazda naprawa zostawia WLASNY wpis w kronice — grupa nie chowa sie za
+    jednym zbiorczym „naprawiono 14 rzeczy".
+
+    Returns:
+        {"rule", "fixed": int, "failed": int, "refused": bool, "messages": [...]}
+    """
+    if rule not in _FIXERS:
+        return {
+            "rule": rule, "fixed": 0, "failed": 0, "refused": True,
+            "messages": [
+                "Ta reguła wymaga decyzji treściowej — nie ma dla niej naprawy masowej."
+                if rule in _UNFIXABLE else f"Nieznana reguła: {rule!r}"
+            ],
+        }
+
+    targets = [i["id"] for i in run_world_lint(conn, limit=10_000)["issues"] if i["rule"] == rule]
+    fixed = failed = 0
+    messages: list[str] = []
+    for issue_id in targets:
+        result = fix_world_lint_issue(conn, issue_id)
+        if result["fixed"]:
+            fixed += 1
+        else:
+            failed += 1
+            messages.append(result["message"])
+
+    logger.info("world_lint_bulk_fix", rule=rule, fixed=fixed, failed=failed)
+    return {"rule": rule, "fixed": fixed, "failed": failed, "refused": False, "messages": messages}
 
 
 # ─── naprawy ─────────────────────────────────────────────────────────────────

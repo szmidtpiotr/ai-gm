@@ -31,6 +31,7 @@ from app.services.world_lint_service import (
     DUPLICATE_SIMILARITY_THRESHOLD,
     LINT_LIST_LIMIT,
     fix_world_lint_issue,
+    fix_world_lint_rule,
     lint_history,
     lint_issue_count,
     record_reconcile_report,
@@ -423,7 +424,8 @@ def test_report_shape_and_counter(conn):
 def test_clean_world_reports_nothing(conn):
     _add_location(conn, "brzezino")
     assert run_world_lint(conn) == {
-        "issues": [], "counts": {}, "total": 0, "truncated": False, "fixable": 0
+        "issues": [], "counts": {}, "fixable_by_rule": {},
+        "total": 0, "truncated": False, "fixable": 0,
     }
 
 
@@ -439,6 +441,80 @@ def test_fix_of_unfixable_rule_is_refused(conn):
     result = fix_world_lint_issue(conn, issue["id"])
     assert result["fixed"] is False
     assert "service_without_host" in _rules(run_world_lint(conn)), "nic nie zniknelo po cichu"
+
+
+# ─── Naprawa masowa (per REGULA, nigdy „napraw wszystko") ───────────────────
+
+def test_bulk_fix_repairs_whole_rule_group(conn):
+    """13 sierot po tym samym szablonie = jedna decyzja, nie 13 klikniec."""
+    for i in range(3):
+        _add_location(conn, f"sierota_{i}", location_type="sub",
+                      parent_id=999, parent_key="start_26")
+    _add_location(conn, "zdrowa")
+
+    result = fix_world_lint_rule(conn, "broken_sublocation_parent")
+    assert result["fixed"] == 3 and result["failed"] == 0
+
+    assert "broken_sublocation_parent" not in _rules(run_world_lint(conn))
+
+
+def test_bulk_fix_touches_only_its_own_rule(conn):
+    """Naprawa grupy nie moze przy okazji ruszyc innych regul."""
+    _add_location(conn, "sierota", location_type="sub", parent_id=999, parent_key="start_26")
+    conn.execute("INSERT INTO npcs (key, label) VALUES ('bartel', 'Bartel')")
+    conn.execute(
+        "INSERT INTO location_npc_assignments (location_key, npc_key) VALUES (?,?)",
+        ("start_24", "bartel"),
+    )
+    conn.commit()
+
+    result = fix_world_lint_rule(conn, "broken_sublocation_parent")
+    assert result["fixed"] == 1
+
+    rules = _rules(run_world_lint(conn))
+    assert "broken_sublocation_parent" not in rules
+    assert "orphan_npc_assignment" in rules, "sierota obsady miala zostac nietknieta"
+
+
+def test_bulk_fix_of_content_rule_is_refused(conn):
+    """„Napraw wszystkie" NIE moze istniec dla regul wymagajacych decyzji tresciowej."""
+    _add_location(conn, "karczma_pod_rogiem", location_subtype="tavern", region="kresy")
+    _add_location(conn, "kuznia", location_subtype="smithy", region="kresy")
+
+    result = fix_world_lint_rule(conn, "service_without_host")
+    assert result["fixed"] == 0
+    assert result["refused"] is True
+
+    assert run_world_lint(conn)["counts"]["service_without_host"] == 2
+
+
+def test_bulk_fix_of_unknown_rule_is_refused(conn):
+    result = fix_world_lint_rule(conn, "nie_ma_takiej_reguly")
+    assert result["fixed"] == 0 and result["refused"] is True
+
+
+def test_bulk_fix_writes_one_history_entry_per_repair(conn):
+    """Kronika ma slad KAZDEJ naprawy, nie jeden zbiorczy wpis „naprawiono grupe"."""
+    for i in range(2):
+        _add_location(conn, f"sierota_{i}", location_type="sub",
+                      parent_id=999, parent_key="start_26")
+
+    fix_world_lint_rule(conn, "broken_sublocation_parent")
+
+    history = lint_history(conn)
+    assert len(history) == 2
+    assert {h["target"] for h in history} == {"sierota_0", "sierota_1"}
+    assert all(h["source"] == "manual_fix" for h in history)
+
+
+def test_report_exposes_fixable_count_per_rule_for_bulk_button(conn):
+    """Panel musi wiedziec, ile w grupie da sie naprawic jednym klikiem."""
+    _add_location(conn, "sierota", location_type="sub", parent_id=999, parent_key="start_26")
+    _add_location(conn, "karczma_pod_rogiem", location_subtype="tavern", region="kresy")
+
+    report = run_world_lint(conn)
+    assert report["fixable_by_rule"]["broken_sublocation_parent"] == 1
+    assert report["fixable_by_rule"].get("service_without_host", 0) == 0
 
 
 # ─── Backward compatibility ─────────────────────────────────────────────────

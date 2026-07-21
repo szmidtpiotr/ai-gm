@@ -5,6 +5,7 @@
  */
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { confirmDialog } from '../shared/modal.js';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 // Monolit używał _worldLoaded jako cache zakładek mapy — zachowane 1:1 (lokalne dla modułu).
@@ -345,11 +346,154 @@ const _ROW_REGISTRY = {
 
 // ── Tab dispatcher + hexmap generate ───────────────────────────────────────────
   function _loadMapTab(tab) {
+    // #1527 — kontrola świata musi być ZAWSZE świeża (stan świata żyje, a po
+    // naprawie lista natychmiast się zmienia); reszta zakładek jest cache'owana.
+    if (tab === 'lint') _worldLoaded.delete('lint');
     if (_worldLoaded.has(tab)) return Promise.resolve();
-    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats, floating:_loadFloating, duplicates:_loadLocDuplicates }[tab];
+    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats, floating:_loadFloating, duplicates:_loadLocDuplicates, lint:_loadWorldLint }[tab];
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('Map tab failed:', tab, err.message); });
+  }
+
+  // ── 🩺 Kontrola świata (#1527) ─────────────────────────────────────────────
+  // Lampka zamiast cichej samonaprawy. Lista jest GRUPOWANA po regule, bo tak
+  // wyglądają realne dane: 14× ten sam zepsuty rodzic po skasowanym szablonie to
+  // jedna decyzja, nie 14 kliknięć. Każda grupa deterministyczna dostaje
+  // „Napraw wszystkie"; grupy wymagające decyzji treściowej (brak gospodarza,
+  // duplikat nazwy) nie dostają go NIGDY — i nie ma guzika „napraw wszystko"
+  // dla całej listy, bo to byłoby ciche zamiatanie z jednym klikiem zamiast crona.
+  const _LINT_RULE_LABELS = {
+    service_without_host:           'Usługa bez gospodarza',
+    orphan_npc_assignment:          'Sierota obsady',
+    hex_points_to_missing_location: 'Heks bez lokacji',
+    pin_not_backed_by_canon:        'Pin bez kanonu',
+    broken_sublocation_parent:      'Zepsuty rodzic',
+    illegal_flag_value:             'Nielegalna flaga',
+    duplicate_label_in_region:      'Duplikat etykiety',
+  };
+
+  function _lintBadge(n) {
+    const badge = document.getElementById('world-lint-badge');
+    if (!badge) return;
+    badge.textContent = n || '';
+    badge.style.display = n ? '' : 'none';
+  }
+
+  async function _loadWorldLint() {
+    const box = document.getElementById('world-lint-container');
+    if (!box) return;
+    box.innerHTML = 'Sprawdzam świat…';
+    const d = await apiFetch('/api/admin/world/lint');
+    const issues = d.issues || [];
+    const fixableByRule = d.fixable_by_rule || {};
+    _lintBadge(d.total || 0);
+
+    const summary = document.getElementById('world-lint-summary');
+    if (summary) {
+      summary.textContent = d.total
+        ? `${d.total} rozjazdów · ${d.fixable} naprawialnych jednym kliknięciem`
+        : 'Świat spójny — nic do naprawy.';
+    }
+    if (!issues.length) {
+      box.innerHTML = `<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.85rem">✅ Świat spójny — lint nie znalazł rozjazdów.</div>`;
+      return;
+    }
+
+    const groups = {};
+    issues.forEach(i => { (groups[i.rule] ||= []).push(i); });
+
+    box.innerHTML = Object.entries(groups).map(([rule, list]) => {
+      const bulk = fixableByRule[rule] || 0;
+      const head = `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 4px 8px;border-top:1px solid var(--border)">
+          <span class="badge ${list[0].severity === 'error' ? 'badge-red' : 'badge-amber'}">${_esc(_LINT_RULE_LABELS[rule] || rule)}</span>
+          <span style="color:var(--t2);font-size:0.82rem">${list.length} ${list.length === 1 ? 'problem' : 'problemów'}</span>
+          <span style="flex:1"></span>
+          ${bulk > 1
+            ? `<button class="btn btn-sm btn-primary" onclick="window._worldLintFixRule('${_esc(rule)}', this)">🔧 Napraw wszystkie (${bulk})</button>`
+            : bulk === 0
+              ? `<span style="color:var(--t3);font-size:0.75rem">decyzja człowieka — naprawa masowa wyłączona</span>`
+              : ''}
+        </div>`;
+      const rows = list.map(i => `
+        <tr data-lint-id="${_esc(i.id)}">
+          <td class="td-name">${_esc(i.label)}</td>
+          <td style="color:var(--t3);font-size:0.78rem">${_esc(i.detail)}</td>
+          <td style="text-align:right;white-space:nowrap">${i.fixable
+            ? `<button class="btn btn-sm btn-secondary" onclick="window._worldLintFix('${_esc(i.id)}', this)">🔧 Napraw</button>`
+            : `<span style="color:var(--t3);font-size:0.75rem">decyzja człowieka</span>`}</td>
+        </tr>`).join('');
+      return `${head}<div class="table-wrap"><table class="data-table"><tbody>${rows}</tbody></table></div>`;
+    }).join('');
+  }
+
+  async function _fixWorldLintIssue(issueId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const d = await apiFetch('/api/admin/world/lint/fix', {
+        method: 'POST', body: JSON.stringify({ issue_id: issueId }),
+      });
+      showToast(d.message || 'Naprawione', 'success');
+      await _loadWorldLint();
+    } catch (e) {
+      showToast(e.message || 'Naprawa nieudana', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '🔧 Napraw'; }
+    }
+  }
+
+  async function _fixWorldLintRule(rule, btn) {
+    const label = _LINT_RULE_LABELS[rule] || rule;
+    const ok = await confirmDialog(
+      `Naprawić wszystkie problemy z grupy „${label}"? Każda naprawa zostanie zapisana w historii napraw.`
+    );
+    if (!ok) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Naprawiam…'; }
+    try {
+      const d = await apiFetch('/api/admin/world/lint/fix-rule', {
+        method: 'POST', body: JSON.stringify({ rule }),
+      });
+      showToast(
+        d.failed
+          ? `Naprawiono ${d.fixed}, nie udało się ${d.failed}`
+          : `Naprawiono ${d.fixed} — grupa „${label}" czysta`,
+        d.failed ? 'error' : 'success'
+      );
+      await _loadWorldLint();
+    } catch (e) {
+      showToast(e.message || 'Naprawa masowa nieudana', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '🔧 Napraw wszystkie'; }
+    }
+  }
+
+  async function _toggleWorldLintHistory() {
+    const box = document.getElementById('world-lint-history');
+    if (!box) return;
+    if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+    box.style.display = '';
+    box.innerHTML = '<div style="color:var(--t3);font-size:0.8rem;padding:8px">Wczytuję kronikę…</div>';
+    try {
+      const d = await apiFetch('/api/admin/world/lint/history');
+      const rows = d.entries || [];
+      box.innerHTML = rows.length
+        ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+             <th><div class="th-inner">Kiedy</div></th>
+             <th><div class="th-inner">Kto</div></th>
+             <th><div class="th-inner">Reguła</div></th>
+             <th><div class="th-inner">Czego dotyczyło</div></th>
+             <th><div class="th-inner">Co zrobił</div></th>
+           </tr></thead><tbody>${rows.map(r => `
+             <tr>
+               <td style="white-space:nowrap">${_esc(r.created_at)}</td>
+               <td>${r.source === 'manual_fix' ? '👤 panel' : '⚙️ start backendu'}</td>
+               <td>${_esc(r.rule)}</td>
+               <td class="td-name">${_esc(r.target)}</td>
+               <td style="color:var(--t3);font-size:0.78rem">${_esc(r.detail)}</td>
+             </tr>`).join('')}</tbody></table></div>`
+        : '<div style="color:var(--t3);font-size:0.8rem;padding:8px">Kronika pusta — nic się jeszcze nie naprawiło.</div>';
+    } catch (e) {
+      box.innerHTML = `<div style="color:var(--red);font-size:0.8rem;padding:8px">Błąd: ${_esc(e.message)}</div>`;
+    }
   }
 
   // ── Ustawienia mapy (#1482: generator świata i masowe czyszczenie usunięte) ──
@@ -2598,6 +2742,18 @@ function _sectionHtml() {
           <button class="stab" data-mtap="terrain">Teren</button>
           <button class="stab" data-mtap="review">Do zatwierdzenia</button>
           <button class="stab" data-mtap="duplicates">🧹 Duplikaty <span class="badge badge-red" id="loc-dup-badge" style="display:none">0</span></button>
+          <button class="stab" data-mtap="lint">🩺 Kontrola świata <span class="badge badge-red" id="world-lint-badge" style="display:none">0</span></button>
+        </div>
+
+        <!-- 🩺 Kontrola świata (#1527) — przeniesione ze Świata do Mapy -->
+        <div class="stab-panel" id="wtab-lint">
+          <div class="toolbar">
+            <button class="btn btn-secondary btn-sm" onclick="window._worldLintReload()">↻ Sprawdź ponownie</button>
+            <button class="btn btn-secondary btn-sm" onclick="window._worldLintToggleHistory()">🕮 Historia napraw</button>
+            <span style="color:var(--t3);font-size:0.78rem" id="world-lint-summary"></span>
+          </div>
+          <div id="world-lint-history" style="display:none;padding:0 4px 12px"></div>
+          <div id="world-lint-container" style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>
         </div>
 
         <!-- Lokacje -->
@@ -2806,6 +2962,11 @@ export async function init(panel) {
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
     openLocDetailModal, wbFilterRegion, wbToggleRegionStatus,
+    // #1527 — 🩺 Kontrola świata (przeniesiona ze Świata do Mapy)
+    _worldLintReload: () => _loadWorldLint(),
+    _worldLintFix: (id, btn) => _fixWorldLintIssue(id, btn),
+    _worldLintFixRule: (rule, btn) => _fixWorldLintRule(rule, btn),
+    _worldLintToggleHistory: () => _toggleWorldLintHistory(),
   });
 
   // Wire tab switching (data-mtap)

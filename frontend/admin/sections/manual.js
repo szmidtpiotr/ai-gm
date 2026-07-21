@@ -57,36 +57,6 @@ wybierasz już na miejscu.</p>`,
     chapters: [
       { id: 'swiat', title: 'NPC, wrogowie i zasady świata', body: STUB },
       {
-        id: 'kontrola-swiata',
-        title: '🩺 Kontrola świata (lampka zamiast cichej samonaprawy)',
-        body: `
-<p>Do tej pory świat prostował się <b>sam i po cichu</b> przy każdym starcie backendu. Rozjazd znikał
-z ekranu, ale przyczyna zostawała, a Ty nigdy się nie dowiadywałeś, że coś było nie tak. Zakładka
-<b>Świat → 🩺 Kontrola świata</b> odwraca to: pokazuje listę problemów i pozwala je naprawiać
-świadomie, jednym kliknięciem.</p>
-<h4>Co lint sprawdza</h4>
-<ul>
-  <li><b>Usługa bez gospodarza</b> — karczma, kuźnia, kram, świątynia, stajnia albo komora, w której
-      nie stoi ani jeden NPC. Gracz wchodzi do pustego wnętrza. Liczone <b>tylko dla krain
-      otwartych</b> (status <code>live</code>) — Czarnobór i Pustkowia wejdą tu same w dniu otwarcia.</li>
-  <li><b>Sierota obsady</b> — NPC przypisany do lokacji, której już nie ma.</li>
-  <li><b>Heks bez lokacji</b> — pole mapy wskazuje lokację, która nie istnieje.</li>
-  <li><b>Pin bez kanonu</b> — lokacja twierdzi, że stoi na heksie, którego mapa jej nie przyznaje.</li>
-  <li><b>Zepsuty rodzic</b> — sub-lokacja bez rodzica albo z niekompletnym wiązaniem.</li>
-  <li><b>Nielegalna flaga</b> — <code>created_by</code> / <code>review_status</code> spoza dozwolonego zbioru.</li>
-  <li><b>Duplikat etykiety</b> — dwie lokacje o (prawie) tej samej nazwie w jednej krainie.</li>
-</ul>
-<h4>Guzik „Napraw"</h4>
-<p>Pojawia się tylko przy rozjazdach, które da się rozwiązać <b>jednoznacznie</b> (odpiąć pin, zwolnić
-heks, uzupełnić rodzica, zdjąć martwe przypisanie). Tam, gdzie potrzebna jest <b>decyzja treściowa</b>
-— dosiew gospodarza albo wybór, którą kopię lokacji zostawić — panel pisze „decyzja człowieka"
-i niczego nie zgaduje.</p>
-<h4>Kronika napraw</h4>
-<p>Przycisk <b>🕮 Historia napraw</b> pokazuje, co i kiedy zostało naprawione — osobno to, co zrobił
-start backendu (⚙️), a osobno to, co kliknąłeś sam (👤). Licznik problemów dokłada się do plakietki
-przy pozycji <b>Świat</b> w menu bocznym.</p>`,
-      },
-      {
         id: 'sol-rdzen',
         title: 'Sól i „istoty Rdzenia" (klasa wroga)',
         body: `
@@ -198,6 +168,43 @@ na plotkę, proporcja prawda/fałsz i DC wyczucia to wartości startowe — będ
   {
     ico: '🗺', label: 'Mapa',
     chapters: [
+      {
+        id: 'kontrola-swiata',
+        title: '🩺 Kontrola świata (lampka zamiast cichej samonaprawy)',
+        body: `
+<p>Do tej pory świat prostował się <b>sam i po cichu</b> przy każdym starcie backendu. Rozjazd znikał
+z ekranu, ale przyczyna zostawała, a Ty nigdy się nie dowiadywałeś, że coś było nie tak. Zakładka
+<b>Mapa → 🩺 Kontrola świata</b> odwraca to: pokazuje listę problemów i pozwala je naprawiać
+świadomie, jednym kliknięciem.</p>
+<h4>Co lint sprawdza</h4>
+<ul>
+  <li><b>Usługa bez gospodarza</b> — karczma, kuźnia, kram, świątynia, stajnia albo komora, w której
+      nie stoi ani jeden NPC. Gracz wchodzi do pustego wnętrza. Liczone <b>tylko dla krain
+      otwartych</b> (status <code>live</code>) — Czarnobór i Pustkowia wejdą tu same w dniu otwarcia.</li>
+  <li><b>Sierota obsady</b> — NPC przypisany do lokacji, której już nie ma.</li>
+  <li><b>Heks bez lokacji</b> — pole mapy wskazuje lokację, która nie istnieje.</li>
+  <li><b>Pin bez kanonu</b> — lokacja twierdzi, że stoi na heksie, którego mapa jej nie przyznaje.</li>
+  <li><b>Zepsuty rodzic</b> — sub-lokacja bez rodzica albo z niekompletnym wiązaniem.</li>
+  <li><b>Nielegalna flaga</b> — <code>created_by</code> / <code>review_status</code> spoza dozwolonego zbioru.</li>
+  <li><b>Duplikat etykiety</b> — dwie lokacje o (prawie) tej samej nazwie w jednej krainie.</li>
+</ul>
+<h4>Guzik „Napraw" i naprawa masowa</h4>
+<p>Pojawia się tylko przy rozjazdach, które da się rozwiązać <b>jednoznacznie</b> (odpiąć pin, zwolnić
+heks, uzupełnić rodzica, zdjąć martwe przypisanie). Tam, gdzie potrzebna jest <b>decyzja treściowa</b>
+— dosiew gospodarza albo wybór, którą kopię lokacji zostawić — panel pisze „decyzja człowieka"
+i niczego nie zgaduje.</p>
+<p>Lista jest <b>pogrupowana po regule</b>, bo tak wyglądają realne dane: kilkanaście sub-lokacji po
+skasowanym szablonie to jeden problem powtórzony wiele razy, a nie kilkanaście osobnych decyzji.
+Nad każdą taką grupą jest <b>🔧 Napraw wszystkie (N)</b> — jedno potwierdzenie, wszystkie naprawy
+osobno zapisane w historii. Grupy „decyzja człowieka" nie dostają go nigdy.</p>
+<p><b>Czego celowo nie ma:</b> guzika „napraw wszystko" dla całej listy. Taki guzik odtworzyłby ciche
+zamiatanie — tylko z jednym kliknięciem zamiast po nocach. Naprawa masowa zawsze dotyczy jednej
+reguły, którą świadomie wskazałeś.</p>
+<h4>Kronika napraw</h4>
+<p>Przycisk <b>🕮 Historia napraw</b> pokazuje, co i kiedy zostało naprawione — osobno to, co zrobił
+start backendu (⚙️), a osobno to, co kliknąłeś sam (👤). Licznik problemów wisi jako plakietka
+przy pozycji <b>Mapa</b> w menu bocznym.</p>`,
+      },
       {
         id: 'cykl-lokacji',
         title: 'Skąd biorą się lokacje',
