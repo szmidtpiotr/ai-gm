@@ -23,7 +23,7 @@ from app.character_creation_config import (
 from app.services.opening_context import build_opening_plan_context
 from app.services.loot_service import grant_loot_to_character
 from app.services.vitality_service import calculate_hp, calculate_mana
-from app.services.actor_stats import apply_racial_modifiers
+from app.services.actor_stats import RACIAL_STAT_MODS, apply_racial_modifiers
 from app.services.campaign_plan_service import generate_v2_campaign_plan
 from app.services.turn_pipeline import generate_opening_scene as generate_v2_opening_scene
 from app.services.gm_plan_generation_service import (
@@ -512,8 +512,15 @@ _STAT_OVERRIDE_ALIASES = {
 }
 
 
-def _core_bases_from_stored_stats(stats: dict, archetype: str) -> dict[str, int]:
-    """Subtract archetype stat bonuses to recover pre-bonus bases (what _build_character_sheet adds)."""
+def _core_bases_from_stored_stats(stats: dict, archetype: str, race: str = "human") -> dict[str, int]:
+    """Subtract archetype AND racial stat bonuses to recover pre-bonus bases.
+
+    #1520 — stored stats zawierają też modyfikatory rasowe (`apply_racial_modifiers`
+    przy tworzeniu). Bez ich odjęcia „rolled bases" elfa/krasnoluda nie były rzutami:
+    suma zawierała rasowy bilans (elf +2, krasnolud +1), a ujemny mod (elf CON −1)
+    potrafił zepchnąć bazę poniżej STAT_ROLL_MIN — kreator wtedy clampował po swojej
+    stronie i finalize odrzucał redystrybucję („expected 88; got 89").
+    """
     out: dict[str, int] = {}
     for k in SIX_CORE_STATS:
         lk = k.lower()
@@ -531,6 +538,11 @@ def _core_bases_from_stored_stats(stats: dict, archetype: str) -> dict[str, int]
     else:
         out["INT"] -= 2
         out["WIS"] -= 1
+    for stat_key, delta in RACIAL_STAT_MODS.get(
+        str(race or "human").strip().lower(), {}
+    ).items():
+        if stat_key in out:
+            out[stat_key] -= delta
     return out
 
 
@@ -898,12 +910,14 @@ def _pick_random_start_location(conn: sqlite3.Connection) -> str:
 # ── R3.3: extracted helpers for create_character / finalize_character_sheet ───
 
 
-def _finalize_resolve_new_stats(sheet: dict, req) -> dict:
+def _finalize_resolve_new_stats(sheet: dict, req, race: str = "human") -> dict:
     """Validate stat_overrides from FinalizeSheetRequest and return the merged
-    stats dict (SIX_CORE_STATS + LCK) ready to write back to sheet["stats"]."""
+    stats dict (SIX_CORE_STATS + LCK) ready to write back to sheet["stats"].
+
+    #1520 — bases są PRE-rasowe (czyste rzuty); rasę nakłada z powrotem finalize."""
     archetype = str(sheet.get("archetype") or "warrior").strip().lower()
     raw_stats = dict(sheet.get("stats") or {})
-    bases = _core_bases_from_stored_stats(raw_stats, archetype)
+    bases = _core_bases_from_stored_stats(raw_stats, archetype, race)
     sum_target = sum(bases[k] for k in SIX_CORE_STATS)
 
     merged = dict(bases)
@@ -2747,7 +2761,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
 
     row = conn.execute(
         """
-        SELECT id, sheet_json
+        SELECT id, sheet_json, COALESCE(race, 'human') AS race
         FROM characters
         WHERE id = ?
         """,
@@ -2757,6 +2771,8 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Character not found")
+
+    race = str(row["race"] or "human").strip().lower()
 
     try:
         sheet = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
@@ -2780,7 +2796,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         archetype = "warrior"
     sheet["archetype"] = archetype
 
-    new_stats = _finalize_resolve_new_stats(sheet, req)
+    new_stats = _finalize_resolve_new_stats(sheet, req, race)
 
     skills_sheet = {k: int(v) for k, v in (sheet.get("skills") or {}).items()}
     orig_snapshot = sheet.get("skills_at_creation")
@@ -2800,6 +2816,25 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         archetype,
         apply_archetype_skill_minimums=False,
     )
+
+    # #1520 — bazy w new_stats są PRE-rasowe, więc rasę trzeba nałożyć z powrotem
+    # (lustro create_character). CON/INT/DEX mogły się zmienić → przelicz HP, manę,
+    # modyfikatory i obronę; finalize i tak ustawia current = max.
+    if race != "human":
+        apply_racial_modifiers(rebuilt, race)
+        _r_stats = rebuilt["stats"]
+        _r_level = int(rebuilt.get("level", 1) or 1)
+        _hp = calculate_hp(archetype, int(_r_stats.get("CON", 10)), _r_level)
+        _mana = calculate_mana(archetype, int(_r_stats.get("INT", 10)), _r_level)
+        rebuilt["current_hp"] = _hp
+        rebuilt["max_hp"] = _hp
+        rebuilt["current_mana"] = _mana
+        rebuilt["max_mana"] = _mana
+        rebuilt["stat_modifiers"] = {
+            k: (int(_r_stats.get(k, 10)) - 10) // 2
+            for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+        }
+        rebuilt["defense"] = {"base": 10 + rebuilt["stat_modifiers"]["DEX"]}
 
     if req.identity_overrides is not None:
         _apply_identity_overrides(rebuilt, req.identity_overrides)

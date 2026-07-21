@@ -29,6 +29,16 @@ export const ARCHETYPE_BONUS: Record<Archetype, Partial<Record<StatKey, number>>
   rogue: { DEX: 2, LCK: 1 },
 };
 
+// #1520 — lustro backendu (`actor_stats.RACIAL_STAT_MODS`). Kreator musi odjąć
+// je od statów z serwera, żeby odzyskać czyste rzuty: bez tego ujemny mod
+// (elf CON −1) spychał bazę pod WIZARD_STAT_MIN, clamp ją podbijał i finalize
+// odrzucał redystrybucję ("expected 88; got 89").
+export const RACE_STAT_MODS: Record<Race, Partial<Record<StatKey, number>>> = {
+  human: {},
+  dwarf: { CON: 2, STR: 1, CHA: -1, DEX: -1 },
+  elf: { DEX: 2, WIS: 1, CON: -1 },
+};
+
 export const STAT_META: Record<StatKey, { name: string; desc: string }> = {
   STR: { name: "Siła", desc: "obrażenia w zwarciu, udźwig" },
   DEX: { name: "Zręczność", desc: "inicjatywa, unik, broń dystansowa" },

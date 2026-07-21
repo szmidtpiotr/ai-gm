@@ -36,6 +36,7 @@ import {
   ALL_SKILL_ROWS,
   ARCHETYPE_BONUS,
   RACE_BLOCKED_ARCHETYPES,
+  RACE_STAT_MODS,
   RANK_LABEL,
   STAT_KEYS,
   STAT_META,
@@ -178,7 +179,10 @@ export default function CreateCharacter() {
   }
 
   const bonus = ARCHETYPE_BONUS[archetype];
-  const eff = (k: StatKey) => statBases[k] + (bonus[k] || 0);
+  // #1520 — staty z serwera = rzuty + bonus klasy + modyfikatory rasy.
+  // Bazy trzymamy czyste (same rzuty), a klasa i rasa wracają przy wyświetlaniu.
+  const raceMod = RACE_STAT_MODS[race] ?? {};
+  const eff = (k: StatKey) => statBases[k] + (bonus[k] || 0) + (raceMod[k] || 0);
 
   function effStats(): Record<StatKey, number> {
     return Object.fromEntries(STAT_KEYS.map((k) => [k, eff(k)])) as Record<StatKey, number>;
@@ -241,7 +245,7 @@ export default function CreateCharacter() {
     const bases = {} as Record<StatKey, number>;
     for (const k of STAT_KEYS) {
       const def = k === "LCK" ? 8 : 10;
-      const b = (bonus[k] || 0);
+      const b = (bonus[k] || 0) + (raceMod[k] || 0);
       bases[k] = Math.max(WIZARD_STAT_MIN, (Number(stored[k] ?? def)) - b);
     }
     setStatBases(bases);
@@ -375,6 +379,7 @@ export default function CreateCharacter() {
             archetype={archetype}
             statBases={statBases}
             bonus={bonus}
+            raceMod={raceMod}
             pool={pool}
             eff={effStats()}
             onAdjust={(k, dir) => {
@@ -657,6 +662,7 @@ function StepStats({
   archetype,
   statBases,
   bonus,
+  raceMod,
   pool,
   eff,
   onAdjust,
@@ -665,6 +671,7 @@ function StepStats({
   archetype: Archetype;
   statBases: Record<StatKey, number>;
   bonus: Partial<Record<StatKey, number>>;
+  raceMod: Partial<Record<StatKey, number>>;
   pool: number;
   eff: Record<StatKey, number>;
   onAdjust: (k: StatKey, dir: number) => void;
@@ -673,8 +680,13 @@ function StepStats({
   const hp = calcHp(archetype, eff.CON);
   const mana = calcMana(archetype, eff.INT);
   const init = statMod(eff.DEX);
+  const fmtMod = (v: number) => `${v > 0 ? "+" : ""}${v}`;
   const bonusStr = Object.entries(bonus)
     .map(([k, v]) => `+${v} ${k}`)
+    .join(" · ");
+  const raceStr = Object.entries(raceMod)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${fmtMod(v as number)} ${k}`)
     .join(" · ");
 
   return (
@@ -689,7 +701,8 @@ function StepStats({
       </div>
       {bonusStr && (
         <p className="-mt-2 mb-3 text-center font-ui text-micro text-text-3">
-          Bonus klasy {bonusStr} doliczony automatycznie
+          Bonus klasy {bonusStr}
+          {raceStr ? <> · rasa {raceStr}</> : null} doliczony automatycznie
         </p>
       )}
 
