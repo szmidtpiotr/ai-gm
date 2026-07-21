@@ -32,7 +32,7 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
   // Server-state per panel (leniwie via enabled — pobiera tylko potrzebny panel).
   const inventory = useInventory(panel === "inventory" ? characterId : undefined);
   const spells = useSpells(panel === "spells" ? characterId : undefined);
-  const catalog = useSpellCatalog(panel === "spells");
+  const catalog = useSpellCatalog(panel === "spells", characterId);
   const reputation = useReputation(panel === "reputation" ? characterId : undefined);
   const equip = useEquipItem(characterId);
   // #1375 — zakładka Receptury widoczna dopiero po nauczeniu pierwszej receptury.

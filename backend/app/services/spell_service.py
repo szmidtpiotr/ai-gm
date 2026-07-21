@@ -120,18 +120,39 @@ def get_spell(spell_key: str) -> dict | None:
         conn.close()
 
 
-def get_spell_catalog() -> list[dict]:
+def race_can_learn(race: str | None, race_lock: str | None) -> bool:
+    """#1510 — jedno źródło reguły „czy ta rasa może uczyć się tego czaru".
+
+    ``race_lock`` = CSV ras dopuszczonych do nauki. Pusty/NULL = legacy pula
+    ludzka (migracja `_backfill_spell_race_lock` zapisuje ją jawnie jako
+    "human", ale stare bazy mogą jeszcze mieć NULL). Nieznana rasa → "human".
+    Lustro w kliencie: `frontend/front-v2/src/lib/spells.ts::canRaceLearnSpell`.
+    """
+    r = str(race or "").strip().lower() or "human"
+    raw = str(race_lock or "").strip().lower()
+    allowed = [x.strip() for x in raw.split(",") if x.strip()] or ["human"]
+    return r in allowed
+
+
+def get_spell_catalog(race: str | None = None) -> list[dict]:
     """#1170 — Public catalog of all active spells (for the Scholar level-up modal).
 
     Returns every learnable spell ordered by tier; each row carries at least
     ``key``, ``label`` and ``description`` (the fields the level-up UI needs).
+
+    #1510: z ``race`` katalog jest odsiany po ``race_lock`` po stronie backendu —
+    elf nie dostaje ludzkich arkanów ani Rdzeń-magii, i vice versa. Bez ``race``
+    zwraca całość (admin / kompatybilność wsteczna).
     """
     conn = _get_db()
     try:
         rows = conn.execute(
             "SELECT * FROM game_config_spells WHERE is_active = 1 ORDER BY tier, key"
         ).fetchall()
-        return [dict(r) for r in rows]
+        items = [dict(r) for r in rows]
+        if race:
+            items = [sp for sp in items if race_can_learn(race, sp.get("race_lock"))]
+        return items
     finally:
         conn.close()
 
@@ -668,7 +689,7 @@ def learn_spell(character_id: int, spell_key: str, conn=None) -> dict:
             pass
         raw_lock = str(spell_race_lock or "").strip().lower()
         allowed_races = [r.strip() for r in raw_lock.split(",") if r.strip()] or ["human"]
-        if char_race not in allowed_races:
+        if not race_can_learn(char_race, spell_race_lock):
             if raw_lock:
                 pretty = " / ".join(allowed_races)
                 raise ValueError(

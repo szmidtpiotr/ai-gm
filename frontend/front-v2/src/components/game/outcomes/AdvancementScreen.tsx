@@ -273,7 +273,7 @@ function MagicTab({
   onUpgrade: (spellKey: string) => void;
 }) {
   const known = useSpells(characterId);
-  const catalog = useSpellCatalog(true);
+  const catalog = useSpellCatalog(true, characterId);
   if (known.isLoading || catalog.isLoading)
     return <p className="py-8 text-center font-ui text-body text-text-3">Wczytywanie…</p>;
 

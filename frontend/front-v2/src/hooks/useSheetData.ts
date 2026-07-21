@@ -56,13 +56,19 @@ export function useSpells(characterId: number | undefined) {
   });
 }
 
-/** GET /spells → pełny katalog (do pokazania zablokowanych obok znanych). */
-export function useSpellCatalog(enabled: boolean) {
+/** GET /spells → katalog (do pokazania zablokowanych obok znanych).
+ *  #1510 — z `characterId` backend odsiewa czary spoza szkoły rasy bohatera
+ *  (ludzkie arkana / Rdzeń-magia krasnoluda / szkoła Stroiciela elfa). Klient
+ *  i tak filtruje `canRaceLearnSpell` — to druga linia obrony, nie duplikat. */
+export function useSpellCatalog(enabled: boolean, characterId?: number) {
   return useQuery({
-    queryKey: ["spell-catalog"],
+    queryKey: ["spell-catalog", characterId ?? null],
     enabled,
     staleTime: 10 * 60_000, // config, rzadko się zmienia
-    queryFn: () => apiFetch<{ spells: SpellCatalogEntry[] }>(`/spells`),
+    queryFn: () =>
+      apiFetch<{ spells: SpellCatalogEntry[] }>(
+        characterId ? `/spells?character_id=${characterId}` : `/spells`,
+      ),
     select: (d) => d.spells ?? [],
   });
 }

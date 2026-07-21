@@ -36,13 +36,14 @@ export function spellTypeLabel(spellType: string): string {
   return SPELL_TYPE_PL[spellType] ?? spellType;
 }
 
-// #975 R6 / #1373 — lustro backendowej reguły `spell_service.learn_spell`.
+// #975 R6 / #1373 / #1474 / #1510 — lustro backendu (`spell_service.race_can_learn`).
 // `race_lock` = lista ras dopuszczonych do nauki, rozdzielona przecinkami
-// ("human", "dwarf", "human,dwarf"). Bohater widzi/uczy się czaru wtedy i tylko
-// wtedy, gdy jego rasa jest na liście.
+// ("human", "dwarf", "elf", "human,dwarf"). Bohater widzi/uczy się czaru wtedy
+// i tylko wtedy, gdy jego rasa jest na liście.
 //   • pusty/NULL race_lock = legacy „pula ludzka" → traktowany jak ["human"]
-//     (krasnolud wykluczony — używa wyłącznie Rdzeń-magii),
-//   • "dwarf" = tylko krasnolud, "human,dwarf" = obie rasy.
+//     (od #1510 migracja zapisuje ją jawnie; stare bazy mogą mieć NULL),
+//   • "dwarf" = tylko krasnolud (Rdzeń-magia), "elf" = tylko elf (szkoła
+//     Stroiciela), "human,dwarf" = obie rasy.
 // Nieznana rasa traktowana jak „human" (domyślna wartość backendu).
 export function raceLockList(raceLock: string | undefined | null): string[] {
   const raw = (raceLock ?? "").trim().toLowerCase();

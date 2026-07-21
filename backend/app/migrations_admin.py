@@ -6157,6 +6157,29 @@ def _seed_elf_spells(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _backfill_spell_race_lock(conn: sqlite3.Connection) -> None:
+    """#1510 — każdy czar ma JAWNY race_lock; koniec z NULL = „domyślnie ludzie".
+
+    Kanon (Księga Zasad, rozdz. Rasy): jedno źródło mocy (Rdzeń), trzy techniki.
+    Człowiek czerpie (arkana), krasnolud wydziera (Rdzeń-magia), elf stroi (szkoła
+    Stroiciela) — i żadna z tych szkół nie uczy się czarów pozostałych. Puste pole
+    znaczyło dotąd to samo co "human", ale tylko implicite: admin widział pusty
+    zestaw checkboxów, a zapis formularza mógł je zamienić w cokolwiek. Tu robimy
+    to jawnie, raz.
+
+    Czary rasowe (`dwarf` / `elf`) oraz jawnie współdzielone (`dwarf,human`)
+    zostają nietknięte — pulę wspólną Piotr wypełnia ręcznie w adminie.
+    """
+    try:
+        conn.execute(
+            "UPDATE game_config_spells SET race_lock = 'human' "
+            "WHERE race_lock IS NULL OR TRIM(race_lock) = ''"
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def _fix_1353_spell_metadata(conn: sqlite3.Connection) -> None:
     """#1353 WALKA-T3 — poprawa metadanych czarów na ISTNIEJĄCYCH bazach.
 
@@ -7947,6 +7970,7 @@ def run_admin_migrations() -> None:
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
         _seed_elf_spells(conn)  # #1474 — szkoła Stroiciela
+        _backfill_spell_race_lock(conn)  # #1510 — jawny race_lock na każdym czarze
         _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)
         _fix_1353_spell_metadata(conn)  # #1353 WALKA-T3 — rdzen_shield→defense + opisy
         _fix_1460_rdzen_effects(conn)  # #1460 — effect_json + attack_aoe + aoe (efekty specjalne Rdzenia)

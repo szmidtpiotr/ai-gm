@@ -4065,12 +4065,17 @@ _SPELL_COLUMNS = [
     "effect_stat", "effect_type", "effect_duration", "target_zone", "aoe",
     "description", "rank2_json", "rank3_json", "is_active", "race_lock",
 ]
-_SPELL_TYPES = {"attack", "heal", "defense", "effect", "attack_aoe"}
+# #1510: pełna lista typów z DB. Wcześniej whitelist miała tylko 5 pozycji, więc
+# zapis czaru narracyjnego / reakcji / przyzwania / AoE-efektu kończył się 422.
+_SPELL_TYPES = {
+    "attack", "attack_aoe", "heal", "defense", "effect", "effect_aoe",
+    "narrative", "reaction", "summon",
+}
 _SPELL_ZONES = {"any", "self", "engaged", "ranged"}
-# race_lock (#1373): lista ras (CSV) dopuszczonych do nauki czaru.
-#   NULL/"" = legacy pula ludzka (krasnolud wykluczony — spell_service.learn_spell),
-#   "human" / "dwarf" / "human,dwarf" = jawna lista ras.
-_SPELL_RACES = {"human", "dwarf"}
+# race_lock (#1373 / #1474 / #1510): lista ras (CSV) dopuszczonych do nauki czaru.
+#   NULL/"" = legacy pula ludzka (backfill #1510 zapisuje ją jawnie jako "human"),
+#   "human" / "dwarf" / "elf" / CSV = jawna lista ras.
+_SPELL_RACES = {"human", "dwarf", "elf"}
 
 
 def _normalize_race_lock(value) -> str | None:

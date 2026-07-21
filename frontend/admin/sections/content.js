@@ -1005,10 +1005,17 @@ function _raceLockList(rl) {
   const list = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : ['human'];
   return list.length ? list : ['human'];
 }
+// #1510 — jedno źródło etykiet ras czaru (badge + checkboxy w modalu).
+const SPELL_RACES = [
+  ['human', 'Ludzie',       'badge-slate'],
+  ['dwarf', '⛏ Krasnolud',  'badge-amber'],
+  ['elf',   '🍃 Elf',        'badge-green'],
+];
 function _raceLockBadges(rl) {
-  return _raceLockList(rl).map(r => r === 'dwarf'
-    ? '<span class="badge badge-amber">⛏ krasnolud</span>'
-    : '<span class="badge badge-slate">ludzie</span>').join(' ');
+  const list = _raceLockList(rl);
+  return SPELL_RACES.filter(([k]) => list.includes(k))
+    .map(([, lbl, cls]) => `<span class="badge ${cls}">${lbl}</span>`).join(' ')
+    || '<span class="badge badge-slate">ludzie</span>';
 }
 
 async function _loadSpells() {
@@ -1183,6 +1190,7 @@ function _openSpellForm(prefill, onSubmit) {
   const sopt = (v,lbl) => `<option value="${v}" ${stype===v?'selected':''}>${lbl}</option>`;
   const zopt = (v,lbl) => `<option value="${v}" ${tzone===v?'selected':''}>${lbl}</option>`;
   const rchk = (v,lbl) => `<label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" name="race_${v}" ${rlist.includes(v)?'checked':''}> ${lbl}</label>`;
+  const raceChecks = SPELL_RACES.map(([k,lbl]) => rchk(k,lbl)).join('');
   const STATS = ['STR','DEX','CON','INT','WIS','CHA'];
   overlay.innerHTML = `<div class="modal-box" style="width:520px">
     <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj czar' : 'Nowy czar'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
@@ -1190,11 +1198,11 @@ function _openSpellForm(prefill, onSubmit) {
       <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. magic_bolt" ${p.key?'readonly':''}></div>
       <div class="form-row"><label class="form-label">Nazwa *</label><input class="form-input" name="label" value="${_esc(p.label||'')}"></div>
       <div class="grid-2col" style="gap:10px">
-        <div class="form-row"><label class="form-label">Typ czaru *</label><select class="form-input" name="spell_type">${sopt('attack','Atak (1 cel)')}${sopt('attack_aoe','Atak AoE')}${sopt('heal','Leczenie')}${sopt('defense','Obrona / tarcza')}${sopt('effect','Efekt / kondycja')}</select></div>
+        <div class="form-row"><label class="form-label">Typ czaru *</label><select class="form-input" name="spell_type">${sopt('attack','Atak (1 cel)')}${sopt('attack_aoe','Atak AoE')}${sopt('heal','Leczenie')}${sopt('defense','Obrona / tarcza')}${sopt('effect','Efekt / kondycja')}${sopt('effect_aoe','Efekt AoE')}${sopt('narrative','Użytkowy (narracyjny)')}${sopt('reaction','Reakcja')}${sopt('summon','Przyzwanie')}</select></div>
         <div class="form-row"><label class="form-label">Tier (1-5)</label><input class="form-input" name="tier" type="number" value="${p.tier??1}" min="1" max="5"></div>
         <div class="form-row"><label class="form-label">Koszt many (1-10)</label><input class="form-input" name="mana_cost" type="number" value="${p.mana_cost??1}" min="0" max="10"></div>
         <div class="form-row"><label class="form-label">Strefa celu</label><select class="form-input" name="target_zone">${zopt('any','Dowolna')}${zopt('self','Tylko siebie')}${zopt('engaged','Zwarcie')}${zopt('ranged','Dystans')}</select></div>
-        <div class="form-row"><label class="form-label">Rasy (kto może się uczyć)</label><div style="display:flex;gap:16px;padding-top:6px">${rchk('human','Ludzie')}${rchk('dwarf','⛏ Krasnolud')}</div></div>
+        <div class="form-row"><label class="form-label">Rasy (kto może się uczyć)</label><div style="display:flex;gap:14px;padding-top:6px;flex-wrap:wrap">${raceChecks}</div></div>
         <div class="form-row"><label class="form-label">Kość obrażeń</label><input class="form-input" name="damage_die" value="${_esc(p.damage_die||'')}" placeholder="np. 2d6"></div>
         <div class="form-row"><label class="form-label">Kość leczenia</label><input class="form-input" name="heal_die" value="${_esc(p.heal_die||'')}" placeholder="np. 2d6"></div>
         <div class="form-row"><label class="form-label">Stat obrony celu</label><select class="form-input" name="effect_stat"><option value="" ${!p.effect_stat?'selected':''}>—</option>${STATS.map(s=>`<option value="${s}" ${p.effect_stat===s?'selected':''}>${s}</option>`).join('')}</select></div>
@@ -1237,7 +1245,7 @@ function _openSpellForm(prefill, onSubmit) {
       rank2_json: val('rank2_json')||null,
       rank3_json: val('rank3_json')||null,
       description: val('description')||null,
-      race_lock: ['human','dwarf'].filter(r => overlay.querySelector(`[name="race_${r}"]`).checked).join(',') || null,
+      race_lock: SPELL_RACES.map(([k]) => k).filter(r => overlay.querySelector(`[name="race_${r}"]`).checked).join(',') || null,
     };
     overlay.remove();
     await onSubmit(data);

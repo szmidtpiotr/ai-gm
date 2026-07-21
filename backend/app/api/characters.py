@@ -3549,15 +3549,29 @@ def get_character_spells_public(character_id: int):
 
 
 @router.get("/spells")
-def get_spell_catalog_public():
+def get_spell_catalog_public(character_id: int | None = None):
     """#1170 — Public spell catalog for the Scholar level-up modal.
 
-    The player UI (game.js) merges this against a character's known spells to
-    render learn/upgrade rows. Previously the frontend hit a non-existent
-    /api/spells (404 swallowed → empty list); this is the missing endpoint.
+    The player UI merges this against a character's known spells to render
+    learn/upgrade rows.
+
+    #1510 — z `?character_id=` katalog jest odsiany po rasie bohatera
+    (`game_config_spells.race_lock`), tak samo jak bramka w `learn_spell`.
+    Bez parametru zwraca pełny katalog (kompatybilność wsteczna); klient nadal
+    filtruje `canRaceLearnSpell` jako druga linia obrony.
     """
     from app.services.spell_service import get_spell_catalog
-    return {"spells": get_spell_catalog()}
+    race = None
+    if character_id:
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT race FROM characters WHERE id = ?", (character_id,)
+            ).fetchone()
+            race = (row[0] if row else None) or "human"
+        finally:
+            conn.close()
+    return {"spells": get_spell_catalog(race)}
 
 
 # ─── Crafter NPC endpoints (#466 F6) ─────────────────────────────────────────

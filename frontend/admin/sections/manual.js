@@ -362,6 +362,13 @@ zmieniają się wraz z rasą: „Łotrzyk" czyta się u elfa jako <b>Zwiadowca</
 <p>Czary elfa to osobna pula <b>szkoły Stroiciela</b> (kontrola, ochrona, iluzje), zamknięta
 polem <code>race_lock = elf</code> w <b>Zawartość → Czary</b>. Elf nie nauczy się czarów
 ludzkich ani krasnoludzkich i odwrotnie — tak samo jak przy Rdzeń-magii.</p>
+<p><b>Pola „Rasy (kto może się uczyć)" w modalu czaru (#1510):</b> trzy checkboxy —
+Ludzie / ⛏ Krasnolud / 🍃 Elf. Każdy z 50 czarów ma teraz wpis <b>jawnie</b>: 37 ludzkich,
+6 krasnoludzkich (Rdzeń), 6 elfich (Stroiciel), 1 wspólny (Rana Uleczona = krasnolud + człowiek).
+Zaznaczenie kilku ras robi z czaru pulę wspólną. Puste zaznaczenie = zapis <code>NULL</code>,
+który silnik nadal czyta jako „tylko ludzie" — lepiej zaznaczyć świadomie.
+Zmiana działa od razu: kreator, zakładka <i>Czary</i>, modal awansu przy odpoczynku i lista
+czarów w walce biorą tę samą listę (backend odsiewa katalog po rasie bohatera).</p>
 <p><b>Uwaga o starcie:</b> Czarnobór nie ma jeszcze zaseedowanej mapy, więc kampania elfa
 startuje na razie tam, gdzie kampania człowieka (Kresy). Kotwica startowa w krainie ojczystej
 dojdzie razem z wdrożeniem Czarnoboru (sesja CB-8). Sama rasa jest już zabramkowana statusem
