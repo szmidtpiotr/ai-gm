@@ -55,7 +55,37 @@ wybierasz już na miejscu.</p>`,
   {
     ico: '⊕', label: 'Świat',
     chapters: [
-      { id: 'swiat', title: 'NPC, wrogowie i zasady świata', body: STUB },
+      {
+        id: 'swiat',
+        title: 'Obsada lokacji — kto gdzie stoi',
+        body: `
+<p>Przypisanie „NPC ↔ lokacja" ma <b>jedno</b> źródło prawdy i jedno wejście: przycisk <b>👤</b>
+przy lokacji (zakładka <b>Mapa → Lokacje</b>) albo pole lokacji w karcie NPC. Lista NPC widoczna
+na karcie lokacji to tylko <b>kopia</b> tego przypisania, odświeżana po każdym zapisie — nie
+edytuj jej „na boku", bo i tak zostanie nadpisana.</p>
+
+<h4>Zasada: gospodarz siedzi w podlokacji</h4>
+<p>Osada z podlokacjami jest <b>hubem</b> — placem, przez który się przechodzi. Karczmarz nie stoi
+„w Brzezinie", tylko „w karczmie w Brzezinie". Dlatego:</p>
+<ul>
+  <li>przypisanie NPC do makro-osady, która ma podlokacje, jest <b>odrzucane</b> — panel powie,
+      że to hub;</li>
+  <li>szukaj właściwego wnętrza (karczma, kuźnia, kram, świątynia) i obsadź je tam.</li>
+</ul>
+<p>Dzięki temu gracz wchodzący do karczmy zastaje karczmarkę, a nie „wszystkich NPC osady naraz",
+a sklep otwiera się w tym wnętrzu, w którym faktycznie ktoś handluje.</p>
+
+<h4>Puste wnętrza widać od ręki</h4>
+<p>Lokacja usługowa bez ani jednego NPC to martwe miejsce — gracz wchodzi i nie ma z kim
+rozmawiać. Takie wnętrza wypisuje <b>Mapa → 🩺 Kontrola świata</b> (reguła „Usługa bez
+gospodarza"), a obsadzić je możesz nie ruszając się z tej listy: przycisk
+<b>👤 Obsadź gospodarza</b> pokazuje NPC, którzy nigdzie nie stoją, albo pozwala utworzyć nowego.</p>
+
+<h4>NPC, którego lokacja zniknęła</h4>
+<p>Gdy skasujesz lokację, przypisania do niej stają się sierotami — NPC „stoi" w miejscu,
+którego nie ma. To też pokazuje Kontrola świata (reguła „Sierota obsady") i tam naprawia się
+jednym kliknięciem, pojedynczo albo całą grupą.</p>`,
+      },
       {
         id: 'sol-rdzen',
         title: 'Sól i „istoty Rdzenia" (klasa wroga)',
@@ -169,6 +199,43 @@ na plotkę, proporcja prawda/fałsz i DC wyczucia to wartości startowe — będ
     ico: '🗺', label: 'Mapa',
     chapters: [
       {
+        id: 'karta-heks-mapa',
+        title: 'Karta, heks i mapa lokalna — gdzie leży prawda',
+        body: `
+<p>Świat stoi na trzech rzeczach i warto je rozróżniać, bo mylenie ich rodzi większość
+nieporozumień:</p>
+<ul>
+  <li><b>Karta lokacji</b> — wpis w katalogu (zakładka <b>Lokacje</b>). Mówi CZYM jest miejsce:
+      nazwa, opis, typ, kraina, podtyp. <b>Nie mówi, gdzie leży.</b></li>
+  <li><b>Heks mapy świata</b> — pole na mapie (zakładka <b>Mapa</b>). To ono decyduje o geografii:
+      heks może wskazać jedną lokację i powiedzieć „tu stoi Vilnograd".</li>
+  <li><b>Mapa lokalna</b> — mini-siatka <i>wewnątrz</i> osady. Karczma i kuźnia jednego miasteczka
+      leżą na własnej małej mapce, a nie na mapie świata. Powstaje, gdy osada ma co najmniej
+      dwie podlokacje.</li>
+</ul>
+<h4>Zasada nadrzędna: heks jest prawdą</h4>
+<p>Jeśli chcesz wiedzieć, gdzie leży dana lokacja — <b>pytasz mapy, nie karty</b>. Karta ma
+zapisane współrzędne, ale to tylko kopia dla wygody, odświeżana z mapy. Powód jest prozaiczny:
+przy audycie okazało się, że współrzędne na kartach były zepsute (kilkanaście lokacji „stało"
+w punkcie zerowym), a mapa była czysta. Do tego na jednym heksie z definicji stoi jedno miejsce,
+więc konflikt „dwa miasta w jednym punkcie" jest niemożliwy.</p>
+<p><b>Praktyczny skutek:</b> osadzanie i zdejmowanie lokacji robi się <b>w zakładce Mapa</b>
+(albo przyciskiem <b>⚓ Osadź</b> w Floating). Ręczne wpisanie współrzędnych gdzie indziej nie
+przetrwa — przy najbliższym starcie serwera świat wróci do tego, co mówi mapa, a lokacja
+zostanie odpięta.</p>
+<h4>Floating to nie błąd</h4>
+<p>Z ponad dwustu aktywnych kart tylko około czterdziestu stoi na mapie świata i to jest
+<b>normalne</b>, bo „floating" oznacza dwie zupełnie różne rzeczy:</p>
+<ol>
+  <li><b>Podlokacje</b> — z definicji nie stoją na mapie świata (Wielka Izba nie jest osobnym
+      punktem na mapie Kresów, tylko wnętrzem karczmy). To większość floatingu.</li>
+  <li><b>Zapas miejsc</b> — gotowe lokacje czekające na osadzenie. Silnik może je automatycznie
+      postawić na pasującym pustym heksie o odpowiednim terenie. To magazyn treści, nie śmieci.</li>
+</ol>
+<p>Floating lokacja <b>nadal jest grywalna</b> — narrator może o niej opowiedzieć, gracz może
+w niej być. Traci tylko znacznik na mapie świata.</p>`,
+      },
+      {
         id: 'kontrola-swiata',
         title: '🩺 Kontrola świata (lampka zamiast cichej samonaprawy)',
         body: `
@@ -235,37 +302,82 @@ start backendu (⚙️), a osobno to, co kliknąłeś sam (👤). Licznik proble
 przy pozycji <b>Mapa</b> w menu bocznym.</p>`,
       },
       {
+        id: 'konwencja-nazw',
+        title: 'Jak nazywamy miejsca i ludzi (konwencja świata)',
+        body: `
+<p>Świat ma ustaloną konwencję nazw i <b>zna ją teraz sam panel</b> — każdy generator AI
+(Kreator, Kuźnia, podlokacje osady, plan MG, spotkania, plotki, komnaty lochów, podpowiadacz
+gospodarza) dostaje ją w instrukcji, zanim cokolwiek zaproponuje.</p>
+
+<h4>Reguła ogólna</h4>
+<p><b>Mix słowiańsko-germański.</b> Trzy tradycje współistnieją, bo pogranicze to uzasadnia:
+słowiańskie fantasy (Vilnograd, Czarnobór), germańskie dark (Strzegwacht, Rabenstein)
+i hybrydy (Czarnstein, Wilczburg). Zachód i dawne Imperium ciągną w germańskie, głębokie
+Kresy w słowiańskie, pas graniczny miesza.</p>
+
+<h4>Styl per kraina</h4>
+<table class="data-table"><thead><tr><th>Kraina</th><th>Ludzie</th><th>Miejsca</th></tr></thead>
+<tbody>
+<tr><td><b>Kresy</b></td><td>imię archaiczne + przydomek od rzemiosła (Hanka Rogowa)</td><td>mix, hybrydy (Wilczburg)</td></tr>
+<tr><td><b>Siwe Granie</b></td><td>krasnoludy: nordyckie imię + polski przydomek (Balrik Siwotarczy)</td><td>hołdy, sztolnie, kuźnie (Kamienny Gród, Frosthold)</td></tr>
+<tr><td><b>Czarnobór</b></td><td>elfy: miękko i śpiewnie (Nimriel, Sylvar); ludzie na skraju — germańsko</td><td>poetyckie tłumaczenia elfich nazw (Szept Koron)</td></tr>
+<tr><td><b>Martwe Pustkowia</b></td><td>Piętnowani: brzmienie arabskie (Raszid, Lejla)</td><td>solne i porzucone (Solny Próg, Obóz Gorączki)</td></tr>
+<tr><td><b>Koronne Niziny</b></td><td>dwór z tytułem (Kanclerz Dobrogost); półświatek — pseudonim-urząd („Nocny Burmistrz")</td><td>miasta, rogatki, klasztory (Klasztor Iskry)</td></tr>
+<tr><td><b>Wybrzeże Łez</b></td><td>wyspiarze: krótko i samogłoskowo (Taio, Nakea)</td><td>porty i zatoki (Zatoka Topielców)</td></tr>
+</tbody></table>
+
+<h4>Czego generator nie zaproponuje</h4>
+<ul>
+  <li><b>Współczesnych polskich imion i nazwisk</b> — „Agnieszka Kruk" w karczmie na Kresach
+      psuje immersję mocniej niż niejeden bug.</li>
+  <li><b>Realnych polskich nazw wsi</b> — końcówki <code>-owice</code>, <code>-anka</code>,
+      <code>-ino</code>, <code>-ówka</code>, <code>-yce</code>. Pytanie kontrolne: „czy to mogłaby
+      być prawdziwa wieś w Polsce?".</li>
+  <li><b>Świętych z naszego świata</b> — świat ma własną wiarę: Światło, Klasztor Iskry,
+      Biała Bogini, kulty Rdzenia. Żadnego św. Floriana.</li>
+  <li><b>Imion, które już istnieją</b> — także tych z kanonu krain jeszcze nieotwartych.</li>
+</ul>
+<p>Gdy model mimo wszystko złamie regułę, panel prosi go o drugie podejście i dopiero potem
+pokazuje wynik. Ostatnie słowo zawsze należy do Ciebie — propozycja trafia do formularza,
+nie do bazy.</p>`,
+      },
+      {
         id: 'cykl-lokacji',
         title: 'Skąd biorą się lokacje',
         body: `
-<p>Lokacje w bazie powstają czterema drogami. Trzy z nich to twórczość AI — takie lokacje
-zawsze trafiają do kolejki <b>Mapa → Do zatwierdzenia</b>, gdzie decydujesz o ich losie.</p>
+<p>Do świata puka <b>wiele</b> mechanizmów, ale wszystkie wchodzą <b>jednymi drzwiami</b> —
+jedną funkcją, która stempluje każdą nową kartę tak samo. Dzięki temu nie ma już lokacji
+„w limbo": takich, które liczą się do kolejki, ale nie widać ich na liście, albo takich,
+które silnik świata ignoruje, bo ktoś zapomniał przestawić jeden przełącznik.</p>
 
-<h4>1. Narrator wymyśla miejsce w trakcie gry</h4>
-<p>Gracz gra, narrator opisuje scenę i „powołuje do życia" nowe miejsce.
-<i>Przykład: gracz pisze „rozglądam się po wiosce", narrator odpowiada „na skraju wioski
-dostrzegasz kuźnię starego Bartha" — i w tej chwili w bazie powstaje lokacja „Kuźnia Bartha".</i>
-Takie wpisy mają w kolumnie autora <code>gm_runtime</code>.</p>
+<h4>Kolumna „kto stworzył" — sześć legalnych wartości</h4>
+<table class="data-table"><thead><tr><th>Stempel</th><th>Kto puka</th><th>Gdzie ląduje</th></tr></thead>
+<tbody>
+<tr><td><code>seed</code></td><td>kanon z repozytorium i skrypty seedujące krainy</td><td>od razu w świecie — <b>to jest kanon</b></td></tr>
+<tr><td><code>admin_manual</code></td><td>Ty, przyciskiem <b>+ Dodaj lokację</b></td><td>od razu w świecie, bez kolejki</td></tr>
+<tr><td><code>admin_kreator</code></td><td>Kreator AI (Smart Entry)</td><td>od razu w świecie</td></tr>
+<tr><td><code>forge</code></td><td>Kuźnia — szablony przygód</td><td><b>Do zatwierdzenia</b></td></tr>
+<tr><td><code>gm_runtime</code></td><td>narrator w trakcie gry: wymyślone miejsce, „idę do…", obóz, scena otwarcia</td><td><b>Do zatwierdzenia</b></td></tr>
+<tr><td><code>auto_generated</code></td><td>generatory osad: hub osady i jej podlokacje</td><td>od razu w świecie</td></tr>
+</tbody></table>
+<p>Wartość spoza tej szóstki jest <b>niemożliwa</b> do zapisania — a gdyby jakimś cudem
+wpadła do bazy, pokaże ją <b>🩺 Kontrola świata</b> jako „Nielegalna flaga".</p>
 
-<h4>2. Gracz idzie w miejsce, którego jeszcze nie ma</h4>
-<p>Plan przygody wspomina jakieś miejsce (np. „chata zielarki"), ale nikt go nie założył.
-Gdy gracz tam rusza i narrator potwierdza, system sam zakłada lokację — i gracz
-<b>od razu do niej wchodzi</b>, zanim ją zobaczysz w kolejce (patrz rozdział
-„Jak narrator (AI) korzysta z lokacji").</p>
+<h4>Co to zmienia w praktyce</h4>
+<ul>
+  <li><b>Rodzic zawsze w komplecie.</b> Podlokacja ma zapisanego rodzica dwoma polami naraz;
+      dawniej bywało zapisane tylko jedno i „idę do karczmy" trafiało w cudzą, luźną kartę.</li>
+  <li><b>Osadzanie tylko przez mapę.</b> Żaden mechanizm nie wpisuje już współrzędnych na skróty,
+      więc lokacje przestały „gubić" znacznik po restarcie serwera.</li>
+  <li><b>Powtórka nie robi kopii.</b> Ten sam generator uruchomiony dwa razy dostaje istniejącą
+      kartę zamiast tworzyć „Karczmę 2". Stąd duplikatów w świecie systematycznie ubywa.</li>
+</ul>
 
-<h4>3. Kuźnia — szablony przygód</h4>
-<p>Gdy w sekcji <b>Kuźnia</b> generujesz szablon przygody, wszystkie kluczowe miejsca z planu
-(osady, lochy, punkty fabularne) są od razu zakładane w bazie i czekają w
-<b>Do zatwierdzenia</b>. Autor: <code>forge</code>.</p>
-
-<h4>4. Start kampanii z szablonu</h4>
-<p>Przy uruchomieniu kampanii z szablonu system zakłada lokację startową i strukturę osady.
-Też trafiają do kolejki, ale <b>z jedną różnicą: od razu dostają hex na mapie</b>
-(gracz musi gdzieś zacząć), więc nie zobaczysz ich w <b>⚓ Floating</b>.</p>
-
-<h4>Lokacje zakładane ręcznie</h4>
-<p>To, co dodasz sam przyciskiem <b>+ Dodaj lokację</b>, NIE przechodzi przez kolejkę —
-od razu jest pełnoprawną częścią świata.</p>`,
+<h4>Lokacje od narratora — najważniejsza grupa do pilnowania</h4>
+<p>Gdy gracz pisze „rozglądam się po wiosce", a narrator odpowiada „na skraju dostrzegasz kuźnię
+starego Bartha" — w tej chwili powstaje karta. Gracz <b>od razu w niej gra</b>, a Ty widzisz ją
+w <b>Do zatwierdzenia</b>. Tam decydujesz, czy zostaje w świecie na stałe, czy była tylko tłem
+jednej sceny.</p>`,
       },
       {
         id: 'do-zatwierdzenia',
@@ -384,7 +496,30 @@ usunięta</b> przy scalaniu. Jeśli chcesz się jej pozbyć: wybierz ją jako za
 </ul>
 <p>Przy każdym wpisie przycisk <b>Usuń</b> — kasuje trwale. <b>↻ Odśwież</b> ponawia skan.</p>
 <p><b>Ważne:</b> nieaktywne lokacje nie są liczone jako duplikaty (nie ma ich w grze) —
-znajdziesz je wyłącznie w kuble <b>💤 Nieaktywne</b>.</p>`,
+znajdziesz je wyłącznie w kuble <b>💤 Nieaktywne</b>.</p>
+
+<h4>Dwa narzędzia, dwie role</h4>
+<p>Duplikaty pokazują się w <b>dwóch</b> miejscach i to nie jest pomyłka:</p>
+<ul>
+  <li><b>🧹 Duplikaty</b> (ta zakładka) — narzędzie porządkowe: grupuje kopie, scala je,
+      sprząta śmieci po testach i sieroty. Działa na całym świecie naraz.</li>
+  <li><b>🩺 Kontrola świata</b> — lampka: zgłasza pojedyncze pary „to wygląda jak ta sama
+      lokacja" razem z resztą rozjazdów, i pozwala rozstrzygnąć parę porównaniem kart
+      (<b>⚖ Porównaj i rozstrzygnij</b>) bez opuszczania listy.</li>
+</ul>
+
+<h4>Kiedy podobna nazwa NIE jest duplikatem</h4>
+<p>Kanon lubi <b>serie nazw</b>: Siwe Granie mają cztery opuszczone hołdy rodowe —
+„Frosthold — Wyssany Hołd", „Grauhold — Wyssany Hołd", „Silberhold…", „Kohlgrund…".
+To cztery różne miejsca, każde z własnym opisem i własnym heksem; wspólny jest tylko ogon
+nazwy. Dlatego lampka stosuje dwie zasady:</p>
+<ol>
+  <li><b>Obie karty stoją na różnych heksach ⇒ nigdy duplikat.</b> Dwa miejsca leżące fizycznie
+      gdzie indziej to dwa miejsca.</li>
+  <li>Przy wspólnym ogonie nazwy porównywany jest <b>człon wyróżniający</b> (Frosthold vs
+      Grauhold), a nie cała etykieta.</li>
+</ol>
+<p>W zakładce 🧹 Duplikaty ten sam efekt osiągasz ręcznie przyciskiem <b>🚫 Nie duplikat</b>.</p>`,
       },
       {
         id: 'dostepnosc-krain',
