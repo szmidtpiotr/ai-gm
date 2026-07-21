@@ -26,6 +26,7 @@ from typing import Any
 
 from app.migrations_admin import DB_PATH
 from app.services.shop_service import DWARF_SHOP_DISCOUNT
+from app.services import npc_placement_service
 
 # Afiks nadawany przez ulepszenie broni (musi istnieć w game_config_affixes; seedowany
 # w migracji _ensure_recipes_schema). Silnik walki sumuje jego damage_bonus.
@@ -306,8 +307,8 @@ def get_location_crafting(loc_ref: str | int, character_id: int | None = None) -
     """Przepisy dostępne u rzemieślników w danej lokacji.
 
     loc_ref: klucz LUB numeryczne id lokacji. Zbiera crafter_type wszystkich
-    NPC-rzemieślników przypisanych do lokacji (npc_keys + npc_locations +
-    location_npc_assignments), zwraca przepisy pasujących typów (availability='crafter').
+    NPC-rzemieślników obsadzonych w lokacji (#1524: kanon = location_npc_assignments),
+    zwraca przepisy pasujących typów (availability='crafter').
 
     #1375: gdy podano character_id, dokłada receptury lootowe ZNANE przez gracza —
     rzemieślnik wykona je jako usługę (koszt ×1.5, bez testu skilla).
@@ -316,49 +317,20 @@ def get_location_crafting(loc_ref: str | int, character_id: int | None = None) -
     try:
         ref = str(loc_ref).strip()
         loc = conn.execute(
-            "SELECT id, key, label, npc_keys FROM game_locations WHERE key = ? LIMIT 1",
+            "SELECT id, key, label FROM game_locations WHERE key = ? LIMIT 1",
             (ref,),
         ).fetchone()
         if not loc and ref.isdigit():
             loc = conn.execute(
-                "SELECT id, key, label, npc_keys FROM game_locations WHERE id = ? LIMIT 1",
+                "SELECT id, key, label FROM game_locations WHERE id = ? LIMIT 1",
                 (int(ref),),
             ).fetchone()
         if not loc:
             raise CraftError(404, f"Lokalizacja '{loc_ref}' nie istnieje.")
 
         loc_key = loc["key"]
-        # Klucze NPC z trzech źródeł przypisania.
-        npc_keys: set[str] = set()
-        try:
-            for k in json.loads(loc["npc_keys"] or "[]"):
-                if str(k or "").strip():
-                    npc_keys.add(str(k).strip())
-        except (json.JSONDecodeError, TypeError):
-            pass
-        for tbl, col in (("location_npc_assignments", "npc_key"),):
-            try:
-                for r in conn.execute(
-                    f"SELECT {col} AS k FROM {tbl} WHERE location_key = ? AND is_active = 1",
-                    (loc_key,),
-                ).fetchall():
-                    if str(r["k"] or "").strip():
-                        npc_keys.add(str(r["k"]).strip())
-            except sqlite3.OperationalError:
-                pass
-        try:
-            for r in conn.execute(
-                """
-                SELECT n.key AS k FROM npc_locations nl
-                JOIN npcs n ON n.id = nl.npc_id
-                WHERE nl.location_key = ?
-                """,
-                (loc_key,),
-            ).fetchall():
-                if str(r["k"] or "").strip():
-                    npc_keys.add(str(r["k"]).strip())
-        except sqlite3.OperationalError:
-            pass
+        # #1524: obsada lokacji ma jedno źródło prawdy — tabelę przypisań.
+        npc_keys: set[str] = set(npc_placement_service.npc_keys_for_location(conn, loc_key))
 
         # crafter_type z tych NPC.
         crafter_types: set[str] = set()

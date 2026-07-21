@@ -400,7 +400,7 @@ def build_npc_context_block(conn: sqlite3.Connection, campaign_id: int) -> str |
     """
     Build [NPC CONTEXT] block for LLM:
     - location-assigned NPC for current location
-    - global NPC (no rows in npc_locations)
+    - global NPC (no rows in location_npc_assignments — #1524)
     """
     from app.services.location_context_injector import get_session_id_for_campaign
 
@@ -427,11 +427,13 @@ def build_npc_context_block(conn: sqlite3.Connection, campaign_id: int) -> str |
             WHERE COALESCE(n.is_active, 1) = 1
               AND (
                 EXISTS (
-                    SELECT 1 FROM npc_locations nl
-                    WHERE nl.npc_id = n.id AND nl.location_key = ?
+                    SELECT 1 FROM location_npc_assignments a
+                    WHERE a.npc_key = n.key AND a.location_key = ?
+                      AND COALESCE(a.is_active, 1) = 1
                 )
                 OR NOT EXISTS (
-                    SELECT 1 FROM npc_locations nl2 WHERE nl2.npc_id = n.id
+                    SELECT 1 FROM location_npc_assignments a2
+                    WHERE a2.npc_key = n.key AND COALESCE(a2.is_active, 1) = 1
                 )
               )
             ORDER BY n.npc_type, n.label COLLATE NOCASE
@@ -445,7 +447,8 @@ def build_npc_context_block(conn: sqlite3.Connection, campaign_id: int) -> str |
             FROM npcs n
             WHERE COALESCE(n.is_active, 1) = 1
               AND NOT EXISTS (
-                SELECT 1 FROM npc_locations nl WHERE nl.npc_id = n.id
+                SELECT 1 FROM location_npc_assignments a
+                WHERE a.npc_key = n.key AND COALESCE(a.is_active, 1) = 1
               )
             ORDER BY n.npc_type, n.label COLLATE NOCASE
             """

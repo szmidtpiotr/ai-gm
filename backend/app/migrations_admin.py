@@ -5086,6 +5086,44 @@ def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
         logger.warning("u31_npc_locations_migration_failed", error=str(exc))
 
 
+def _issue1524_npc_binding_canon(conn: sqlite3.Connection) -> None:
+    """#1524 fala 1 — `location_npc_assignments` staje się jedynym źródłem prawdy.
+
+    Kolejność ma znaczenie: legacy jest już zbackfillowany wyżej
+    (`_migrate_npc_locations_to_assignments`), więc tutaj tylko sprzątamy i
+    odświeżamy lustro `game_locations.npc_keys`.
+
+    1. śmieci testowe po U31 (`*_u31`) znikają z przypisań,
+    2. przypisania do lokacji-duchów (brak karty w `game_locations`) znikają,
+    3. legacy `npc_locations` zostaje opróżniony (DROP dopiero po weryfikacji na DEV),
+    4. `npc_keys` przepisane z przypisań dla CAŁEGO katalogu.
+    """
+    from app.services import npc_placement_service
+
+    try:
+        junk = conn.execute(
+            "DELETE FROM location_npc_assignments "
+            "WHERE location_key GLOB '*_u31' OR npc_key GLOB '*_u31'"
+        ).rowcount
+        ghosts = conn.execute(
+            "DELETE FROM location_npc_assignments WHERE location_key NOT IN "
+            "(SELECT key FROM game_locations)"
+        ).rowcount
+        legacy = conn.execute("DELETE FROM npc_locations").rowcount
+        mirrored = npc_placement_service.resync_npc_keys_mirror(conn)
+        conn.commit()
+        if junk or ghosts or legacy or mirrored:
+            logger.info(
+                "issue1524_npc_binding_canon",
+                junk_removed=junk,
+                ghost_assignments_removed=ghosts,
+                legacy_rows_cleared=legacy,
+                npc_keys_mirrored=mirrored,
+            )
+    except sqlite3.OperationalError as exc:
+        logger.warning("issue1524_npc_binding_canon_failed", error=str(exc))
+
+
 _RARITY_WORD_TO_INT = {
     "common": 1, "uncommon": 2, "rare": 3, "epic": 4, "legendary": 5,
     "poor": 1, "standard": 1, "rich": 2, "treasure": 3,
@@ -7977,10 +8015,11 @@ _GUILD_MERCHANTS = [
      "Faktor Gildii Kupieckiej w Volhynii: waży komponenty na mosiężnej szali i płaci "
      "grosze za surowiec, lecz każdy łowca bestii wie, że tu opchnie kły i skóry bez "
      "gadania. Rzadkich, bossowych trofeów nie tknie — te zostają w plecaku myśliwego."),
-    ("gildia_kupiecka_brzezino", "Faktor Gildii — Kunegunda Rączka", "brzezino",
+    # #1524: faktorzy siedzą w sub-lokacjach (kram / kantyna), nie na makro-hubie osady.
+    ("gildia_kupiecka_brzezino", "Faktor Gildii — Kunegunda Rączka", "brzezino_kram",
      "Objazdowa faktorka Gildii z kantorkiem przy trakcie w Brzezinie. Skupuje pospolite "
      "komponenty rzemieślnicze i wystawia na sprzedaż to, czego akurat brakuje w kuźniach."),
-    ("gildia_kupiecka_strazyn", "Faktor Gildii — Bruno Miech", "strazyn",
+    ("gildia_kupiecka_strazyn", "Faktor Gildii — Bruno Miech", "strazyn_kantyna",
      "Kwatermistrz Gildii Kupieckiej w Strzegwacht. Za murami twierdzy handluje rudą, "
      "kłami i esencjami — asortyment rotuje z dnia na dzień, jak przychodzą karawany."),
 ]
@@ -8360,6 +8399,7 @@ def run_admin_migrations() -> None:
         _ensure_guild_merchant_schema(conn)  # #1342 BL-D3 — gildia kupiecka + no_trade
         _ensure_recipe_loot_schema(conn)  # #1375 BL-E1 — receptury jako drop lootu + pule availability
         _ensure_companions_schema(conn)  # #1192 FAZA TW — towarzysze podróży + wierzchowce
+        _issue1524_npc_binding_canon(conn)  # #1524 — jedno źródło prawdy o obsadzie lokacji
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

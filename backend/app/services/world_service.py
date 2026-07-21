@@ -484,21 +484,7 @@ def build_available_content_index(
         (location_key,)
     ).fetchall()
 
-    if not npc_rows:
-        # Fallback to npc_keys JSON on game_locations
-        loc_row = conn.execute(
-            "SELECT npc_keys FROM game_locations WHERE key = ?", (location_key,)
-        ).fetchone()
-        if loc_row and loc_row[0]:
-            try:
-                keys = json.loads(loc_row[0])
-                if keys:
-                    npc_rows = conn.execute(
-                        f"SELECT key, label, npc_type FROM npcs WHERE key IN ({','.join('?'*len(keys))}) AND is_active=1",
-                        keys
-                    ).fetchall()
-            except Exception:
-                pass
+    # #1524: bez fallbacku na npc_keys — kanon obsady to location_npc_assignments.
 
     if npc_rows:
         lines.append("\nNearby NPCs:")
@@ -653,23 +639,7 @@ def build_v2_npc_context_block(
         (location_key,)
     ).fetchall()
 
-    if not npc_rows:
-        # Fallback to npc_keys JSON
-        loc_row = conn.execute(
-            "SELECT npc_keys FROM game_locations WHERE key = ?", (location_key,)
-        ).fetchone()
-        if loc_row and loc_row[0]:
-            try:
-                keys = json.loads(loc_row[0])
-                if keys:
-                    npc_rows = conn.execute(
-                        f"""SELECT key, label, npc_type, personality_prompt, keyword_triggers
-                            FROM npcs WHERE key IN ({','.join('?'*len(keys))}) AND is_active=1""",
-                        keys
-                    ).fetchall()
-            except Exception:
-                pass
-
+    # #1524: bez fallbacku na npc_keys — kanon obsady to location_npc_assignments.
     if not npc_rows:
         return None
 

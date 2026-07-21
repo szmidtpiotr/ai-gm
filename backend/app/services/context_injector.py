@@ -1024,27 +1024,8 @@ class ContextInjector:
                WHERE lna.location_key = ? AND lna.is_active = 1 AND n.is_active = 1""",
             (location_key,)
         ).fetchall()
-        if rows:
-            return [dict(r) for r in rows]
-        # Fallback: old npc_keys JSON on game_locations
-        loc_row = self.conn.execute(
-            "SELECT npc_keys FROM game_locations WHERE key = ?", (location_key,)
-        ).fetchone()
-        if not loc_row or not loc_row[0]:
-            return []
-        try:
-            keys = json.loads(loc_row[0])
-        except (json.JSONDecodeError, TypeError):
-            return []
-        result = []
-        for npc_key in keys:
-            row = self.conn.execute(
-                "SELECT key, label, npc_type, personality_prompt FROM npcs WHERE key = ? AND is_active = 1",
-                (npc_key,)
-            ).fetchone()
-            if row:
-                result.append(dict(row))
-        return result
+        # #1524: brak fallbacku na npc_keys — to kopia pochodna, nie źródło prawdy.
+        return [dict(r) for r in rows]
 
     def _get_character(self, character_id: int) -> dict | None:
         row = self.conn.execute(

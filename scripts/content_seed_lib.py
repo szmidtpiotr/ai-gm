@@ -27,7 +27,7 @@ import os
 import sqlite3
 
 # ── Canonical table list (THE single source; sync imports this) ───────────────
-# Same 27 tables as #1201. Excluded by design: users / characters / campaigns
+# 26 tabel (#1201 minus legacy npc_locations, skasowane w #1524). Excluded by design: users / characters / campaigns
 # (player data), world_hexes (own seed-flow), game_config_meta (env-specific),
 # admin_tokens / audit.
 CONTENT_TABLES = [
@@ -57,7 +57,6 @@ CONTENT_TABLES = [
     "game_locations",
     "location_enemy_assignments",
     "location_npc_assignments",
-    "npc_locations",
 ]
 
 # ── Wariant 2 (#1202): canon-only tables ──────────────────────────────────────
@@ -93,7 +92,6 @@ CANON_FILTERS = {
     # np. location_npc_assignments → test_inn_u31 (#1480).
     "location_npc_assignments": _not_junk("location_key"),
     "location_enemy_assignments": _not_junk("location_key"),
-    "npc_locations": _not_junk("location_key"),
 }
 
 

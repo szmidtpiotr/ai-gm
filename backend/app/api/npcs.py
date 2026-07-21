@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.core.jwt_auth import require_admin_role
 from app.core.db_runtime import resolve_db_path
+from app.services import npc_placement_service
 
 DB_PATH = resolve_db_path()
 
@@ -66,23 +67,15 @@ def _validate_npc_type(value: str | None) -> None:
 
 
 def _set_npc_locations(conn: sqlite3.Connection, npc_id: int, location_keys: list[str]) -> None:
-    conn.execute("DELETE FROM npc_locations WHERE npc_id = ?", (int(npc_id),))
-    for loc_key in location_keys:
-        lk = str(loc_key or "").strip()
-        if not lk:
-            continue
-        conn.execute(
-            "INSERT OR IGNORE INTO npc_locations (npc_id, location_key) VALUES (?, ?)",
-            (int(npc_id), lk),
-        )
+    """#1524: obsada idzie do location_npc_assignments (+ lustro npc_keys)."""
+    try:
+        npc_placement_service.set_locations_for_npc_id(conn, int(npc_id), location_keys)
+    except ValueError as exc:  # próba obsadzenia makro-huba
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _get_location_keys(conn: sqlite3.Connection, npc_id: int) -> list[str]:
-    rows = conn.execute(
-        "SELECT location_key FROM npc_locations WHERE npc_id = ? ORDER BY location_key",
-        (int(npc_id),),
-    ).fetchall()
-    return [str(r["location_key"]) for r in rows]
+    return npc_placement_service.locations_for_npc_id(conn, int(npc_id))
 
 
 def _load_npc(conn: sqlite3.Connection, npc_id: int) -> sqlite3.Row:
@@ -183,7 +176,8 @@ def delete_npc(npc_id: int, authorization: str | None = Header(None)):
     require_admin_role(authorization)
     with _conn() as conn:
         _load_npc(conn, npc_id)
-        conn.execute("DELETE FROM npc_locations WHERE npc_id = ?", (int(npc_id),))
+        # #1524: obsada znika razem z NPC (przypisania + lustro npc_keys).
+        npc_placement_service.set_locations_for_npc_id(conn, int(npc_id), [])
         conn.execute("DELETE FROM npcs WHERE id = ?", (int(npc_id),))
         conn.commit()
     return {"ok": True}

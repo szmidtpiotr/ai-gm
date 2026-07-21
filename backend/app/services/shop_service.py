@@ -18,6 +18,7 @@ from app.services.loot_service import (
 from app.services import haggle_service
 from app.services import night_economy_service as night_econ
 from app.services import npc_memory_service
+from app.services import npc_placement_service
 
 SELL_RATIO = 0.5
 
@@ -537,31 +538,8 @@ def _npc_home_tier(conn: sqlite3.Connection, npc: sqlite3.Row) -> int:
     a property of the shop, so the view path and the buy path (which never receives
     a location argument) always compute the exact same list.
     """
-    npc_key = str(npc["key"] or "")
-    npc_id = int(npc["id"]) if "id" in npc.keys() and npc["id"] is not None else None
-    tiers: list[int] = []
-    try:
-        rows = conn.execute(
-            "SELECT COALESCE(gl.tier, 1) AS t FROM location_npc_assignments a "
-            "JOIN game_locations gl ON gl.key = a.location_key "
-            "WHERE a.npc_key = ? AND COALESCE(a.is_active, 1) = 1",
-            (npc_key,),
-        ).fetchall()
-        tiers += [int(r[0]) for r in rows]
-    except sqlite3.OperationalError:
-        pass
-    if npc_id is not None:
-        try:
-            rows = conn.execute(
-                "SELECT COALESCE(gl.tier, 1) AS t FROM npc_locations nl "
-                "JOIN game_locations gl ON gl.key = nl.location_key "
-                "WHERE nl.npc_id = ?",
-                (npc_id,),
-            ).fetchall()
-            tiers += [int(r[0]) for r in rows]
-        except sqlite3.OperationalError:
-            pass
-    return max(tiers) if tiers else 1
+    # #1524: obsada lokacji ma jedno źródło prawdy — tabelę przypisań.
+    return npc_placement_service.max_tier_for_npc_key(conn, str(npc["key"] or ""))
 
 
 def _shop_profile_for_npc(npc: sqlite3.Row) -> str:
@@ -846,35 +824,8 @@ def _npc_serves_location(conn: sqlite3.Connection, npc: sqlite3.Row, location_ke
     assignments must list the player's current location, otherwise the buyer is
     trying to shop at a merchant in another region by raw id → npc_not_here.
     """
-    if not location_key:
-        return True
-    loc = str(location_key).strip().lower()
-    npc_id = int(npc["id"])
-    npc_key = str(npc["key"] or "")
-    assigned: list[str] = []
-    try:
-        assigned += [
-            str(r[0]).strip().lower()
-            for r in conn.execute(
-                "SELECT location_key FROM npc_locations WHERE npc_id = ?", (npc_id,)
-            ).fetchall()
-        ]
-    except sqlite3.OperationalError:
-        pass
-    try:
-        assigned += [
-            str(r[0]).strip().lower()
-            for r in conn.execute(
-                "SELECT location_key FROM location_npc_assignments "
-                "WHERE npc_key = ? AND COALESCE(is_active, 1) = 1",
-                (npc_key,),
-            ).fetchall()
-        ]
-    except sqlite3.OperationalError:
-        pass
-    if not assigned:
-        return True
-    return loc in assigned
+    # #1524: jedno źródło prawdy — location_npc_assignments (legacy npc_locations martwe).
+    return npc_placement_service.npc_is_at_location(conn, str(npc["key"] or ""), location_key)
 
 
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:

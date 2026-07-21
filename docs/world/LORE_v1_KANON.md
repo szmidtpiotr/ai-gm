@@ -63,7 +63,7 @@ Religie świata są **prawdziwe jako wiara ludzi**, nie jako dowiedzione bóstwa
 *Nazwa kanoniczna. Alt rozważane: Strażyńskie Pogranicze, Wschodnia Marchia.*
 
 **Charakter:** zwykli ludzie na granicy mroku — tu zaczyna się większość historii (otwarcie Mizela 🟢). Codzienność, strach, drobne zlecenia, które urastają do czegoś większego.
-**Lokacje 🟢:** **Strzegwacht** (twierdza graniczna, 200 lat straży; hybryda słow.+germ.), **Cieszburg** (wioska przy twierdzy), **Birkenwald** (drwale, blisko Boru Zmarłych), **Wolfsmark** (wioska górnicza), **Most Czarnej Rzeki** (poborcy myta), **Karczma Pod Trzema Krukami** (plotki, ukrywający się), **Pustelnia Świętego Marcina**, **Zgliszcza** (spalona wieś). Tu też domyślnie stoi gospoda **„Pod Złamanym Rogiem"** 🟢 (Marta karczmarka) — pierwsze schronienie bohatera.
+**Lokacje 🟢:** **Strzegwacht** (twierdza graniczna, 200 lat straży; hybryda słow.+germ.), **Cieszburg** (wioska przy twierdzy), **Birkenwald** (drwale, blisko Boru Zmarłych), **Wolfsmark** (wioska górnicza), **Most Czarnej Rzeki** (poborcy myta), **Karczma Pod Trzema Krukami** (plotki, ukrywający się), **Pustelnia Świętego Marcina**, **Zgliszcza** (spalona wieś). Tu też domyślnie stoi gospoda **„Pod Złamanym Rogiem"** 🟢 (Hanka Rogowa, karczmarka) — pierwsze schronienie bohatera. *(#1524: gospoda weszła do kanonu treści na heksie (24,13) i dostała własną gospodynię; Marta karczmarka gra dalej w Karczmie Pod Trzema Krukami, gdzie używa jej szablon „Pierwsze Kroki".)*
 **Nieludzie 🔵:** we wsiach górniczych (Wolfsmark) i przy Moście Czarnej Rzeki **osiadłe rody krasnoludzkich górników i kowali**, częściowo zasymilowane; pierwsze ofiary, gdy mrok pełznie z gór.
 
 ---

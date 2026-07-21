@@ -82,8 +82,8 @@ def test_no_scene_text_no_chips(conn):
     assert _get_npc_actions(conn, "wolanka", "") == []
 
 
-def test_npc_keys_fallback_gated(conn):
-    # brak assignments → fallback na game_locations.npc_keys, też bramkowany sceną
+def test_brak_fallbacku_na_npc_keys(conn):
+    # #1524: npc_keys to kopia pochodna — sam wpis w lustrze NIE obsadza lokacji.
     conn.execute("DELETE FROM location_npc_assignments")
     conn.execute(
         "INSERT INTO game_locations (key, npc_keys) VALUES (?, ?)",
@@ -91,5 +91,4 @@ def test_npc_keys_fallback_gated(conn):
     )
     conn.commit()
     assert _get_npc_actions(conn, "wolanka", "cisza i mgla") == []
-    named = _get_npc_actions(conn, "wolanka", "miron unosi mlot")
-    assert [a.label for a in named] == ["Porozmawiaj z Grubas Miron"]
+    assert _get_npc_actions(conn, "wolanka", "miron unosi mlot") == []

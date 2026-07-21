@@ -3393,11 +3393,13 @@ def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -
               AND COALESCE(n.is_shop, 0) = 1
               AND (
                 EXISTS (
-                    SELECT 1 FROM npc_locations nl
-                    WHERE nl.npc_id = n.id AND nl.location_key = ?
+                    SELECT 1 FROM location_npc_assignments a
+                    WHERE a.npc_key = n.key AND a.location_key = ?
+                      AND COALESCE(a.is_active, 1) = 1
                 )
                 OR NOT EXISTS (
-                    SELECT 1 FROM npc_locations nl2 WHERE nl2.npc_id = n.id
+                    SELECT 1 FROM location_npc_assignments a2
+                    WHERE a2.npc_key = n.key AND COALESCE(a2.is_active, 1) = 1
                 )
               )
             ORDER BY n.key COLLATE NOCASE
@@ -3412,7 +3414,8 @@ def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -
             WHERE COALESCE(n.is_active, 1) = 1
               AND COALESCE(n.is_shop, 0) = 1
               AND NOT EXISTS (
-                  SELECT 1 FROM npc_locations nl WHERE nl.npc_id = n.id
+                  SELECT 1 FROM location_npc_assignments a
+                  WHERE a.npc_key = n.key AND COALESCE(a.is_active, 1) = 1
               )
             ORDER BY n.key COLLATE NOCASE
             """

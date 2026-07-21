@@ -479,19 +479,8 @@ class WorldStateMachine:
             "SELECT 1 FROM location_npc_assignments WHERE npc_key = ? AND location_key = ? AND is_active = 1",
             (npc_key, location_key)
         ).fetchone()
-        if row:
-            return True
-        # Fallback: check old npc_keys JSON on game_locations
-        loc_row = self.conn.execute(
-            "SELECT npc_keys FROM game_locations WHERE key = ?", (location_key,)
-        ).fetchone()
-        if loc_row and loc_row[0]:
-            try:
-                keys = json.loads(loc_row[0])
-                return npc_key in keys
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return False
+        # #1524: bez fallbacku na npc_keys — kanon obsady to location_npc_assignments.
+        return bool(row)
 
     def _current_location_key(self, campaign_id: int, session_flags: dict | None = None) -> str | None:
         """PT-F7 #1141: current location key derived from current_location_id (single

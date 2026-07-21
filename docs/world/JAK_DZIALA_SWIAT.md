@@ -206,7 +206,7 @@ Rdzeń projektu jest zdrowy. Problemy siedzą w **warstwach historycznych, któr
 
 | Informacja | Ile kopii | Gdzie |
 |---|---|---|
-| kto jest NPC w lokacji | **3** | stara tabela `npc_locations` (wciąż czytana przez sklep, rzemiosło i silnik!) · nowa tabela przypisań · lista wpisana wprost na karcie lokacji |
+| ~~kto jest NPC w lokacji~~ | ~~**3**~~ → **1** | ✅ **naprawione w fali 1** (#1524): kanon = tabela przypisań `location_npc_assignments`; lista na karcie lokacji (`npc_keys`) to od teraz **kopia pochodna** odświeżana po każdym zapisie; legacy `npc_locations` nie jest już czytana ani zapisywana (pusta, DROP po weryfikacji). Zasada dodatkowa: **gospodarz siedzi w sub-lokacji**, makro-hub osady zostaje pusty. |
 | czy lokacja stoi na mapie | **3** | przełącznik `placement` · współrzędne na karcie · wskazanie z heksa |
 | kto jest rodzicem | **2** | numer rodzica i nazwa rodzica — kod sprawdza oba, bo numer bywa pusty |
 | czy stworzyło AI | **2** | stara flaga `ai_generated` i nowe pole „kto stworzył" |

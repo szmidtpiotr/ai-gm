@@ -61,7 +61,7 @@ Stan DEV DB (2026-07-20): **8 lokacji makro** + **23 czynne sub-lokacje** oznacz
 
 ### Lokacja startowa
 
-**Gospoda „Pod Złamanym Rogiem"** (`gospoda_pod_z_amanym_rogiem`, hex 0,22) — próg większości historii świata; w DB istnieje jako lokacja typu `tavern`, ale **nie jest oznaczona jako kanoniczna i nie ma podpiętego NPC**. To rozbieżność stanu (kanon LORE_v1 sadza tu Martę karczmarkę; DB trzyma `innkeeper_marta` przy Karczmie Pod Trzema Krukami). Do decyzji Piotra — rozdział jej nie rozstrzyga.
+**Gospoda „Pod Złamanym Rogiem"** (`gospoda_pod_zlamanym_rogiem`, hex **24,13**) — próg większości historii świata. Od #1524 stoi w kanonie treści: makro `wayside-inn` + trzy wnętrza (Izba Szynkowa, Pokoje Na Górze, Stajnia), gospodyni **Hanka Rogowa** (`karczmarka_zlamany_rog`) w izbie szynkowej. Stary runtime'owy rekord `gospoda_pod_z_amanym_rogiem` (hex 0,22) został odłożony jako `discarded`. Marta karczmarka gra dalej w Karczmie Pod Trzema Krukami (pokoje kupców) — używa jej szablon „Pierwsze Kroki".
 
 ## 5. Obsada — NPC z DB
 

@@ -1,374 +1,6 @@
 [
   {
-    "id": 2,
-    "location_key": "locked_inn_u31",
-    "npc_key": "ghost_npc_u31",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 0
-  },
-  {
-    "id": 4,
-    "location_key": "tavern_u31",
-    "npc_key": "barkeep_u31",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 5,
-    "location_key": "parent_inn_u31",
-    "npc_key": "parent_npc_u31",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 6,
-    "location_key": "sub_cellar_u31",
-    "npc_key": "sub_npc_u31",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 19,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "blacksmith_goran",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 20,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "quest_giver_eldran",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 21,
-    "location_key": "volhynia_kupiecka",
-    "npc_key": "merchant_aldric",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 22,
-    "location_key": "trzech_krukow",
-    "npc_key": "innkeeper_marta",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 23,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "kowal_vilnograd",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 24,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "uzdrowiciel_vilnograd",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 25,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "kupiec_vilnograd",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 26,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "kapitan_krolewski",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 27,
-    "location_key": "vilnograd_stolica",
-    "npc_key": "kronikarz_vilnograd",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 28,
-    "location_key": "volhynia_kupiecka",
-    "npc_key": "kowal_volhynia",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 29,
-    "location_key": "volhynia_kupiecka",
-    "npc_key": "aptekarka_volhynia",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 30,
-    "location_key": "volhynia_kupiecka",
-    "npc_key": "gildmistrz_volhynia",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 31,
-    "location_key": "czarnogrod_port",
-    "npc_key": "kowal_czarnogrod",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 32,
-    "location_key": "czarnogrod_port",
-    "npc_key": "chirurg_czarnogrod",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 33,
-    "location_key": "czarnogrod_port",
-    "npc_key": "kapitan_smolny",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 34,
-    "location_key": "klasztor_iskry_centrum",
-    "npc_key": "matka_klasztor",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 35,
-    "location_key": "klasztor_iskry_centrum",
-    "npc_key": "brat_tomasz_kronikarz",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36,
-    "location_key": "zatoka_topielcow",
-    "npc_key": "kowal_zatoka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 37,
-    "location_key": "zatoka_topielcow",
-    "npc_key": "uzdrowiciel_zatoka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 38,
-    "location_key": "zatoka_topielcow",
-    "npc_key": "rybak_stary_zatoka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 39,
-    "location_key": "brzezino",
-    "npc_key": "kowal_brzezino",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 40,
-    "location_key": "brzezino",
-    "npc_key": "soltys_brzezino",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 41,
-    "location_key": "brzezino",
-    "npc_key": "zielarka_brzezino",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 42,
-    "location_key": "wolanka",
-    "npc_key": "kowal_wolanka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 43,
-    "location_key": "wolanka",
-    "npc_key": "zielarka_wolanka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 44,
-    "location_key": "wolanka",
-    "npc_key": "starszy_gornik_wolanka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 45,
-    "location_key": "strazyn",
-    "npc_key": "kowal_strazyn",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 46,
-    "location_key": "strazyn",
-    "npc_key": "komendant_strazyn",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 47,
-    "location_key": "strazyn",
-    "npc_key": "medyk_strazyn",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 48,
-    "location_key": "trzech_krukow",
-    "npc_key": "karczmarz_krukow",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 49,
-    "location_key": "cieszowice",
-    "npc_key": "kowal_cieszowice",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 50,
-    "location_key": "cieszowice",
-    "npc_key": "znachorka_cieszowice",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 51,
-    "location_key": "cieszowice",
-    "npc_key": "soltys_cieszowice",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 52,
-    "location_key": "pustelnia_marcina",
-    "npc_key": "pustelnik_marcin",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 53,
-    "location_key": "step_wilkow",
-    "npc_key": "lowczy_step",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 54,
-    "location_key": "wschodnia_wioska",
-    "npc_key": "innkeeper_marta",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17488,
-    "location_key": "most_czarnej_rzeki",
-    "npc_key": "celnik_pius",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17489,
-    "location_key": "gospoda_pod_z_amanym_rogiem",
-    "npc_key": "innkeeper_marta",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17630,
-    "location_key": "bor_zmarlych",
-    "npc_key": "wiedzma_jaga",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17631,
-    "location_key": "zgliszcza",
-    "npc_key": "ocalaly_zgliszcza",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17632,
-    "location_key": "zgliszcza_obozowisko",
-    "npc_key": "ocalaly_zgliszcza",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17633,
-    "location_key": "bagienna_knieja",
-    "npc_key": "zielarka_mira_bagno",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17634,
+    "id": 1,
     "location_key": "bagienna_chatka_zielarki",
     "npc_key": "zielarka_mira_bagno",
     "assignment_type": "resident",
@@ -376,63 +8,15 @@
     "is_active": 1
   },
   {
-    "id": 17635,
-    "location_key": "brzezino_tartak",
-    "npc_key": "tartacznik_brzezino",
+    "id": 2,
+    "location_key": "bor_chata_jagi",
+    "npc_key": "wiedzma_jaga",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 17636,
-    "location_key": "most_karczma_pod_lupinkami",
-    "npc_key": "karczmarz_most",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17637,
-    "location_key": "cieszowice_karczma",
-    "npc_key": "karczmarz_cieszowice",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17638,
-    "location_key": "strazyn_lazaret",
-    "npc_key": "medyk_strazyn",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17639,
-    "location_key": "strazyn_koszary",
-    "npc_key": "komendant_strazyn",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17640,
-    "location_key": "wolanka_kuznia",
-    "npc_key": "kowal_wolanka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17641,
-    "location_key": "wolanka_kopalnia_glowna",
-    "npc_key": "starszy_gornik_wolanka",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 17642,
+    "id": 3,
     "location_key": "brzezino_dom_starszego",
     "npc_key": "soltys_brzezino",
     "assignment_type": "resident",
@@ -440,23 +24,47 @@
     "is_active": 1
   },
   {
-    "id": 17643,
-    "location_key": "most_komora_celna",
-    "npc_key": "celnik_pius",
+    "id": 4,
+    "location_key": "brzezino_kram",
+    "npc_key": "gildia_kupiecka_brzezino",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 17644,
-    "location_key": "trzech_krukow_wielka_izba",
-    "npc_key": "karczmarz_krukow",
+    "id": 5,
+    "location_key": "brzezino_kuznia",
+    "npc_key": "kowal_brzezino",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 17645,
+    "id": 6,
+    "location_key": "brzezino_swieta_polanka",
+    "npc_key": "zielarka_brzezino",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 7,
+    "location_key": "brzezino_tartak",
+    "npc_key": "tartacznik_brzezino",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 8,
+    "location_key": "cieszowice_chata_soltysa",
+    "npc_key": "soltys_cieszowice",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 9,
     "location_key": "cieszowice_kaplica",
     "npc_key": "znachorka_cieszowice",
     "assignment_type": "visitor",
@@ -464,159 +72,47 @@
     "is_active": 1
   },
   {
-    "id": 17646,
-    "location_key": "pustelnia_kaplica_lesna",
-    "npc_key": "pustelnik_marcin",
+    "id": 10,
+    "location_key": "cieszowice_karczma",
+    "npc_key": "karczmarz_cieszowice",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 17647,
-    "location_key": "pustelnia_ogrod_ziolowy",
-    "npc_key": "pustelnik_marcin",
+    "id": 11,
+    "location_key": "cieszowice_kuznia",
+    "npc_key": "kowal_cieszowice",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 17648,
-    "location_key": "pustelnia_zrodlo",
-    "npc_key": "pustelnik_marcin",
+    "id": 12,
+    "location_key": "czarnogrod_izba_chirurga",
+    "npc_key": "chirurg_czarnogrod",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 17649,
-    "location_key": "trzech_krukow",
-    "npc_key": "blacksmith_goran",
-    "assignment_type": "visitor",
-    "notes": "#1080 onboarding — Goran gości w karczmie startowej dla sceny handlu",
-    "is_active": 1
-  },
-  {
-    "id": 32696,
-    "location_key": "volhynia_gildia_kupcow",
-    "npc_key": "gildia_kupiecka_volhynia",
+    "id": 13,
+    "location_key": "czarnogrod_kuznia",
+    "npc_key": "kowal_czarnogrod",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 32697,
-    "location_key": "brzezino",
-    "npc_key": "gildia_kupiecka_brzezino",
+    "id": 14,
+    "location_key": "czarnogrod_nabrzeze",
+    "npc_key": "kapitan_smolny",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   },
   {
-    "id": 32698,
-    "location_key": "strazyn",
-    "npc_key": "gildia_kupiecka_strazyn",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36651,
-    "location_key": "kamienny_grod",
-    "npc_key": "balrik_siwotarczy",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36652,
-    "location_key": "kamienny_grod",
-    "npc_key": "dagna_mlotodzierzca",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36653,
-    "location_key": "kamienny_grod",
-    "npc_key": "torvin_mistrz_kuzni",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36654,
-    "location_key": "kamienny_grod",
-    "npc_key": "grimm_rdzawy",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36655,
-    "location_key": "kamienny_grod",
-    "npc_key": "helga_solnobroda",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36656,
-    "location_key": "kamienny_grod",
-    "npc_key": "hadmar_obserwator",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36657,
-    "location_key": "grod_sala_rodow",
-    "npc_key": "balrik_siwotarczy",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36658,
-    "location_key": "grod_sala_rodow",
-    "npc_key": "dagna_mlotodzierzca",
-    "assignment_type": "visitor",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36659,
-    "location_key": "grod_pod_rdzawym_mlotem",
-    "npc_key": "grimm_rdzawy",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36660,
-    "location_key": "grod_pod_rdzawym_mlotem",
-    "npc_key": "dagna_mlotodzierzca",
-    "assignment_type": "visitor",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36661,
-    "location_key": "grod_wielka_kuznia",
-    "npc_key": "torvin_mistrz_kuzni",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36662,
-    "location_key": "grod_targ_solny",
-    "npc_key": "helga_solnobroda",
-    "assignment_type": "resident",
-    "notes": null,
-    "is_active": 1
-  },
-  {
-    "id": 36663,
+    "id": 15,
     "location_key": "echo_wieza",
     "npc_key": "hadmar_obserwator",
     "assignment_type": "visitor",
@@ -624,7 +120,119 @@
     "is_active": 1
   },
   {
-    "id": 36664,
+    "id": 16,
+    "location_key": "grod_pod_rdzawym_mlotem",
+    "npc_key": "dagna_mlotodzierzca",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 17,
+    "location_key": "grod_pod_rdzawym_mlotem",
+    "npc_key": "grimm_rdzawy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 18,
+    "location_key": "grod_sala_rodow",
+    "npc_key": "balrik_siwotarczy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 19,
+    "location_key": "grod_sala_rodow",
+    "npc_key": "dagna_mlotodzierzca",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 20,
+    "location_key": "grod_targ_solny",
+    "npc_key": "helga_solnobroda",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 21,
+    "location_key": "grod_wielka_kuznia",
+    "npc_key": "torvin_mistrz_kuzni",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 22,
+    "location_key": "klasztor_iskry_biblioteka",
+    "npc_key": "brat_tomasz_kronikarz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 23,
+    "location_key": "klasztor_iskry_kaplica_glowna",
+    "npc_key": "matka_klasztor",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 24,
+    "location_key": "most_karczma_pod_lupinkami",
+    "npc_key": "karczmarz_most",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 25,
+    "location_key": "most_komora_celna",
+    "npc_key": "celnik_pius",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 26,
+    "location_key": "oboz_wygnancow_lodu",
+    "npc_key": "kettil_wodz_wygnancow",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 27,
+    "location_key": "pustelnia_kaplica_lesna",
+    "npc_key": "pustelnik_marcin",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 28,
+    "location_key": "pustelnia_ogrod_ziolowy",
+    "npc_key": "pustelnik_marcin",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 29,
+    "location_key": "pustelnia_zrodlo",
+    "npc_key": "pustelnik_marcin",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 30,
     "location_key": "sanktuarium_zamarznietej_pielgrzymki",
     "npc_key": "brat_elias",
     "assignment_type": "resident",
@@ -632,9 +240,217 @@
     "is_active": 1
   },
   {
-    "id": 36665,
-    "location_key": "oboz_wygnancow_lodu",
-    "npc_key": "kettil_wodz_wygnancow",
+    "id": 31,
+    "location_key": "step_obozowisko_koczownikow",
+    "npc_key": "lowczy_step",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 32,
+    "location_key": "strazyn_kantyna",
+    "npc_key": "gildia_kupiecka_strazyn",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 33,
+    "location_key": "strazyn_koszary",
+    "npc_key": "komendant_strazyn",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 34,
+    "location_key": "strazyn_kuznia",
+    "npc_key": "kowal_strazyn",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 35,
+    "location_key": "strazyn_lazaret",
+    "npc_key": "medyk_strazyn",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36,
+    "location_key": "trzech_krukow_pokoje_kupcow",
+    "npc_key": "innkeeper_marta",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37,
+    "location_key": "trzech_krukow_wielka_izba",
+    "npc_key": "karczmarz_krukow",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 38,
+    "location_key": "vilnograd_kuznia",
+    "npc_key": "blacksmith_goran",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 39,
+    "location_key": "vilnograd_kuznia",
+    "npc_key": "kowal_vilnograd",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 40,
+    "location_key": "vilnograd_rynek",
+    "npc_key": "kupiec_vilnograd",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 41,
+    "location_key": "vilnograd_swiatynia_swiatla",
+    "npc_key": "kronikarz_vilnograd",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 42,
+    "location_key": "vilnograd_swiatynia_swiatla",
+    "npc_key": "uzdrowiciel_vilnograd",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 43,
+    "location_key": "vilnograd_zamek",
+    "npc_key": "kapitan_krolewski",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 44,
+    "location_key": "vilnograd_zamek",
+    "npc_key": "quest_giver_eldran",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 45,
+    "location_key": "volhynia_apteka",
+    "npc_key": "aptekarka_volhynia",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 46,
+    "location_key": "volhynia_gildia_kupcow",
+    "npc_key": "gildia_kupiecka_volhynia",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 47,
+    "location_key": "volhynia_gildia_kupcow",
+    "npc_key": "gildmistrz_volhynia",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 48,
+    "location_key": "volhynia_kuznia",
+    "npc_key": "kowal_volhynia",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 49,
+    "location_key": "volhynia_targowisko",
+    "npc_key": "merchant_aldric",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 50,
+    "location_key": "wolanka_kopalnia_glowna",
+    "npc_key": "starszy_gornik_wolanka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 51,
+    "location_key": "wolanka_kosciol_swietego_floriana",
+    "npc_key": "zielarka_wolanka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 52,
+    "location_key": "wolanka_kuznia",
+    "npc_key": "kowal_wolanka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 53,
+    "location_key": "zatoka_izba_znachora",
+    "npc_key": "uzdrowiciel_zatoka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 54,
+    "location_key": "zatoka_kuznia",
+    "npc_key": "kowal_zatoka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 55,
+    "location_key": "zatoka_pirackie_doki",
+    "npc_key": "rybak_stary_zatoka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 56,
+    "location_key": "zgliszcza_obozowisko",
+    "npc_key": "ocalaly_zgliszcza",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 57,
+    "location_key": "zlamany_rog_izba",
+    "npc_key": "karczmarka_zlamany_rog",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1

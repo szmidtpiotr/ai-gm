@@ -68,7 +68,6 @@ except ImportError:
         "game_locations",
         "location_enemy_assignments",
         "location_npc_assignments",
-        "npc_locations",
     ]
 
 

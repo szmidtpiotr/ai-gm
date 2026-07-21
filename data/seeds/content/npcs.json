@@ -2644,5 +2644,32 @@
     "faction_key": "wygnancy_lodu",
     "crafter_type": null,
     "is_guild_merchant": 0
+  },
+  {
+    "id": 990001,
+    "key": "karczmarka_zlamany_rog",
+    "label": "Hanka Rogowa, karczmarka",
+    "npc_type": "merchant",
+    "description": "Gospodyni gospody Pod Złamanym Rogiem. Wdowa po myśliwym, którego róg wisi nad szynkwasem. Wie, kto przejeżdżał traktem i w którą stronę — ale mówi to dopiero po drugim dzbanku.",
+    "personality_json": "{\"personality\": \"rzeczowa, nieufna wobec obcych, lojalna wobec stałych gości\", \"topics\": [\"trakt\", \"noclegi\", \"kto przejeżdżał\", \"wilki przy drodze\"], \"secret\": null}",
+    "is_shop": 1,
+    "shop_inventory_json": "[]",
+    "is_active": 1,
+    "created_at": "2026-06-11 16:27:02",
+    "updated_at": "2026-06-18 07:41:35",
+    "is_quest_giver": 1,
+    "is_ally": 0,
+    "personality_prompt": null,
+    "keyword_triggers": "[]",
+    "review_status": "permanent",
+    "is_dead": 0,
+    "is_crafter": 0,
+    "stats_json": null,
+    "image_url": null,
+    "image_url_raw": null,
+    "image_gen_prompt": "middle-aged innkeeper, sturdy build, weathered face, knowing eyes, friendly smirk, short beard, rolled-up sleeves, rustic tavern clothes, apron, well-worn vest, approachable, shrewd, cozy atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   }
 ]

@@ -748,15 +748,16 @@ def build_location_context(session_id: int) -> str:
             neighbor_names = [n["label"] for n in loc["neighbors"]]
             lines.append(f"Możliwe sąsiednie lokalizacje: {', '.join(neighbor_names)}")
         
-        # NPC i wrogowie (opcjonalnie)
-        if loc.get("npc_keys"):
+        # NPC i wrogowie (opcjonalnie) — #1524: obsada z kanonu, nie z lustra npc_keys.
+        if loc.get("key"):
+            from app.services import npc_placement_service
+            npc_conn = _get_db_connection()
             try:
-                import json
-                npcs = json.loads(loc["npc_keys"]) if loc["npc_keys"].startswith("[") else []
-                if npcs:
-                    lines.append(f"Obecni NPC: {', '.join(npcs)}")
-            except json.JSONDecodeError:
-                pass
+                npcs = npc_placement_service.npc_keys_for_location(npc_conn, str(loc["key"]))
+            finally:
+                npc_conn.close()
+            if npcs:
+                lines.append(f"Obecni NPC: {', '.join(npcs)}")
         
         lines.append("")  # Pusta linia na końcu
         

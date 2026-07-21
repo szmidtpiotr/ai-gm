@@ -33,11 +33,12 @@ def conn():
             personality_json TEXT NOT NULL DEFAULT '{}',
             is_active INTEGER NOT NULL DEFAULT 1
         );
-        CREATE TABLE npc_locations (
+        CREATE TABLE location_npc_assignments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            npc_id INTEGER NOT NULL,
             location_key TEXT NOT NULL,
-            UNIQUE(npc_id, location_key)
+            npc_key TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(location_key, npc_key)
         );
         """
     )
@@ -55,8 +56,9 @@ def conn():
         """
     )
     # Marta assigned to inn_main; Aldric and Eldran remain global.
+    # #1524: obsada lokacji zyje w location_npc_assignments (legacy npc_locations skasowane).
     c.execute(
-        "INSERT INTO npc_locations(npc_id, location_key) SELECT id, 'inn_main' FROM npcs WHERE key='innkeeper_marta'"
+        "INSERT INTO location_npc_assignments(location_key, npc_key) VALUES ('inn_main', 'innkeeper_marta')"
     )
     c.commit()
     try:

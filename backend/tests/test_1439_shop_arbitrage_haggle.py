@@ -168,7 +168,8 @@ def test_buy_from_remote_npc_rejected(db):
     _exec(db, "INSERT INTO characters(id, gold_gp, sheet_json, race, campaign_id) "
               "VALUES (1, 10000, '{\"stats\":{\"CHA\":10},\"level\":1}', 'human', 99)")
     # NPC id 1 is assigned only to town_b — the hero stands in town_a.
-    _exec(db, "INSERT INTO npc_locations(npc_id, location_key) VALUES (1, 'town_b')")
+    # #1524: kanon obsady = location_npc_assignments (po kluczu NPC, nie po id).
+    _exec(db, "INSERT INTO location_npc_assignments(location_key, npc_key) VALUES ('town_b', 'merchant')")
 
     with pytest.raises(ValueError) as ei:
         shop_service.buy_item(1, 1, "item", "trinket")

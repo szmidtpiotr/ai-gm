@@ -104,6 +104,21 @@ def get_db_connection() -> sqlite3.Connection:
     return conn
 
 
+def _apply_npc_roster(conn: sqlite3.Connection, location_key: str, npc_keys: list[str] | None) -> None:
+    """#1524: obsada lokacji trafia do location_npc_assignments; npc_keys to lustro.
+
+    Panel admina nadal przysyła listę kluczy — jedyna różnica jest w tym, gdzie
+    ona ląduje. Próba obsadzenia makro-huba (osada z sub-lokacjami) = 400.
+    """
+    if npc_keys is None:
+        return
+    from app.services import npc_placement_service
+    try:
+        npc_placement_service.set_npcs_for_location(conn, location_key, list(npc_keys))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def row_to_location_dict(row: sqlite3.Row) -> dict:
     """Konwertuje wiersz SQLite na dict z parsed JSON fields."""
     result = dict(row)
@@ -299,8 +314,9 @@ async def create_location(
 
         # Konwertuj listy na JSON
         enemy_keys_json = json.dumps(data.enemy_keys) if data.enemy_keys else "[]"
-        npc_keys_json = json.dumps(data.npc_keys) if data.npc_keys else "[]"
-        
+        # #1524: npc_keys to lustro — obsadę zapisuje npc_placement_service PO insercie.
+        npc_keys_json = "[]"
+
         # Wstaw nową lokalizację
         cursor = conn.execute(
             """
@@ -328,8 +344,9 @@ async def create_location(
                 data.source_campaign_id,
             )
         )
+        _apply_npc_roster(conn, key, data.npc_keys)
         conn.commit()
-        
+
         # Pobierz utworzoną lokalizację
         new_id = cursor.lastrowid
         row = conn.execute(
@@ -431,7 +448,8 @@ async def update_location(
 
         # Konwertuj listy na JSON
         enemy_keys_json = json.dumps(data.enemy_keys) if data.enemy_keys else "[]"
-        npc_keys_json = json.dumps(data.npc_keys) if data.npc_keys else "[]"
+        # #1524: npc_keys to lustro — obsadę zapisuje npc_placement_service PO update.
+        npc_keys_json = "[]"
 
         # Aktualizuj lokalizację
         conn.execute(
@@ -464,8 +482,9 @@ async def update_location(
                 key,
             )
         )
+        _apply_npc_roster(conn, key, data.npc_keys)
         conn.commit()
-        
+
         # Pobierz zaktualizowaną lokalizację
         row = conn.execute(
             "SELECT * FROM game_locations WHERE key = ?",
@@ -694,9 +713,7 @@ async def patch_location(
         if "canonical" in data:
             updates.append("canonical = ?")
             params.append(1 if data["canonical"] else 0)
-        if "npc_keys" in data and isinstance(data["npc_keys"], list):
-            updates.append("npc_keys = ?")
-            params.append(json.dumps(data["npc_keys"]))
+        # #1524: npc_keys nie jest już zapisywane wprost — patrz _apply_npc_roster niżej.
         if "review_status" in data:
             allowed = {"pending_review", "permanent", "discarded"}
             val = str(data["review_status"]).strip()
@@ -714,18 +731,22 @@ async def patch_location(
         if ("label" in data or "description" in data) and "ai_generated" not in data:
             updates.append("ai_generated = 1")
 
-        if not updates:
+        roster = data["npc_keys"] if isinstance(data.get("npc_keys"), list) else None
+
+        if not updates and roster is None:
             return location
-        
-        updates.append("updated_at = CURRENT_TIMESTAMP")
-        params.append(key)
-        
-        conn.execute(
-            f"UPDATE game_locations SET {', '.join(updates)} WHERE key = ?",
-            params
-        )
+
+        if updates:
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.append(key)
+            conn.execute(
+                f"UPDATE game_locations SET {', '.join(updates)} WHERE key = ?",
+                params
+            )
+        if roster is not None:
+            _apply_npc_roster(conn, key, roster)
         conn.commit()
-        
+
         # Pobierz zaktualizowaną
         row = conn.execute("SELECT * FROM game_locations WHERE key = ?", (key,)).fetchone()
         return row_to_location_dict(row)

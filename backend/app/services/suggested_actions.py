@@ -586,38 +586,8 @@ def _get_npc_actions(
                 action=f"DIALOGUE:{npc_key}",
                 enabled=True,
             ))
-        if actions:
-            return actions[:2]
-
-        # Fallback: parse npc_keys JSON from game_locations
-        loc_row = conn.execute(
-            "SELECT npc_keys FROM game_locations WHERE key = ? LIMIT 1",
-            (location_key,),
-        ).fetchone()
-        if loc_row:
-            npc_keys_raw = loc_row["npc_keys"] if "npc_keys" in loc_row.keys() else None
-            if npc_keys_raw:
-                npc_keys = json.loads(npc_keys_raw) if isinstance(npc_keys_raw, str) else npc_keys_raw
-                if isinstance(npc_keys, list):
-                    for npc_key in npc_keys:
-                        npc_key = str(npc_key).strip()
-                        if not npc_key:
-                            continue
-                        # Try to get name
-                        nr = conn.execute(
-                            "SELECT label FROM npcs WHERE key = ? LIMIT 1",
-                            (npc_key,),
-                        ).fetchone()
-                        npc_name = str(nr["label"]) if nr else npc_key
-                        if not _npc_in_scene(npc_name, npc_key, scene_folded):
-                            continue
-                        actions.append(SuggestedAction(
-                            label=f"Porozmawiaj z {npc_name}",
-                            action=f"DIALOGUE:{npc_key}",
-                            enabled=True,
-                        ))
-                        if len(actions) >= 2:
-                            break
+        # #1524: bez fallbacku na npc_keys — kanon obsady to location_npc_assignments.
+        return actions[:2]
     except Exception as exc:
         logger.warning("npc_actions_error", error=str(exc))
     return actions
