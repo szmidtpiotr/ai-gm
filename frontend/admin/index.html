@@ -127,7 +127,7 @@
     import { apiFetch } from './shared/api.js';
     import { showToast } from './shared/toast.js';
     import { initSortableTable, enhanceTable } from './shared/table.js?v=8';
-    import { initCommandPalette } from './shared/command_palette.js?v=2';
+    import { initCommandPalette } from './shared/command_palette.js?v=3';
 
     // 18 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
     const SECTIONS = [
@@ -229,7 +229,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=131`);
+        const mod = await import(`./sections/${key}.js?v=133`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)
@@ -333,17 +333,19 @@
     // Load pending items count for Świat badge
     async function _loadPendingCount() {
       try {
-        const [npcRes, enemyRes, weapRes, itemRes] = await Promise.allSettled([
+        const [npcRes, enemyRes, weapRes, itemRes, lintRes] = await Promise.allSettled([
           apiFetch('/api/admin/world/pending/npcs'),
           apiFetch('/api/admin/world/pending/enemies'),
           apiFetch('/api/admin/world/pending/weapons'),
           apiFetch('/api/admin/world/pending/items'),
+          apiFetch('/api/admin/world/lint/count'),   // #1527 — 🩺 Kontrola świata
         ]);
         const npcs    = npcRes.status==='fulfilled'   ? (npcRes.value?.items||npcRes.value||[])     : [];
         const enemies = enemyRes.status==='fulfilled' ? (enemyRes.value?.items||enemyRes.value||[]) : [];
         const weapons = weapRes.status==='fulfilled'  ? (weapRes.value?.items||weapRes.value||[])   : [];
         const items   = itemRes.status==='fulfilled'  ? (itemRes.value?.items||itemRes.value||[])   : [];
-        const total = npcs.length + enemies.length + weapons.length + items.length;
+        const lint    = lintRes.status==='fulfilled'  ? (lintRes.value?.count || 0)                : 0;
+        const total = npcs.length + enemies.length + weapons.length + items.length + lint;
         const badge = document.getElementById('world-nav-badge');
         if (badge) {
           badge.textContent = total || '';

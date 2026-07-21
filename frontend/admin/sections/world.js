@@ -1936,6 +1936,7 @@ function _sectionHtml() {
         <button class="stab" data-wtab="events">Wydarzenia</button>
         <button class="stab" data-wtab="rumors">Plotki</button>
         <button class="stab" data-wtab="pending">Oczekujące <span class="nav-badge" id="world-pending-badge" style="display:none">0</span></button>
+        <button class="stab" data-wtab="lint">🩺 Kontrola świata <span class="nav-badge" id="world-lint-badge" style="display:none">0</span></button>
       </div>
 
       <!-- NPC -->
@@ -2055,6 +2056,17 @@ function _sectionHtml() {
         </div>
         <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem" id="world-pending-container">Ładowanie…</div>
       </div>
+
+      <!-- 🩺 Kontrola świata (#1527) -->
+      <div class="stab-panel" id="wtab-lint">
+        <div class="toolbar">
+          <button class="btn btn-secondary btn-sm" onclick="window._worldLintReload()">↻ Sprawdź ponownie</button>
+          <button class="btn btn-secondary btn-sm" onclick="window._worldLintToggleHistory()">🕮 Historia napraw</button>
+          <span style="color:var(--t3);font-size:0.78rem" id="world-lint-summary"></span>
+        </div>
+        <div id="world-lint-history" style="display:none;padding:0 4px 12px"></div>
+        <div id="world-lint-container" style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>
+      </div>
     </div>`;
 }
 
@@ -2067,7 +2079,118 @@ const _TAB_LOADERS = {
   events:  () => { _loadWorldEvents(); },  // #1193 — zawsze świeże (stan eventów żyje)
   rumors:  () => { _initRumorTab(); },     // #1190 — plotki per kampania
   pending: () => { if (!_loaded.has('pending')) { _loaded.add('pending'); _loadBestiaryPending().catch(()=>_loaded.delete('pending')); } },
+  lint:    () => { _loadWorldLint(); },    // #1527 — zawsze świeże (stan świata żyje)
 };
+
+// ── 🩺 Kontrola świata (#1527) ───────────────────────────────────────────────
+// Lampka zamiast cichej samonaprawy: lista rozjazdów + guzik „Napraw" przy tych,
+// które da się rozwiązać deterministycznie. Reguły treściowe (brak gospodarza,
+// duplikat etykiety) są celowo bez guzika — wybór należy do człowieka.
+const _LINT_RULE_LABELS = {
+  service_without_host:           'Usługa bez gospodarza',
+  orphan_npc_assignment:          'Sierota obsady',
+  hex_points_to_missing_location: 'Heks bez lokacji',
+  pin_not_backed_by_canon:        'Pin bez kanonu',
+  broken_sublocation_parent:      'Zepsuty rodzic',
+  illegal_flag_value:             'Nielegalna flaga',
+  duplicate_label_in_region:      'Duplikat etykiety',
+};
+
+function _lintBadge(n) {
+  const badge = document.getElementById('world-lint-badge');
+  if (!badge) return;
+  badge.textContent = n || '';
+  badge.style.display = n ? '' : 'none';
+}
+
+async function _loadWorldLint() {
+  const box = document.getElementById('world-lint-container');
+  if (!box) return;
+  box.innerHTML = 'Sprawdzam świat…';
+  try {
+    const d = await apiFetch('/api/admin/world/lint');
+    const issues = d.issues || [];
+    _lintBadge(d.total || 0);
+    const summary = document.getElementById('world-lint-summary');
+    if (summary) {
+      summary.textContent = d.total
+        ? `${d.total} rozjazdów · ${d.fixable} naprawialnych jednym kliknięciem`
+        : 'Świat spójny — nic do naprawy.';
+    }
+    if (!issues.length) {
+      box.innerHTML = `<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.85rem">✅ Świat spójny — lint nie znalazł rozjazdów.</div>`;
+      return;
+    }
+    box.innerHTML = `
+      <div class="table-wrap">
+        <table class="data-table" id="world-lint-table">
+          <thead><tr>
+            <th><div class="th-inner">Reguła</div></th>
+            <th><div class="th-inner">Problem</div></th>
+            <th><div class="th-inner">Co to znaczy</div></th>
+            <th><div class="th-inner" style="justify-content:flex-end">Akcja</div></th>
+          </tr></thead>
+          <tbody>${issues.map(i => `
+            <tr data-lint-id="${_esc(i.id)}">
+              <td><span class="badge ${i.severity === 'error' ? 'badge-red' : 'badge-amber'}">${_esc(_LINT_RULE_LABELS[i.rule] || i.rule)}</span></td>
+              <td class="td-name">${_esc(i.label)}</td>
+              <td style="color:var(--t3);font-size:0.78rem">${_esc(i.detail)}</td>
+              <td style="text-align:right">${i.fixable
+                ? `<button class="btn btn-sm btn-primary" onclick="window._worldLintFix('${_esc(i.id)}', this)">🔧 Napraw</button>`
+                : `<span style="color:var(--t3);font-size:0.75rem">decyzja człowieka</span>`}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    box.innerHTML = `<div style="padding:28px;text-align:center;color:var(--red);font-size:0.8rem">Błąd: ${_esc(e.message)}</div>`;
+  }
+}
+
+async function _fixWorldLintIssue(issueId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const d = await apiFetch('/api/admin/world/lint/fix', {
+      method: 'POST',
+      body: JSON.stringify({ issue_id: issueId }),
+    });
+    _showToast(d.message || 'Naprawione', 'success');
+    await _loadWorldLint();
+  } catch (e) {
+    _showToast(e.message || 'Naprawa nieudana', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🔧 Napraw'; }
+  }
+}
+
+async function _toggleWorldLintHistory() {
+  const box = document.getElementById('world-lint-history');
+  if (!box) return;
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = '<div style="color:var(--t3);font-size:0.8rem;padding:8px">Wczytuję kronikę…</div>';
+  try {
+    const d = await apiFetch('/api/admin/world/lint/history');
+    const rows = d.entries || [];
+    box.innerHTML = rows.length
+      ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+           <th><div class="th-inner">Kiedy</div></th>
+           <th><div class="th-inner">Kto</div></th>
+           <th><div class="th-inner">Reguła</div></th>
+           <th><div class="th-inner">Czego dotyczyło</div></th>
+           <th><div class="th-inner">Co zrobił</div></th>
+         </tr></thead><tbody>${rows.map(r => `
+           <tr>
+             <td style="white-space:nowrap">${_esc(r.created_at)}</td>
+             <td>${r.source === 'manual_fix' ? '👤 panel' : '⚙️ start backendu'}</td>
+             <td>${_esc(r.rule)}</td>
+             <td class="td-name">${_esc(r.target)}</td>
+             <td style="color:var(--t3);font-size:0.78rem">${_esc(r.detail)}</td>
+           </tr>`).join('')}</tbody></table></div>`
+      : '<div style="color:var(--t3);font-size:0.8rem;padding:8px">Kronika pusta — nic się jeszcze nie naprawiło.</div>';
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--red);font-size:0.8rem;padding:8px">Błąd: ${_esc(e.message)}</div>`;
+  }
+}
 
 // ── Plotki (#1190 R2) — pula per REGION ──────────────────────────────────────
 let _rumorRegionsLoaded = false;
@@ -2216,6 +2339,9 @@ export async function init(panel) {
   window._worldAddRumor        = () => _addRumorManual();
   window._worldGenRumors       = () => _generateRumorsAI();
   window._worldDeleteRumor     = (id, btn) => _deleteRumor(id, btn);
+  window._worldLintReload        = () => _loadWorldLint();                 // #1527
+  window._worldLintFix           = (id, btn) => _fixWorldLintIssue(id, btn);
+  window._worldLintToggleHistory = () => _toggleWorldLintHistory();
   window.rowCheck   = rowCheck;
   window.toggleAll  = toggleAll;
   window.eiOpenGallery  = (key) => eiOpenGallery(key);

@@ -70,6 +70,7 @@ from app.routers.dungeon_tiles import router as dungeon_tiles_router
 from app.routers.admin_analytics import router as admin_analytics_router
 from app.routers.world_review import router as world_review_router
 from app.routers.world_events import router as world_events_router
+from app.routers.world_lint import router as world_lint_router
 from app.routers.admin_spectate import router as admin_spectate_router
 from app.routers.smart_entry import router as smart_entry_router
 from app.routers.admin_duplicates import router as admin_duplicates_router
@@ -744,6 +745,11 @@ async def lifespan(app: FastAPI):
                         cleared=len(_rep["cleared"]),
                         smears=len(_rep["smears"]),
                     )
+                # #1527 (fala 4) — koniec cichej samonaprawy: co reconcile
+                # naprawił, trafia do kroniki widocznej w panelu
+                # (Świat → 🩺 Kontrola świata → Historia napraw).
+                from app.services.world_lint_service import record_reconcile_report
+                record_reconcile_report(_sync_conn, _rep)
             finally:
                 _sync_conn.close()
         except Exception:
@@ -899,6 +905,7 @@ app.include_router(bg_images_router, prefix="/api")
 app.include_router(dungeon_tiles_router, prefix="/api")
 app.include_router(world_review_router)
 app.include_router(world_events_router)  # #1193 — wydarzenia regionalne (żywy świat)
+app.include_router(world_lint_router)  # #1527 — 🩺 Kontrola świata (lint + kronika napraw)
 app.include_router(admin_spectate_router)
 app.include_router(smart_entry_router)
 app.include_router(admin_duplicates_router)  # #1399 — detektor duplikatów treści

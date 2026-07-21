@@ -2406,7 +2406,27 @@ def _migrate_game_locations_schema(conn: sqlite3.Connection, _exec) -> None:
         logger.warning("v2_migration_skipped", label="1525-loc-parent-pair", error=str(e))
 
     # ── czyszczenie danych: heksy wskazujące martwe/nieistniejące lokacje ──
+    # #1527 (fala 4): to sprzątanie leciało przy KAŻDYM starcie po cichu. Teraz
+    # najpierw spisujemy, czego dotyczy, i dopisujemy to do kroniki napraw
+    # (Świat → 🩺 Kontrola świata → Historia napraw).
     try:
+        hex_targets = [
+            f"{r[0]},{r[1]}" for r in conn.execute(
+                "SELECT q, r FROM world_hexes "
+                "WHERE map_level = 0 AND location_key IS NOT NULL AND location_key != '' "
+                "  AND NOT EXISTS (SELECT 1 FROM game_locations g "
+                "                  WHERE g.key = world_hexes.location_key AND g.is_active = 1)"
+            ).fetchall()
+        ]
+        pin_targets = [
+            r[0] for r in conn.execute(
+                "SELECT key FROM game_locations "
+                "WHERE world_hex_q IS NOT NULL AND ("
+                "  location_type = 'sub' OR is_active = 0 OR NOT EXISTS ("
+                "    SELECT 1 FROM world_hexes h WHERE h.map_level = 0 AND h.is_active = 1"
+                "      AND h.location_key = game_locations.key))"
+            ).fetchall()
+        ]
         n = conn.execute(
             "UPDATE world_hexes SET location_key = NULL "
             "WHERE map_level = 0 AND location_key IS NOT NULL AND location_key != '' "
@@ -2426,6 +2446,19 @@ def _migrate_game_locations_schema(conn: sqlite3.Connection, _exec) -> None:
             conn.commit()
             logger.info("v2_migration_applied", label="1525-loc-canon-cleanup",
                         hexes_cleared=n, pins_cleared=m)
+            try:
+                from app.services.world_lint_service import record_startup_cleanup
+                record_startup_cleanup(
+                    conn, "hex_points_to_missing_location", hex_targets,
+                    "heks wskazywał lokację, której nie ma — zwolniony przy starcie",
+                )
+                record_startup_cleanup(
+                    conn, "pin_not_backed_by_canon", pin_targets,
+                    "pin bez pokrycia w kanonie heksów — zgaszony przy starcie",
+                )
+            except Exception as e:  # kronika nie może zablokować migracji
+                logger.warning("world_lint_history_skipped", label="1525-loc-canon-cleanup",
+                               error=str(e))
     except Exception as e:
         logger.warning("v2_migration_skipped", label="1525-loc-canon-cleanup", error=str(e))
 
@@ -5246,6 +5279,33 @@ def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
             logger.info("u31_npc_locations_migrated", rows_inserted=count)
     except Exception as exc:
         logger.warning("u31_npc_locations_migration_failed", error=str(exc))
+
+
+def _issue1527_world_lint_history(conn: sqlite3.Connection) -> None:
+    """#1527 fala 4 — historia napraw świata (koniec cichej samonaprawy).
+
+    Reconcile przy starcie backendu prostował mapę milcząco: rozjazd znikał
+    z ekranu, a Piotr nigdy się nie dowiadywał, że coś było nie tak. Ta tabela
+    jest widoczną kroniką — każda naprawa (startowa i ta z guzika w panelu)
+    zostawia w niej ślad.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS world_lint_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            source     TEXT NOT NULL,
+            rule       TEXT NOT NULL,
+            target     TEXT,
+            detail     TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_world_lint_history_created "
+        "ON world_lint_history(created_at DESC)"
+    )
+    conn.commit()
 
 
 def _issue1524_npc_binding_canon(conn: sqlite3.Connection) -> None:
@@ -8628,6 +8688,7 @@ def run_admin_migrations() -> None:
         _ensure_recipe_loot_schema(conn)  # #1375 BL-E1 — receptury jako drop lootu + pule availability
         _ensure_companions_schema(conn)  # #1192 FAZA TW — towarzysze podróży + wierzchowce
         _issue1524_npc_binding_canon(conn)  # #1524 — jedno źródło prawdy o obsadzie lokacji
+        _issue1527_world_lint_history(conn)  # #1527 — kronika napraw świata (lint zamiast ciszy)
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
