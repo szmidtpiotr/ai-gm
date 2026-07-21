@@ -6,7 +6,7 @@ export const WIZARD_MAX_SWAPS = 4;
 export const WIZARD_STAT_MIN = 8;
 export const WIZARD_STAT_MAX = 18;
 
-export type Race = "human" | "dwarf";
+export type Race = "human" | "dwarf" | "elf";
 export type Archetype = "warrior" | "scholar" | "rogue";
 
 // #1477 (SG-8) — archetypy zamknięte dla rasy. Krasnolud nie gra Łotrzykiem
@@ -16,6 +16,8 @@ export type Archetype = "warrior" | "scholar" | "rogue";
 export const RACE_BLOCKED_ARCHETYPES: Record<Race, Archetype[]> = {
   human: [],
   dwarf: ["rogue"],
+  // #1474 — elf leśny nie gra Wojownikiem (CON −1, lekki chód): Zwiadowca albo Stroiciel.
+  elf: ["warrior"],
 };
 
 export const STAT_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"] as const;

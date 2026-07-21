@@ -73,6 +73,13 @@ const RACES: Array<{ key: Race; icon: string; title: string; desc: string; bonus
     desc: "Twardy jak kamień. Odporny na trucizny i mroczną magię, widzi w ciemności.",
     bonus: "+2 KON · +1 SIŁ · −1 CHA · −1 ZRĘ · Rdzeń-magia",
   },
+  {
+    key: "elf",
+    icon: "🏹",
+    title: "Elf leśny",
+    desc: "Cichy strażnik starych granic. Celny łuk, zmierzchowy wzrok, odskok ze zwarcia. Kruchy w bezpośrednim starciu.",
+    bonus: "+2 ZRĘ · +1 MĄD · −1 KON · Magia strojenia",
+  },
 ];
 
 const ARCHETYPES: Array<{ key: Archetype; icon: string; title: string; desc: string; bonus: string }> = [
@@ -80,6 +87,24 @@ const ARCHETYPES: Array<{ key: Archetype; icon: string; title: string; desc: str
   { key: "rogue", icon: "🏹", title: "Łotrzyk", desc: "Zwinny cień: skradanie, łuk, inteligentna walka.", bonus: "+2 ZRĘ · +1 SZC · HP 8" },
   { key: "scholar", icon: "📜", title: "Uczony", desc: "Tkacz arkanów: kruchy, ale niszczycielski dzięki zaklęciom i manie.", bonus: "+2 INT · +1 MĄD · HP 6 · Mana" },
 ];
+
+// #1474 — ta sama mechanika archetypu, inna nazwa i klimat wedle rasy. Elf nie ma
+// "Łotrzyka" (nazwa nie pasuje do strażnika granic) ani zwykłego "Uczonego" —
+// jego magia to strojenie, nie nauka z ksiąg. Klucze archetypów bez zmian.
+const RACE_ARCHETYPE_OVERRIDE: Partial<
+  Record<Race, Partial<Record<Archetype, { title: string; desc: string; bonus?: string }>>>
+> = {
+  elf: {
+    rogue: {
+      title: "Zwiadowca",
+      desc: "Łucznik i tropiciel: cichy w kniei, celny z dystansu, odskakuje ze zwarcia.",
+    },
+    scholar: {
+      title: "Uczony-Stroiciel",
+      desc: "Stroi pęknięcia Rdzenia zamiast je rwać: kontrola, ochrona i iluzje zamiast czystego ognia.",
+    },
+  },
+};
 
 const BOND_TYPES = { person: "Osoba", place: "Miejsce", object: "Przedmiot", ideal: "Ideał" };
 const WEAK_TYPES = { fear: "Strach", flaw: "Wada", addiction: "Nałóg", trauma: "Trauma" };
@@ -144,7 +169,12 @@ export default function CreateCharacter() {
     setRace(r);
     const blocked = (raceOptions?.find((o) => o.key === r)?.blocked_archetypes ??
       RACE_BLOCKED_ARCHETYPES[r] ?? []) as Archetype[];
-    if (blocked.includes(archetype)) setArchetype("warrior");
+    // #1474: fallbackiem nie może być na sztywno Wojownik — dla elfa to właśnie
+    // archetyp zamknięty. Bierzemy pierwszy dozwolony z listy kart.
+    if (blocked.includes(archetype)) {
+      const firstAllowed = ARCHETYPES.find((a) => !blocked.includes(a.key))?.key ?? "rogue";
+      setArchetype(firstAllowed);
+    }
   }
 
   const bonus = ARCHETYPE_BONUS[archetype];
@@ -335,6 +365,7 @@ export default function CreateCharacter() {
             archetype={archetype}
             setArchetype={setArchetype}
             blockedArchetypes={blockedArchetypes}
+            race={race}
             backstory={backstory}
             setBackstory={setBackstory}
           />
@@ -524,8 +555,13 @@ function StepIdentity({
   setBackstory: (v: string) => void;
   /** #1477 — archetypy zamknięte dla wybranej rasy; karty w ogóle nie wchodzą. */
   blockedArchetypes?: Archetype[];
+  /** #1474 — rasa nadaje archetypom własne nazwy (elf: Zwiadowca / Uczony-Stroiciel). */
+  race?: Race;
 }) {
-  const options = ARCHETYPES.filter(({ key }) => !blockedArchetypes.includes(key));
+  const options = ARCHETYPES.filter(({ key }) => !blockedArchetypes.includes(key)).map((a) => ({
+    ...a,
+    ...(RACE_ARCHETYPE_OVERRIDE[race as Race]?.[a.key] ?? {}),
+  }));
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-center font-serif text-title-lg font-semibold text-text">Twój bohater</h1>

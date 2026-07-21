@@ -25,6 +25,10 @@ import sqlite3
 #: Archetypy niedostępne dla rasy (klucz rasy → krotka archetypów).
 RACE_BLOCKED_ARCHETYPES: dict[str, tuple[str, ...]] = {
     "dwarf": ("rogue",),
+    # #1474 — elf leśny nie gra Wojownikiem. CON −1 i lekki chód wykluczają
+    # frontowe zwarcie; tożsamość rasy = Zwiadowca (łuk + odskok) i
+    # Uczony-Stroiciel (kontrola/iluzje).
+    "elf": ("warrior",),
 }
 
 #: Powód pokazywany graczowi, gdy mimo wszystko spróbuje zapisać taką parę.
@@ -32,6 +36,10 @@ _BLOCK_REASON: dict[tuple[str, str], str] = {
     ("dwarf", "rogue"): (
         "Krasnoludy nie chodzą drogą Łotrzyka — ich droga to Wojownik "
         "albo Uczony Rdzenia."
+    ),
+    ("elf", "warrior"): (
+        "Leśne elfy nie stają w ścianie tarcz — ich droga to Zwiadowca "
+        "albo Uczony-Stroiciel."
     ),
 }
 
@@ -47,6 +55,11 @@ RACE_START: dict[str, dict] = {
             "wyrobisko_srebrnej_zyly",
         ),
     },
+    # #1474 — elf startuje docelowo w Czarnoborze (ukryta osada, „Szept Koron"),
+    # ale kraina nie ma jeszcze zaseedowanych heksów ani lokacji-hubu (#1489/CB-5).
+    # Do tego czasu ŚWIADOMIE bez wpisu: elf startuje jak człowiek (Kresy), zamiast
+    # kotwiczyć się w pustym regionie i wywracać tworzenie kampanii. Wpis dopisać
+    # w sesji CB-8, gdy hub Czarnoboru istnieje w `game_locations` + `world_hexes`.
 }
 
 #: Podpowiedź do promptu planu kampanii — lore §9: pierwsze haki to spór rodów

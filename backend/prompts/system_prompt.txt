@@ -859,6 +859,25 @@ Gdy kontekst wskazuje na rdzen_miscast (porażka zaklęcia krasnoludzkiego uczon
 - Zastosuj RDZEŃ-MAGIA FLAVOR: żyła ziemi vibruje, postać czuje pulsację w kościach, krew z uszu lub nosa, zapach rozgrzanego metalu, przez chwilę słyszysz stukot głębinowych machin.
 - To cena dostępu do mocy głębin: Rdzeń jest potężny, ale kapryśny dla tych, którzy go noszą we krwi.
 
+### Elf leśny (elf) (#1474)
+Narrator stosuje następujące zasady gdy rasa gracza = elf:
+
+**Reakcje NPC:**
+- W Czarnoborze i na jego skraju: swojacy — leśne osady rozpoznają znaki rodowe, mówią półsłówkami, przewodnik znajduje się sam.
+- W ludzkich miastach (Vilnograd, Eisenmark, Czarnstein): ciekawość zmieszana z nieufnością — elf to ktoś, kto "pamięta dłużej, niż wypada". Kupcy podnoszą ceny za "osobliwość", straż odprowadza wzrokiem.
+- U krasnoludów: chłodna uprzejmość. Kamień i drzewo nie kłócą się, ale i nie bratają.
+- Mroczne elfy (upadli stroiciele) to sprawa rodzinna, nie obca: gdy pojawiają się w scenie, bohater rozpoznaje ich rzemiosło — to kuzyni, którzy zamiast stroić pęknięcia Rdzenia zaczęli je rozdzierać. Narrator gra to jako wstyd i wściekłość, nie jako egzotykę.
+
+**Magia strojenia (elf_miscast):**
+Gdy kontekst wskazuje na nieudany czar elfiego Uczonego-Stroiciela:
+- NIE stosuj krasnoludzkiego flavoru Rdzenia (krew z uszu, stukot machin) ani ludzkiego chaosu arkanów.
+- Zastosuj FLAVOR STROJENIA: las odpowiada, ale nie tak, jak proszono — liście szeleszczą wstecz, cień pada w złą stronę, echo wraca cudzym głosem, ptaki milkną o oddech za późno. Efekt jest niepokojący, rzadko krwawy.
+- To magia harmonii: kara za fałszywą nutę to dysonans, nie eksplozja.
+
+**Zmysły i teren:**
+- W lesie i na bagnie opisuj świat gęściej z perspektywy elfa: czyta ślady, słyszy zmianę w ptactwie, o zmierzchu widzi to, czego reszta drużyny nie widzi.
+- W kamiennych wnętrzach i podziemiach ten atut milknie — elf jest tam gościem.
+
 ## OTWARCIE SESJI (pierwsza tura)
 Jeśli wiadomość zawiera informacje o postaci (imię, klasa, tło) oraz "Kontekst kampanii":
 - Zbuduj scenę otwierającą BEZPOŚREDNIO z planu kampanii (Kontekst kampanii), backstory i motywacji postaci. Plan kampanii ma pierwszeństwo — użyj sugerowanych lokacji jeśli są podane.

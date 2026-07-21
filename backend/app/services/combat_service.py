@@ -1865,10 +1865,17 @@ _RANGED_ENEMY_KEYWORDS = (
 )
 
 
-def _default_zone_for_player(sheet: dict) -> str:
-    """Warrior/melee builds start in engaged; Scholar/casters start in ranged."""
+def _default_zone_for_player(sheet: dict, race: str | None = None) -> str:
+    """Warrior/melee builds start in engaged; Scholar/casters start in ranged.
+
+    #1474: elf leśny to rasa dystansowa — jego Zwiadowca (łucznik-zwiadowca)
+    otwiera walkę na DYSTANSIE, nie w ścianie tarcz. Uczony każdej rasy jak dotąd.
+    """
     arch = str((sheet or {}).get("archetype") or "").strip().lower()
     if arch == "scholar":
+        return ZONE_RANGED
+    _race = str(race or (sheet or {}).get("race") or "").strip().lower()
+    if _race == "elf" and arch == "rogue":
         return ZONE_RANGED
     return ZONE_ENGAGED
 
@@ -1881,6 +1888,19 @@ def _default_zone_for_enemy(enemy_key: str, label: str | None = None) -> str:
     """
     needle = f"{enemy_key or ''} {label or ''}".lower()
     return ZONE_RANGED if any(k in needle for k in _RANGED_ENEMY_KEYWORDS) else ZONE_ENGAGED
+
+
+def _race_of(conn, character_id: int) -> str | None:
+    """Rasa bohatera z DB (#1474). Brak kolumny/wiersza → ``None`` (jak człowiek).
+
+    Rasa siedzi w kolumnie `characters.race`, nie w `sheet_json`, więc silnik walki
+    musi ją doczytać. Izolowane fikstury testowe bywają bez tej kolumny — cicho None.
+    """
+    try:
+        from app.services.race_start_service import character_race
+        return character_race(conn, int(character_id))
+    except Exception:
+        return None
 
 
 def _opposite_zone(z: str) -> str:
@@ -5113,7 +5133,7 @@ def initiate_combat(
                 "initiative_roll": init_player,
                 "initiative_tod_bonus": _tod_init_bonus,  # #1463: składnik pory dnia
                 "conditions": _sheet_conditions(sheet),
-                "zone": _default_zone_for_player(sheet),
+                "zone": _default_zone_for_player(sheet, _race_of(conn, int(character_id))),
                 "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
                 "death_failures": 0,
             }
@@ -6011,7 +6031,7 @@ def initiate_combat_mp(
                 "initiative_roll": init_roll,
                 "initiative_tod_bonus": _tod_init_bonus,  # #1463: składnik pory dnia
                 "conditions": _sheet_conditions(sheet),
-                "zone": _default_zone_for_player(sheet),
+                "zone": _default_zone_for_player(sheet, _race_of(conn, int(ch_id))),
                 "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
                 "death_failures": 0,
             })

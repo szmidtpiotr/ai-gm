@@ -19,7 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import type { Hero } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const RACE_PL: Record<string, string> = { human: "Człowiek", dwarf: "Krasnolud" };
+const RACE_PL: Record<string, string> = { human: "Człowiek", dwarf: "Krasnolud", elf: "Elf leśny" };
 const CLASS_PL: Record<string, string> = {
   warrior: "Wojownik",
   scholar: "Uczony",

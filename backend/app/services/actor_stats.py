@@ -103,6 +103,9 @@ def parse_stats_json(raw: Any) -> dict[str, int]:
 # Racial stat modifiers (STARTING values — Sandbox-tunable via #969).
 RACIAL_STAT_MODS: dict[str, dict[str, int]] = {
     "dwarf": {"CON": +2, "STR": +1, "CHA": -1, "DEX": -1},
+    # #1474: elf leśny — smukły, długowieczny, kruchszy. Tożsamość rasy to celność
+    # i czujność (Zwiadowca / Uczony-Stroiciel), nie wytrzymałość w zwarciu.
+    "elf": {"DEX": +2, "WIS": +1, "CON": -1},
     "human": {},
 }
 

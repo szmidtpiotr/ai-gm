@@ -33,12 +33,17 @@ BLOCKING_STATUSES = ("coming", "locked")
 RACE_HOME_REGION: dict[str, str | None] = {
     "human": None,
     "dwarf": "siwe_granie",
+    # #1474 — elf leśny jest z Czarnoboru. Kraina ma status `coming`, więc rasa
+    # jest na razie grywalna tylko dla testera (ta sama bramka co #1478/#1479);
+    # po otwarciu Czarnoboru odblokowuje się sama, bez zmian w kodzie.
+    "elf": "czarnobor",
 }
 
 #: Etykiety ras dla kreatora (kolejność = kolejność kart).
 RACE_LABELS: dict[str, str] = {
     "human": "Człowiek",
     "dwarf": "Krasnolud",
+    "elf": "Elf leśny",
 }
 
 
