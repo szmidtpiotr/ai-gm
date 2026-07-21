@@ -19,6 +19,7 @@ import structlog
 from typing import Any
 
 from app.services.llm_service import generate_chat
+from app.services.location_factory import LocationSource, create_location
 from app.core.db_runtime import resolve_db_path
 
 logger = structlog.get_logger()
@@ -187,27 +188,23 @@ def _get_or_create_location(
     atmosphere = params.get("atmosphere", "")
     description = params.get("description", "")
 
-    # Resolve parent_id
-    parent_id = None
-    if parent_key:
-        p_row = conn.execute("SELECT id FROM game_locations WHERE key = ?", (parent_key,)).fetchone()
-        if p_row:
-            parent_id = p_row[0]
-
     # Build rules JSON with atmosphere if provided
     rules_json = json.dumps({"atmosphere": atmosphere}) if atmosphere else None
 
     try:
-        conn.execute(
-            """INSERT OR IGNORE INTO game_locations
-               (key, label, location_type, description, parent_id, parent_key,
-                rules, review_status, is_active,
-                created_by, canonical, source_campaign_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review', 1,
-                       'gm_runtime', 0, ?)""",
-            (key, label, loc_type, description, parent_id, parent_key or None, rules_json, campaign_id)
+        # #1526 (fala 3) — jedne drzwi: stempel flag i komplet parent_key/parent_id
+        # robi fabryka, nie ta sciezka.
+        create_location(
+            conn,
+            key=key,
+            label=label,
+            source=LocationSource.GM_RUNTIME,
+            description=description,
+            location_type=loc_type,
+            parent_key=parent_key or None,
+            rules=rules_json,
+            source_campaign_id=campaign_id,
         )
-        conn.commit()
         logger.info("create_location_tag_processed", key=key, campaign_id=campaign_id, created_by="gm_runtime")
         return {"key": key, "label": label, "review_status": "pending_review", "created_by": "gm_runtime"}
     except Exception as e:
@@ -788,22 +785,28 @@ def build_camp(
     label = "Obozowisko"
     description = "Twój obóz polowy. Niewielkie ognisko, koce i broń pod ręką. Nasłuchujesz odgłosów w ciemności."
 
-    conn.execute(
-        """INSERT INTO game_locations
-           (key, label, location_type, description, parent_id, parent_key,
-            is_active, safe_for_rest, temporary, review_status,
-            created_by, canonical, source_campaign_id,
-            location_subtype, biome, tier)
-           VALUES (?, ?, 'sub', ?, ?, ?,
-                   1, 1, 1, 'permanent',
-                   'gm_runtime', 0, ?,
-                   'camp', ?, 1)""",
-        (key, label, description, parent_id, parent_key, campaign_id, biome),
+    # #1526 (fala 3) — jedne drzwi. Oboz to stub techniczny, nie tresc do
+    # recenzji, wiec jawnie `permanent` mimo zrodla `gm_runtime`; heks wiaze
+    # fabryka przez kanonicznego writera (#1243).
+    create_location(
+        conn,
+        key=key,
+        label=label,
+        source=LocationSource.GM_RUNTIME,
+        description=description,
+        location_type="sub",
+        parent_key=parent_key,
+        parent_id=parent_id,
+        review_status="permanent",
+        safe_for_rest=True,
+        temporary=True,
+        location_subtype="camp",
+        biome=biome,
+        tier=1,
+        hex_q=q,
+        hex_r=r,
+        source_campaign_id=campaign_id,
     )
-    # #1243: single writer — hex canon + derived cache for the temp camp.
-    from app.services.hex_location_link import link_location_to_hex
-    link_location_to_hex(conn, key, q, r)
-    conn.commit()
 
     logger.info(
         "build_camp",
@@ -1587,25 +1590,24 @@ def generate_sublocs_for_settlement(
         base_label = _SUBLOC_LABELS.get(subtype, subtype.capitalize())
         safe = SUBLOC_SAFE_FOR_REST.get(subtype, 0)
 
-        base_key = f"{parent_key}_{subtype}"
-        key = base_key
-        idx = 2
-        while conn.execute("SELECT 1 FROM game_locations WHERE key = ?", (key,)).fetchone():
-            key = f"{base_key}_{idx}"
-            idx += 1
-
         label = f"{parent_label}: {base_label}"
 
-        conn.execute(
-            """
-            INSERT INTO game_locations
-                (key, label, location_type, location_subtype, parent_key,
-                 safe_for_rest, approved, review_status, is_active, created_by,
-                 enrichment_locked)
-            VALUES (?, ?, 'sub', ?, ?, ?, 1, 'permanent', 1, 'auto_generated', 0)
-            """,
-            (key, label, subtype, parent_key, safe),
+        # #1526 (fala 3) — jedne drzwi; `unique_key` zachowuje stary sufiks _2/_3
+        # przy powtorzonym podtypie, a fabryka dokleja parent_id do parent_key.
+        res = create_location(
+            conn,
+            key=f"{parent_key}_{subtype}",
+            label=label,
+            source=LocationSource.AUTO_GENERATED,
+            location_type="sub",
+            parent_key=parent_key,
+            location_subtype=subtype,
+            safe_for_rest=safe,
+            enrichment_locked=False,
+            unique_key=True,
+            commit=False,
         )
+        key = res["key"]
         created.append({"key": key, "label": label, "subtype": subtype, "safe_for_rest": safe})
 
     conn.commit()

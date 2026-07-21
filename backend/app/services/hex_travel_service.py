@@ -2096,12 +2096,21 @@ def resolve_starting_hex(
             else:
                 # World has no canonical locations at all — create one-time placeholder.
                 loc_key = f"start_{campaign_id}"
-                conn.execute(
-                    """INSERT OR IGNORE INTO game_locations
-                       (key, label, safe_for_rest, canonical, created_by, is_active,
-                        approved, review_status, source_campaign_id)
-                       VALUES (?,?,1,0,'gm_runtime',1,1,'permanent',?)""",
-                    (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
+                # #1526 (fala 3) — jedne drzwi. Ta sciezka wpisywala kiedys
+                # `review_status='approved'` (status spoza trzech legalnych) →
+                # lokacja ladowala w limbo: ani w poczekalni, ani przyjeta.
+                from app.services.location_factory import (
+                    LocationSource as _LocSrc, create_location as _create_location,
+                )
+                _create_location(
+                    conn,
+                    key=loc_key,
+                    label=starting_location_name or f"Start {campaign_id}",
+                    source=_LocSrc.GM_RUNTIME,
+                    review_status="permanent",
+                    safe_for_rest=True,
+                    source_campaign_id=campaign_id,
+                    commit=False,
                 )
             logger.info(
                 "s17_start_location_created",

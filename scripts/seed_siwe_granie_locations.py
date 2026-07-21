@@ -24,27 +24,20 @@ import sys
 sys.path.insert(0, "/app")
 
 from app.services.hex_location_link import link_location_to_hex  # noqa: E402
+from app.services.location_factory import LocationSource, create_location  # noqa: E402
 from sg4_locations_spec import LOCATIONS  # noqa: E402
 
 REGION = "siwe_granie"
 
-UPSERT = """
-INSERT INTO game_locations
-  (key, label, description, location_type, region, created_by, approved, canonical,
-   ai_generated, map_icon, tier, biome, location_subtype, safe_for_rest,
-   visible_before_visit, review_status, is_active)
-VALUES (?,?,?,'macro',?, 'seed', 1, 1, 0, ?,?,?,?,?, 1, 'permanent', 1)
-ON CONFLICT(key) DO UPDATE SET
-  label=excluded.label,
-  description=excluded.description,
-  region=excluded.region,
-  map_icon=excluded.map_icon,
-  tier=excluded.tier,
-  biome=excluded.biome,
-  location_subtype=excluded.location_subtype,
-  safe_for_rest=excluded.safe_for_rest,
-  is_active=1,
-  updated_at=datetime('now')
+#: #1526 (fala 3) — nowe lokacje wchodza JEDNYMI drzwiami (`create_location`);
+#: powtorne uruchomienie seeda odswieza tresc zwyklym UPDATE-em. Stary UPSERT
+#: pisal tez kolumne `ai_generated`, skasowana w fali 2 (#1525) — czyli od tamtej
+#: pory ten seed by sie wywalil. Jedne drzwi likwiduja ta klase bledow.
+_REFRESH = """
+UPDATE game_locations SET
+  label=?, description=?, region=?, map_icon=?, tier=?, biome=?,
+  location_subtype=?, safe_for_rest=?, is_active=1, updated_at=datetime('now')
+WHERE key=?
 """
 
 
@@ -68,12 +61,32 @@ def main():
             print(f"  ✗ {loc['key']}: brak hexa z tym location_key — najpierw "
                   f"seed_world_map.py --region {REGION} --force")
             return 1
-        exists = conn.execute("SELECT 1 FROM game_locations WHERE key=?", (loc["key"],)).fetchone()
-        conn.execute(UPSERT, (
-            loc["key"], loc["label"], loc["desc"], REGION,
-            loc["icon"], loc["tier"], loc["biome"], loc["subtype"], loc["safe"],
-        ))
         q, r = hx["q"], hx["r"]
+        res = create_location(
+            conn,
+            key=loc["key"],
+            label=loc["label"],
+            source=LocationSource.SEED,
+            description=loc["desc"],
+            location_type="macro",
+            region=REGION,
+            map_icon=loc["icon"],
+            tier=loc["tier"],
+            biome=loc["biome"],
+            location_subtype=loc["subtype"],
+            safe_for_rest=loc["safe"],
+            visible_before_visit=True,
+            canonical=True,
+            hex_q=q,
+            hex_r=r,
+            commit=False,
+        )
+        exists = not res["created"]
+        if exists:
+            conn.execute(_REFRESH, (
+                loc["label"], loc["desc"], REGION, loc["icon"], loc["tier"],
+                loc["biome"], loc["subtype"], loc["safe"], loc["key"],
+            ))
         ok = link_location_to_hex(conn, loc["key"], q, r)
         if exists:
             updated += 1

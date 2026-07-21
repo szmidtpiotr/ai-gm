@@ -38,6 +38,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from app.core.logging import get_logger
+from app.services.location_factory import LocationSource, create_location
 
 logger = get_logger(__name__)
 
@@ -228,20 +229,23 @@ def ensure_template_start_location(
     now = datetime.now(timezone.utc).isoformat()
 
     def _insert(new_key: str) -> None:
-        conn.execute(
-            """INSERT INTO game_locations
-               (key, label, description, review_status, is_active,
-                created_by, source_campaign_id, safe_for_rest,
-                world_hex_q, world_hex_r, created_at, updated_at)
-               VALUES (?, ?, '', 'pending_review', 1, 'forge', ?, 1, ?, ?, ?, ?)""",
-            (new_key, label, template_id, q, r, now, now),
+        # #1526 (fala 3) — jedne drzwi; heks wiaze fabryka przez kanon (#1243).
+        create_location(
+            conn,
+            key=new_key,
+            label=label,
+            source=LocationSource.FORGE,
+            safe_for_rest=True,
+            source_campaign_id=template_id,
+            hex_q=q,
+            hex_r=r,
+            commit=False,
         )
 
     from app.services.hex_location_link import link_location_to_hex
 
     if row is None:
         _insert(key)
-        link_location_to_hex(conn, key, q, r)  # #1243: claim hex canon
         conn.commit()
         logger.info(
             "template_start_location_created",
@@ -398,15 +402,21 @@ def ensure_template_location_structure(
             (key,),
         ).fetchone()
         if row is None:
-            conn.execute(
-                """INSERT INTO game_locations
-                   (key, label, description, location_type, parent_key, parent_id,
-                    review_status, is_active, created_by,
-                    source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 'pending_review', 1, 'forge', ?, ?, ?, ?, ?, ?)""",
-                (key, label, desc, loc_type, parent_key, parent_id,
-                 template_id, safe, hex_q, hex_r, now, now),
+            # #1526 (fala 3) — jedne drzwi.
+            create_location(
+                conn,
+                key=key,
+                label=label,
+                source=LocationSource.FORGE,
+                description=desc,
+                location_type=loc_type,
+                parent_key=parent_key,
+                parent_id=parent_id,
+                source_campaign_id=template_id,
+                safe_for_rest=bool(safe),
+                hex_q=hex_q,
+                hex_r=hex_r,
+                commit=False,
             )
             return key
         # Already in the desired shape (earlier materialization of THIS structure) —
@@ -433,17 +443,23 @@ def ensure_template_location_structure(
             )
             return key
         # foreign row under this key → #1206 conflict rule: copy + rename in plans
-        new_key = _unique_location_key(conn, key)
-        conn.execute(
-            """INSERT INTO game_locations
-               (key, label, description, location_type, parent_key, parent_id,
-                review_status, is_active, created_by,
-                source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
-                created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'pending_review', 1, 'forge', ?, ?, ?, ?, ?, ?)""",
-            (new_key, label, desc, loc_type, parent_key, parent_id,
-             template_id, safe, hex_q, hex_r, now, now),
-        )
+        # #1206 konflikt klucza → kopia pod wolnym kluczem, tez przez jedne drzwi.
+        new_key = create_location(
+            conn,
+            key=key,
+            label=label,
+            source=LocationSource.FORGE,
+            description=desc,
+            location_type=loc_type,
+            parent_key=parent_key,
+            parent_id=parent_id,
+            source_campaign_id=template_id,
+            safe_for_rest=bool(safe),
+            hex_q=hex_q,
+            hex_r=hex_r,
+            unique_key=True,
+            commit=False,
+        )["key"]
         renames.append((key, new_key))
         return new_key
 

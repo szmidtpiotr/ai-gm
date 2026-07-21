@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.migrations_admin import DB_PATH
 from app.services.llm_service import generate_chat
 from app.services.hex_location_link import is_placed_row
+from app.services.location_factory import LocationSource, create_location
 from app.services.location_config_service import get_bool_flag
 from app.services.location_context_injector import _collect_related_location_ids
 from app.services.location_intent_parser import LocationIntent
@@ -507,34 +508,23 @@ def _create_new_location(
         # are None — give the Pending review queue at least the label as description
         # so admins aren't staring at a blank row.
         description = intent.description or intent.target_label
-        cursor = conn.execute(
-            """
-            INSERT INTO game_locations (
-                key, label, description, parent_id, parent_key, location_type,
-                approved,
-                created_by, review_status, canonical, source_campaign_id,
-                biome, location_subtype
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-            """,
-            (
-                key,
-                intent.target_label,
-                description,
-                parent_id,
-                intent.parent_key or None,
-                "sub" if parent_id else "macro",
-                0 if runtime_generated else 1,
-                created_by,
-                review_status,
-                campaign_id if runtime_generated else None,
-                intent.biome,
-                intent.location_subtype,
-            )
-        )
-        conn.commit()
-        
-        new_id = cursor.lastrowid
+        # #1526 (fala 3) — jedne drzwi.
+        new_id = create_location(
+            conn,
+            key=key,
+            label=intent.target_label,
+            source=created_by,
+            description=description,
+            location_type="sub" if parent_id else "macro",
+            parent_id=parent_id,
+            parent_key=intent.parent_key or None,
+            review_status=review_status,
+            approved=0 if runtime_generated else 1,
+            canonical=0,
+            source_campaign_id=campaign_id if runtime_generated else None,
+            biome=intent.biome,
+            location_subtype=intent.location_subtype,
+        )["id"]
         return _get_location_by_id(new_id)
         
     except sqlite3.Error as e:
@@ -576,32 +566,25 @@ def persist_ai_generated_location(
             return dict(existing)
 
         location_type = "sub" if parent_id else "macro"
-        cursor = db.execute(
-            """
-            INSERT INTO game_locations (
-                key, label, description, parent_id, location_type,
-                approved, is_active,
-                created_by, review_status, canonical, source_campaign_id,
-                biome, location_subtype
-            )
-            VALUES (?, ?, ?, ?, ?, 0, 1, 'gm_runtime', 'pending_review', 0, ?, ?, ?)
-            """,
-            (
-                key,
-                intent.target_label,
-                intent.description,
-                parent_id,
-                location_type,
-                campaign_id,
-                intent.biome,
-                intent.location_subtype,
-            ),
+        # #1526 (fala 3) — jedne drzwi.
+        created = create_location(
+            db,
+            key=key,
+            label=intent.target_label,
+            source=LocationSource.GM_RUNTIME,
+            description=intent.description,
+            location_type=location_type,
+            parent_id=parent_id,
+            approved=0,
+            canonical=0,
+            source_campaign_id=campaign_id,
+            biome=intent.biome,
+            location_subtype=intent.location_subtype,
         )
-        db.commit()
 
         new_row = db.execute(
             "SELECT * FROM game_locations WHERE id = ?",
-            (cursor.lastrowid,),
+            (created["id"],),
         ).fetchone()
         if not new_row:
             return None

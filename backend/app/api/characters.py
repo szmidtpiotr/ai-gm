@@ -22,6 +22,7 @@ from app.character_creation_config import (
 )
 from app.services.opening_context import build_opening_plan_context
 from app.services.loot_service import grant_loot_to_character
+from app.services.location_factory import LocationSource, create_location
 from app.services.vitality_service import calculate_hp, calculate_mana
 from app.services.actor_stats import RACIAL_STAT_MODS, apply_racial_modifiers
 from app.services.campaign_plan_service import generate_v2_campaign_plan
@@ -107,16 +108,17 @@ def _ensure_opening_location_fallback(
         description = (opening_message or "").strip()
         if description:
             description = description[:500]
-        conn.execute(
-            """
-            INSERT INTO game_locations
-              (key, label, description, location_type, created_by, approved, is_active)
-            VALUES (?, ?, ?, 'macro', 'gm_runtime', 1, 1)
-            """,
-            (key, label, description),
-        )
-        conn.commit()
-        location_id = int(conn.execute("SELECT id FROM game_locations WHERE key = ?", (key,)).fetchone()["id"])
+        # #1526 (fala 3) — jedne drzwi. Awaryjne miejsce sceny otwarcia to stub
+        # techniczny (gracz w nim stoi od pierwszej tury), wiec `permanent`.
+        location_id = create_location(
+            conn,
+            key=key,
+            label=label,
+            source=LocationSource.GM_RUNTIME,
+            description=description,
+            location_type="macro",
+            review_status="permanent",
+        )["id"]
 
     conn.execute(
         "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",

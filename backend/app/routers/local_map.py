@@ -24,6 +24,7 @@ _LOCAL_ENCOUNTER_FALLBACK_POOL = ["bandit", "unknown_attacker", "goblin"]
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.services.location_factory import LocationSource, create_location
 from app.services.local_hex_service import (
     LOCAL_MAP_THRESHOLD,
     LOCAL_TRAVEL_MINUTES,
@@ -111,20 +112,19 @@ def _ensure_settlement_local_map(
     hub_key = hx["location_key"]
     label = hx["label"] or f"Osada {q},{r}"
     if not hub_key:
-        base = _slug(label)
-        hub_key = base
-        i = 2
-        while conn.execute("SELECT 1 FROM game_locations WHERE key=?", (hub_key,)).fetchone():
-            hub_key = f"{base}_{i}"
-            i += 1
-        conn.execute(
-            "INSERT INTO game_locations (key,label,location_type,world_hex_q,world_hex_r,"
-            "approved,review_status,is_active,created_by) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            (hub_key, label, "macro", int(q), int(r), 1, "permanent", 1, "auto_generated"),
-        )
-        conn.execute("UPDATE world_hexes SET location_key=? WHERE id=?", (hub_key, hx["id"]))
-        conn.commit()
+        # #1526 (fala 3) — jedne drzwi. Ta sciezka pisala `world_hex_q/r` wprost
+        # w INSERT, omijajac kanonicznego writera → reconcile odpinal huby przy
+        # starcie backendu (#1305). Teraz heks wiaze fabryka.
+        hub_key = create_location(
+            conn,
+            key=_slug(label),
+            label=label,
+            source=LocationSource.AUTO_GENERATED,
+            location_type="macro",
+            hex_q=int(q),
+            hex_r=int(r),
+            unique_key=True,
+        )["key"]
     else:
         # get_hub_hex_id wymaga kotwicy world_hex_q/r na lokacji-hubie.
         conn.execute(

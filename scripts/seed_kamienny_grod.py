@@ -31,6 +31,7 @@ import sys
 sys.path.insert(0, "/app")
 
 from app.services.hex_location_link import link_location_to_hex  # noqa: E402
+from app.services.location_factory import LocationSource, create_location  # noqa: E402
 from app.services.local_hex_service import (  # noqa: E402
     auto_assign_local_hex,
     get_hub_hex_id,
@@ -41,32 +42,51 @@ from sg5_grod_spec import HUB, HUB_HEX, START_DEFAULT, SUBS  # noqa: E402
 
 REGION = "siwe_granie"
 
-UPSERT_MACRO = """
-INSERT INTO game_locations
-  (key, label, description, location_type, region, created_by, approved, canonical,
-   map_icon, tier, biome, location_subtype, safe_for_rest,
-   visible_before_visit, review_status, is_active)
-VALUES (?,?,?,'macro',?, 'seed', 1, 1, ?,?,?,?,?, ?, 'permanent', 1)
-ON CONFLICT(key) DO UPDATE SET
-  label=excluded.label, description=excluded.description, region=excluded.region,
-  map_icon=excluded.map_icon, tier=excluded.tier, biome=excluded.biome,
-  location_subtype=excluded.location_subtype, safe_for_rest=excluded.safe_for_rest,
-  is_active=1, updated_at=datetime('now')
+#: #1526 (fala 3) — nowe lokacje wchodza JEDNYMI drzwiami (`create_location`);
+#: powtorne uruchomienie seeda odswieza tresc zwyklym UPDATE-em.
+_REFRESH = """
+UPDATE game_locations SET
+  label=?, description=?, region=?, map_icon=?, tier=?, biome=?,
+  location_subtype=?, safe_for_rest=?, is_active=1, updated_at=datetime('now')
+WHERE key=?
 """
 
-UPSERT_SUB = """
-INSERT INTO game_locations
-  (key, label, description, location_type, region, created_by, approved, canonical,
-   map_icon, tier, biome, location_subtype, safe_for_rest,
-   visible_before_visit, review_status, is_active, parent_id, parent_key)
-VALUES (?,?,?,'sub',?, 'seed', 1, 1, ?,?,?,?,?, 0, 'permanent', 1, ?, ?)
-ON CONFLICT(key) DO UPDATE SET
-  label=excluded.label, description=excluded.description, region=excluded.region,
-  map_icon=excluded.map_icon, tier=excluded.tier, biome=excluded.biome,
-  location_subtype=excluded.location_subtype, safe_for_rest=excluded.safe_for_rest,
-  parent_id=excluded.parent_id, parent_key=excluded.parent_key,
-  is_active=1, updated_at=datetime('now')
-"""
+
+def upsert_seed_location(
+    conn: sqlite3.Connection, spec: dict, *, is_sub: bool,
+    parent_key: str | None = None, parent_id: int | None = None,
+) -> bool:
+    """Wstaw (jedne drzwi) albo odswiez lokacje krainy. Zwraca True gdy nowa."""
+    res = create_location(
+        conn,
+        key=spec["key"],
+        label=spec["label"],
+        source=LocationSource.SEED,
+        description=spec["desc"],
+        location_type="sub" if is_sub else "macro",
+        parent_key=parent_key,
+        parent_id=parent_id,
+        region=REGION,
+        map_icon=spec["icon"],
+        tier=spec["tier"],
+        biome=spec["biome"],
+        location_subtype=spec["subtype"],
+        safe_for_rest=spec["safe"],
+        visible_before_visit=(0 if is_sub else spec.get("visible", 1)),
+        canonical=True,
+        commit=False,
+    )
+    if not res["created"]:
+        conn.execute(_REFRESH, (
+            spec["label"], spec["desc"], REGION, spec["icon"], spec["tier"],
+            spec["biome"], spec["subtype"], spec["safe"], spec["key"],
+        ))
+        if is_sub:
+            conn.execute(
+                "UPDATE game_locations SET parent_key=?, parent_id=? WHERE key=?",
+                (parent_key, parent_id, spec["key"]),
+            )
+    return res["created"]
 
 
 def reattach_local_hexes(conn: sqlite3.Connection, hub_key: str, sub_keys: list[str]) -> int:
@@ -93,10 +113,7 @@ def main():
     conn.row_factory = sqlite3.Row
 
     # ── 1. hub ────────────────────────────────────────────────────────────────
-    conn.execute(UPSERT_MACRO, (
-        HUB["key"], HUB["label"], HUB["desc"], REGION,
-        HUB["icon"], HUB["tier"], HUB["biome"], HUB["subtype"], HUB["safe"], HUB["visible"],
-    ))
+    upsert_seed_location(conn, HUB, is_sub=False)
     hub_id = conn.execute("SELECT id FROM game_locations WHERE key=?", (HUB["key"],)).fetchone()["id"]
 
     q, r = HUB_HEX
@@ -112,11 +129,7 @@ def main():
 
     # ── 2. sub-lokacje ────────────────────────────────────────────────────────
     for s in SUBS:
-        conn.execute(UPSERT_SUB, (
-            s["key"], s["label"], s["desc"], REGION,
-            s["icon"], s["tier"], s["biome"], s["subtype"], s["safe"],
-            hub_id, HUB["key"],
-        ))
+        upsert_seed_location(conn, s, is_sub=True, parent_key=HUB["key"], parent_id=hub_id)
         print(f"  sub {s['label']:44s} safe_for_rest={s['safe']}")
     conn.commit()
 

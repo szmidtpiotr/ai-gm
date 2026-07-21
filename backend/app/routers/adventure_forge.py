@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.services.admin_auth import verify_admin_token
 from app.services.campaign_plan_service import normalize_plan_beats
 from app.services.llm_service import generate_chat
+from app.services.location_factory import LocationSource, create_location
 from app.core.db_runtime import resolve_db_path
 
 logger = get_logger(__name__)
@@ -464,18 +465,18 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
         table = "game_locations"
         key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         label = d.get("label") or hook["title"]
-        cur = conn.execute(
-            """INSERT INTO game_locations
-               (key, label, description, location_type, biome,
-                approved, review_status, created_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, 'permanent', 'admin_kreator', ?, ?)""",
-            (key, label,
-             d.get("description", hook.get("description", "")),
-             _LOC_TYPE_MAP.get(d.get("location_type", ""), "macro"),
-             d.get("biome", ""),
-             now, now),
+        # #1526 (fala 3) — jedne drzwi.
+        res = create_location(
+            conn,
+            key=key,
+            label=label,
+            source=LocationSource.ADMIN_KREATOR,
+            description=d.get("description", hook.get("description", "")),
+            location_type=_LOC_TYPE_MAP.get(d.get("location_type", ""), "macro"),
+            biome=d.get("biome", ""),
+            commit=False,
         )
-        return table, cur.lastrowid
+        return table, res["id"]
 
     else:
         raise ValueError(f"Cannot promote hook_type='{htype}' — no target table mapping")
@@ -1451,7 +1452,6 @@ def _auto_create_forge_locations(
     Idempotent: skips any key that already exists in game_locations.
     Returns list of {key, name} for each created location.
     """
-    now = datetime.now(timezone.utc).isoformat()
     created: list[dict] = []
     hub_key = next(
         (str(l.get("key")) for l in locations
@@ -1467,15 +1467,20 @@ def _auto_create_forge_locations(
         loc_type = "sub" if is_sub else "macro"
         parent_key = (loc.get("parent") or hub_key) if is_sub else None
         try:
-            conn.execute(
-                """INSERT OR IGNORE INTO game_locations
-                   (key, label, description, location_type, parent_key,
-                    review_status, is_active,
-                    created_by, source_campaign_id, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 'pending_review', 1, 'forge', ?, ?, ?)""",
-                (key, name, description, loc_type, parent_key, template_id, now, now),
+            # #1526 (fala 3) — jedne drzwi; idempotencja po kluczu zastapila
+            # INSERT OR IGNORE (ten sam efekt: istniejacy klucz = pominiety).
+            res = create_location(
+                conn,
+                key=key,
+                label=name,
+                source=LocationSource.FORGE,
+                description=description,
+                location_type=loc_type,
+                parent_key=parent_key,
+                source_campaign_id=template_id,
+                commit=False,
             )
-            if conn.execute("SELECT changes()").fetchone()[0]:
+            if res["created"]:
                 created.append({"key": key, "name": name})
         except Exception:
             pass

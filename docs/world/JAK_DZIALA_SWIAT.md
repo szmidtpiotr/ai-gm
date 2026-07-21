@@ -68,7 +68,7 @@ Floating lokacja **nadal jest grywalna narracyjnie** — narrator może o niej o
 
 ## Część 2 — Skąd biorą się lokacje (14 wejść)
 
-Lokacje wchodzą do świata **czternastoma różnymi drzwiami**. To jedna z głównych chorób systemu (Część 7), ale trzeba je znać. W grupach:
+Lokacje wchodzą do świata **czternastoma różnymi wejściami**. Od fali 3 (#1526) wszystkie prowadzą przez **jedne drzwi** — funkcję `create_location()`, która stempluje flagi zawsze tak samo; poniższa lista mówi więc, *kto puka*, a nie *ile jest różnych zamków*. W grupach:
 
 ### A. Treść autorska (twoja, z gita)
 1. **Seed z repozytorium** — pliki `data/seeds/content/game_locations.json`. Stempel: `seed`, kanoniczne, zatwierdzone. **To jest kanon świata.**
@@ -236,7 +236,9 @@ Rozbieżność miała konkretne twarze: 11 lokacji twierdziło, że stoi na mapi
 Bug z gospodą „Pod Złamanym Rogiem" (#1524) to dokładnie ten sam mechanizm w wariancie NPC.
 
 ### Choroba 2 — czternaścioro drzwi
-Każda z 14 ścieżek tworzenia stempluje flagi po swojemu. Jedna wpisuje status recenzji, którego panel w ogóle nie zna — takie lokacje wiszą w limbo: nie w poczekalni, nie przyjęte. Kiedyś inna ścieżka wpisywała `pending` zamiast `pending_review` i **31 lokacji liczyło się do licznika, ale nie było ich na liście**.
+Każda z 14 ścieżek tworzenia stemplowała flagi po swojemu. Jedna wpisywała status recenzji, którego panel w ogóle nie zna — takie lokacje wisiały w limbo: nie w poczekalni, nie przyjęte. Kiedyś inna ścieżka wpisywała `pending` zamiast `pending_review` i **31 lokacji liczyło się do licznika, ale nie było ich na liście**.
+
+✅ **Naprawione w fali 3** (#1526): jest **jedna funkcja** `create_location()` (`backend/app/services/location_factory.py`) i to jedyne miejsce, które wstawia lokację. Gwarantuje cztery rzeczy naraz: komplet flag wg źródła (sześć legalnych źródeł), `parent_id` **i** `parent_key` zawsze razem, wiązanie z mapą wyłącznie przez kanonicznego writera heksa, oraz idempotencję po kluczu (powtórka nie robi kopii `_2`). Nowe, bezpośrednie wpisanie lokacji z pominięciem tych drzwi **wywala test** — więc choroba nie może wrócić tylnymi drzwiami.
 
 ### Choroba 3 — samonaprawa zamiast zdrowia
 Prostowanie świata przy starcie (Część 6) leczy objawy co rano zamiast usunąć przyczynę. Leczenie bywa agresywne (kasuje pinezki), więc trzeba było dokładać kolejne łatki, żeby przed nim ochronić poprawne dane.
@@ -263,7 +265,7 @@ Nie przepisujemy systemu. Trzeci redesign dołożyłby czwartą warstwę do trze
 | **0** ✅ (#1528) | czysty kanon wiązań heks↔lokacja + bezpiecznik seeda | geografia przestaje ginąć przy reseedzie |
 | **1** (#1524) | jeden system NPC: tabela przypisań = prawda, lista na karcie = automatyczna kopia, stara tabela skasowana | gospodarze przestają znikać i dublować się |
 | **2** ✅ (#1525) | jedna prawda na informację: skasowane `placement` i `ai_generated`, 3 legalne statusy pilnowane przez bazę | zniknęły rozjazdy 60/56/54 |
-| **3** | jedne drzwi: wszystkie 14 ścieżek przez jedną funkcję stemplującą flagi tak samo | koniec lokacji w limbo |
+| **3** ✅ (#1526) | jedne drzwi: wszystkie 14 ścieżek przez jedną funkcję stemplującą flagi tak samo | koniec lokacji w limbo |
 | **4** | lampka w panelu admina zamiast cichej samonaprawy: lista rozjazdów + guzik „napraw" | widzisz problemy, zamiast systemu, który je zamiata |
 | **5** | ten dokument | wiesz, jak działa twoja gra ✅ |
 

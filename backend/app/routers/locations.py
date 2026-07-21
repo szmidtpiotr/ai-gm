@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.migrations_admin import DB_PATH
 from app.services.admin_auth import verify_admin_token
+from app.services.location_factory import create_location as create_location_record
 
 
 def require_admin_token(authorization: str | None = Header(default=None)) -> None:
@@ -336,38 +337,31 @@ async def create_location(
         # #1524: npc_keys to lustro — obsadę zapisuje npc_placement_service PO insercie.
         npc_keys_json = "[]"
 
-        # Wstaw nową lokalizację
-        cursor = conn.execute(
-            """
-            INSERT INTO game_locations
-                (key, label, description, parent_id, location_type, rules,
-                 enemy_keys, npc_keys, safe_for_rest,
-                 created_by, location_subtype, biome, tier, canonical, source_campaign_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                key,
-                data.label,
-                data.description,
-                data.parent_id,
-                data.location_type,
-                serialize_rules(data.rules),
-                enemy_keys_json,
-                npc_keys_json,
-                1 if data.safe_for_rest else 0,
-                data.created_by,
-                data.location_subtype,
-                data.biome,
-                data.tier,
-                1 if canonical_flag else 0,
-                data.source_campaign_id,
-            )
-        )
+        # Wstaw nową lokalizację — #1526 (fala 3): jedne drzwi dla wszystkich
+        # 14 wejsc; stempel flag i komplet parent_key/parent_id robi fabryka.
+        new_id = create_location_record(
+            conn,
+            key=key,
+            label=data.label,
+            source=data.created_by,
+            description=data.description,
+            location_type=data.location_type,
+            parent_id=data.parent_id,
+            rules=serialize_rules(data.rules),
+            enemy_keys=enemy_keys_json,
+            npc_keys=npc_keys_json,
+            safe_for_rest=bool(data.safe_for_rest),
+            location_subtype=data.location_subtype,
+            biome=data.biome,
+            tier=data.tier,
+            canonical=canonical_flag,
+            source_campaign_id=data.source_campaign_id,
+            commit=False,
+        )["id"]
         _apply_npc_roster(conn, key, data.npc_keys)
         conn.commit()
 
         # Pobierz utworzoną lokalizację
-        new_id = cursor.lastrowid
         row = conn.execute(
             "SELECT * FROM game_locations WHERE id = ?",
             (new_id,)

@@ -5,6 +5,10 @@ Polish dark-fantasy theme. Idempotent (INSERT OR IGNORE keyed on `key`).
 import sqlite3
 import sys
 
+sys.path.insert(0, "/app")
+
+from app.services.location_factory import LocationSource, create_location  # noqa: E402
+
 DB_PATH = "/data/ai_gm.db"
 
 # (macro_key, label, biome, tier, safe_for_rest, map_icon, location_subtype,
@@ -378,18 +382,15 @@ def main() -> int:
         n_sub = 0
         for macro in LOCATIONS:
             (mkey, mlabel, mbiome, mtier, mrest, micon, msubtype, mdesc, subs) = macro
-            # Insert macro
-            cur = conn.execute(
-                """
-                INSERT OR IGNORE INTO game_locations
-                    (key, label, description, location_type, parent_id, parent_key,
-                     biome, tier, safe_for_rest, map_icon, location_subtype,
-                     canonical, is_active, approved, review_status, created_by)
-                VALUES (?, ?, ?, 'macro', NULL, NULL, ?, ?, ?, ?, ?, 1, 1, 1, 'permanent', 'seed')
-                """,
-                (mkey, mlabel, mdesc, mbiome, mtier, mrest, micon, msubtype),
-            )
-            if cur.rowcount:
+            # Insert macro — #1526 (fala 3): jedne drzwi, idempotentne po kluczu
+            if create_location(
+                conn,
+                key=mkey, label=mlabel, source=LocationSource.SEED,
+                description=mdesc, location_type="macro",
+                biome=mbiome, tier=mtier, safe_for_rest=mrest,
+                map_icon=micon, location_subtype=msubtype,
+                commit=False,
+            )["created"]:
                 n_macro += 1
             macro_row = conn.execute("SELECT id FROM game_locations WHERE key = ?", (mkey,)).fetchone()
             if not macro_row:
@@ -398,17 +399,15 @@ def main() -> int:
             macro_id = int(macro_row["id"])
 
             for (skey, slabel, ssubtype, ssafe, sdesc) in subs:
-                cur2 = conn.execute(
-                    """
-                    INSERT OR IGNORE INTO game_locations
-                        (key, label, description, location_type, parent_id, parent_key,
-                         biome, tier, safe_for_rest, map_icon, location_subtype,
-                         canonical, is_active, approved, review_status, created_by)
-                    VALUES (?, ?, ?, 'sub', ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, 'permanent', 'seed')
-                    """,
-                    (skey, slabel, sdesc, macro_id, mkey, mbiome, mtier, ssafe, micon, ssubtype),
-                )
-                if cur2.rowcount:
+                if create_location(
+                    conn,
+                    key=skey, label=slabel, source=LocationSource.SEED,
+                    description=sdesc, location_type="sub",
+                    parent_key=mkey, parent_id=macro_id,
+                    biome=mbiome, tier=mtier, safe_for_rest=ssafe,
+                    map_icon=micon, location_subtype=ssubtype,
+                    commit=False,
+                )["created"]:
                     n_sub += 1
         conn.commit()
         print(f"✓ Inserted {n_macro} macros + {n_sub} sub-locations = {n_macro + n_sub} total")
