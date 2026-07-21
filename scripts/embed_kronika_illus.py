@@ -9,6 +9,7 @@ this can be re-run after regenerating a subset of the art.
 """
 import argparse
 import re
+import re as _re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -124,6 +125,84 @@ HERBY = {
 }
 
 
+# tytuł karty „miejsc opuszczonych" / legendy → (plik, alt) — scena u góry karty
+SCENY = [
+    ("Cmentarz Młotów", "sc-cmentarz", "Pole młotów wbitych w zamarznięty śnieg"),
+    ("Echo-Wieża", "sc-echo", "Wnętrze wieży nasłuchowej z dzwonami rezonansowymi w szybie"),
+    ("Wyssane Hołdy", "sc-holdy", "Porzucona osada rodowa wykuta w zboczu góry"),
+    ("Zamarznięta Karawana", "sc-karawana", "Wraki wozów wmarznięte w lodową szczelinę"),
+    ("Kaplica Zapomnianego Rodu", "sc-kaplica", "Kamienna kaplica z otwartymi drzwiami i skutym herbem"),
+    ("Sztolnia Umarłego Rodu", "sc-sztolnia", "Kamienny strażnik nad zapieczętowanym grobem w sztolni"),
+    ("Stacja Pradawnych", "sc-stacja", "Ruina Pradawnych wtopiona w ośnieżone zbocze"),
+    ("Lodowa Brama", "sc-brama", "Pradawne wrota wmarznięte w ścianę lodowca"),
+    ("Sekret Rady Czterech", "lg-rada", "Korytarz identycznych zamkniętych drzwi w świetle świec"),
+    ("Rdzeń pod Świątynią Pradawnych", "lg-swiatynia", "Świecąca szczelina w posadzce świątyni Pradawnych"),
+    ("Głębia", "lg-glebia", "Ogromny kształt poruszający się w morskiej głębinie"),
+    ("Tron Białej Bogini", "lg-tron", "Pielgrzymi wmarznięci w lód przed pustym sanktuarium"),
+    ("Lodowa Brama", "lg-brama", "Postać pod wrotami uwięzionymi w lodowcu"),
+    ("Stukanie w Czarnym Hutmanie", "lg-stukanie", "Dłoń przyłożona do skały w ciemnej sztolni"),
+    ("Czarne Serce", "lg-serce", "Martwe korzenie Pradrzewa nad czarną szczeliną"),
+    ("Kto zapala Latarnię Topielców", "lg-latarnia", "Opuszczona latarnia z płonącym światłem nad rafami"),
+    ("Pierwszy Tron i Dwór Czwartego", "lg-tron-czwartego", "Spalona rezydencja między zamożnymi kamienicami"),
+    ("Twierdza Bezimiennego", "lg-twierdza", "Otwarta brama czarnej twierdzy na popielnej równinie"),
+    ("Zgliszcza", "lg-zgliszcza", "Rzędy drewnianych krzyży na pogorzelisku o zmierzchu"),
+    ("Krwawy Hrabia", "lg-hrabia", "Rozłupana od środka płyta nagrobna rycerza"),
+]
+
+# tytuł karty NPC → (plik, alt) — portret w karcie
+PORTRETY = {
+    "Balrik Siwotarczy": ("npc-balrik", "Balrik Siwotarczy — starszy rodów"),
+    "Dagna Młotodzierżca": ("npc-dagna", "Dagna Młotodzierżca — przywódczyni rewizjonistów"),
+    "Torvin": ("npc-torvin", "Torvin — mistrz Wielkiej Kuźni"),
+    "Grimm Rdzawy": ("npc-grimm", "Grimm Rdzawy — karczmarz Pod Rdzawym Młotem"),
+    "Helga Solnobroda": ("npc-helga", "Helga Solnobroda — kupcowa solna"),
+    "Hadmar": ("npc-hadmar", "Hadmar — stary obserwator Echo-Wieży"),
+    "Brat Elias": ("npc-elias", "Brat Elias — pustelnik sanktuarium"),
+    "Kettil": ("npc-kettil", "Kettil — wódz Wygnańców Lodu"),
+}
+
+
+def wire_sceny(html: str, added: list, missing: list) -> str:
+    # Nagłówek karty bywa z badge (<span class="soon">Siwe Granie</span>), a "Lodowa
+    # Brama" występuje dwa razy (Opuszczone Granie + legendy) — stąd regex i lista,
+    # nie słownik: kolejne trafienie tego samego tytułu dostaje kolejny obraz.
+    for tytul, img, alt in SCENY:
+        pat = _re.compile(r'<div class="codex-card"><h4>' + _re.escape(tytul)
+                          + r'(\s*<span[^>]*>[^<]*</span>)?</h4>')
+        m = pat.search(html)
+        if not m:
+            continue
+        if not have(img):
+            missing.append(f"scena {img}")
+            continue
+        badge = m.group(1) or ""
+        new = (f'<div class="codex-card z-scena"><img class="cimg" loading="lazy" '
+               f'src="assets/img/{img}.webp" alt="{alt}"><div class="cbody">'
+               f'<h4>{tytul}{badge}</h4>')
+        html = html[:m.start()] + new + html[m.end():]
+        added.append(f"scena {tytul}")
+    html = re.sub(r'(<div class="codex-card z-scena"><img(?:(?!</div></div>).)*?)</p></div>(?!</div>)',
+                  r'\1</p></div></div>', html, flags=re.S)
+    return html
+
+
+def wire_portrety(html: str, added: list, missing: list) -> str:
+    for tytul, (img, alt) in PORTRETY.items():
+        old = f'<div class="codex-card"><h4>{tytul}</h4>'
+        if old not in html:
+            continue
+        if not have(img):
+            missing.append(f"portret {img}")
+            continue
+        new = (f'<div class="codex-card z-npc"><img class="npc" loading="lazy" '
+               f'src="assets/img/{img}.webp" alt="{alt}"><div><h4>{tytul}</h4>')
+        html = html.replace(old, new, 1)
+        added.append(f"portret {tytul}")
+    html = re.sub(r'(<div class="codex-card z-npc"><img(?:(?!</div></div>).)*?)</p></div>(?!</div>)',
+                  r'\1</p></div></div>', html, flags=re.S)
+    return html
+
+
 def have(img: str) -> bool:
     return (IMG_DIR / f"{img}.webp").exists()
 
@@ -192,6 +271,8 @@ def main() -> None:
     html = wire_ludy(html, added, missing)
     html = wire_rany(html, added, missing)
     html = wire_herby(html, added, missing)
+    html = wire_sceny(html, added, missing)
+    html = wire_portrety(html, added, missing)
 
     # OD KOŃCA: każda wstawka wydłuża dokument, więc pozycje dopasowań policzone
     # na wejściowym HTML przestają być aktualne dla wpisów LEŻĄCYCH DALEJ. Idąc

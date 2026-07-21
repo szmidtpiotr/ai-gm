@@ -49,7 +49,16 @@ HERALDIC = (
     "high contrast, clean silhouette, no text, no lettering, no watermark, no border frame"
 )
 
+# Portrety czyta się z 76px, więc twarz musi wypełniać kadr — scena w tle gubi rysy.
+PORTRAIT_STYLE = (
+    "character portrait, head and shoulders, face fills the frame, looking at the viewer, "
+    "dramatic side lighting, deep near-black background, dark fantasy illustration, "
+    "grimoire aesthetic, painterly oil portrait, weathered realistic face, highly detailed, "
+    "no text, no lettering, no watermark, no signature, no border"
+)
+
 BANNER = (1152, 432)
+PORTRAIT = (640, 800)
 WIDE = (1152, 648)
 EMBLEM = (640, 640)
 
@@ -254,6 +263,115 @@ JOBS = {
         "outcasts in furs around a low fire, sledges and lashed bundles, no walls and no "
         "permanent buildings, the white wall of a glacier rising on the horizon behind them, "
         "bitter wind, ")},
+
+    # ── Opuszczone Granie — sceny w kartach kodeksu ────────────────────────────
+    "sc-cmentarz": {"kind": "scene", "size": WIDE, "darken": 0.24, "prompt": (
+        "hundreds of dwarven war hammers driven head-down into a frozen snowfield as grave "
+        "markers, hafts leaning at angles, rime and icicles on the iron, dark peaks behind, "
+        "blowing snow, a vast field of memorial, ")},
+    "sc-echo": {"kind": "scene", "size": WIDE, "darken": 0.26, "prompt": (
+        "the interior of a dwarven listening tower over a mine shaft, huge bronze resonance "
+        "bells hung in the shaft on chains, a vacant observer's chair and desk with instruments, "
+        "lantern light, dust in the air, nobody there, ")},
+    "sc-holdy": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "an abandoned dwarven clan settlement carved into a mountainside, empty doorways and "
+        "snow-filled halls, a toppled clan standard, tools left mid-work, the whole village "
+        "shut in a hurry generations ago, grey daylight, ")},
+    "sc-karawana": {"kind": "scene", "size": WIDE, "darken": 0.26, "prompt": (
+        "wrecked wagons frozen deep inside a blue glacier crevasse, wheels and canvas encased "
+        "in clear ice, cargo crates still lashed down, the ice glowing pale blue from within, "
+        "nobody visible, ")},
+    "sc-kaplica": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "a small stone dwarven chapel with its door standing open, snow drifted across the "
+        "threshold, an altar with a clan crest deliberately chiselled blank, one guttering "
+        "candle still lit inside, deep silence, ")},
+    "sc-sztolnia": {"kind": "scene", "size": WIDE, "darken": 0.30, "prompt": (
+        "an abandoned mine gallery with collapsed timbers, a carved stone guardian statue "
+        "standing over a sealed tomb doorway deep in the tunnel, rubble and old rails, one "
+        "lantern glow far behind, ")},
+    "sc-stacja": {"kind": "scene", "size": WIDE, "darken": 0.30, "prompt": (
+        "a pre-human ruin of impossible geometry half buried in a snowy mountain slope, smooth "
+        "alien stone unlike the rough dwarven masonry beside it, a dark opening, snow drifting "
+        "into it, far older than anything around, ")},
+    "sc-brama": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "colossal ancient gates frozen inside a glacier wall, only their upper arch visible "
+        "through metres of blue ice, carvings blurred by the ice, no path leading to them, "
+        "cold light, absolute stillness, ")},
+
+    # ── Legendy i haki — sceny w kartach ───────────────────────────────────────
+    "lg-rada": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "a long candlelit corridor of a great house lined with identical closed doors, one "
+        "hooded figure walking away from the viewer, ledgers and a wax seal on a side table, "
+        "the far end of the corridor lost in darkness, ")},
+    "lg-swiatynia": {"kind": "scene", "size": WIDE, "darken": 0.32, "prompt": (
+        "a vast pre-human temple interior like the inside of a ribcage, a black fissure in the "
+        "floor breathing faint light from far below, alien carvings on ribbed vaults, tiny "
+        "human silhouette at the edge for scale, ")},
+    "lg-glebia": {"kind": "scene", "size": WIDE, "darken": 0.32, "prompt": (
+        "dark ocean water seen from just below the surface, an enormous indistinct shape moving "
+        "in the deep far below, shafts of dim light from above, a small boat hull silhouetted "
+        "on the surface, sense of terrible scale, ")},
+    "lg-tron": {"kind": "scene", "size": WIDE, "darken": 0.26, "prompt": (
+        "a procession of robed pilgrims frozen solid in clear glacier ice, all facing uphill "
+        "toward a distant summit, an empty stone shrine beyond them with its threshold swept "
+        "clear of snow, blue ice light, ")},
+    "lg-brama": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "a single figure in furs standing far below enormous gates entombed in glacier ice, "
+        "looking up at them, dwarfed by the ice wall, no path, wind-driven snow, ")},
+    "lg-stukanie": {"kind": "scene", "size": WIDE, "darken": 0.32, "prompt": (
+        "deep inside a dark mine tunnel, a hand pressed flat against the rock face listening, "
+        "lantern on the ground casting long shadows, a band of white salt crystal in the wall "
+        "just above, blackness beyond, ")},
+    "lg-serce": {"kind": "scene", "size": WIDE, "darken": 0.32, "prompt": (
+        "the enormous dead roots of a colossal tree splitting open above a black fissure in the "
+        "forest floor, the trunk above burnt hollow and black, no leaves anywhere, mist pooling "
+        "in the roots, ")},
+    "lg-latarnia": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "an abandoned stone lighthouse on a rocky headland at night with its lamp burning "
+        "brightly, jagged reefs and breaking surf below, a ship's masts leaning at a wrong "
+        "angle among the rocks, nobody on the gallery, ")},
+    "lg-tron-czwartego": {"kind": "scene", "size": WIDE, "darken": 0.28, "prompt": (
+        "the burnt shell of a grand townhouse standing empty between two prosperous city "
+        "mansions, boarded windows and soot-black stone, weeds in the forecourt, wealthy "
+        "street around it fully alive, ")},
+    "lg-twierdza": {"kind": "scene", "size": WIDE, "darken": 0.34, "prompt": (
+        "a black fortress gate standing wide open on an ash plain, utter darkness inside, packs "
+        "and dropped weapons scattered on the threshold, no bodies, no damage to the gate, "
+        "sunless sky, ")},
+    "lg-zgliszcza": {"kind": "scene", "size": WIDE, "darken": 0.30, "prompt": (
+        "rows of simple wooden grave crosses on a burnt village site at dusk, blackened chimneys "
+        "behind them, one lantern left burning at the graves, a lone figure standing among the "
+        "crosses counting, ")},
+    "lg-hrabia": {"kind": "scene", "size": WIDE, "darken": 0.32, "prompt": (
+        "a marble tomb effigy of an armoured knight cracked open from the inside, dark stains "
+        "on the crypt floor, fresh candles burning at the tomb's foot, royal banners rotting on "
+        "the walls, ")},
+
+    # ── Obsada Grań — portrety ────────────────────────────────────────────────
+    "npc-balrik": {"kind": "portrait", "prompt": (
+        "an old dwarven clan elder with a long grey braided beard, heavy fur mantle and iron "
+        "clasps, deeply lined stern face, eyes of someone who has forbidden things for decades, ")},
+    "npc-dagna": {"kind": "portrait", "prompt": (
+        "a fierce dwarven woman warrior-leader, red-brown braided hair, scarred cheek, war "
+        "hammer haft over her shoulder, defiant jaw, firelight on her face, ")},
+    "npc-torvin": {"kind": "portrait", "prompt": (
+        "a broad dwarven master smith, soot-streaked face and singed beard, leather apron and "
+        "burn scars on forearms, forge glow lighting him from one side, ")},
+    "npc-grimm": {"kind": "portrait", "prompt": (
+        "a stout dwarven tavern keeper with a rust-red beard and shrewd amused eyes, cloth over "
+        "one shoulder, tankards behind him, warm lamplight, ")},
+    "npc-helga": {"kind": "portrait", "prompt": (
+        "a shrewd dwarven merchant woman, salt-white streaks in her braided beard, fur-trimmed "
+        "trader's coat, weighing a pinch of salt crystal between her fingers, ")},
+    "npc-hadmar": {"kind": "portrait", "prompt": (
+        "a very old dwarf, thin and hollow-cheeked, white beard, one hand cupped behind his ear "
+        "listening, haunted distant stare, dim tower light, ")},
+    "npc-elias": {"kind": "portrait", "prompt": (
+        "a gaunt old human hermit in a snow-crusted hooded robe, frost in his beard and "
+        "eyebrows, calm empty gaze of someone who forgot when he arrived, pale glacier light, ")},
+    "npc-kettil": {"kind": "portrait", "prompt": (
+        "a weathered dwarven outcast chieftain in patched furs and hide, no clan crest anywhere, "
+        "wind-burnt face, wary sidelong glance, tundra behind him, ")},
     # ── Frakcje — herby ───────────────────────────────────────────────────────
     "herb-korona": {
         "kind": "emblem",
@@ -365,7 +483,11 @@ def main() -> None:
         print(f"[{i}/{len(jobs)}] {name} …", flush=True)
         try:
             seed = job_seed(name, args.seed_offset)
-            if job["kind"] == "emblem":
+            if job["kind"] == "portrait":
+                prompt = job["prompt"] + PORTRAIT_STYLE + NO_LETTERING
+                raw = gen(prompt, PORTRAIT, 9, seed)
+                save(raw, name, 0.14, trim_bottom=0.07)
+            elif job["kind"] == "emblem":
                 prompt = job["prompt"] + HERALDIC + NO_LETTERING
                 raw = gen(prompt, EMBLEM, 9, seed)
                 save(raw, name, 0.05, trim_bottom=0.07)

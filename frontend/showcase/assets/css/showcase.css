@@ -469,7 +469,7 @@ footer .brand{display:inline-block;margin-bottom:14px}
 /* baner ludu w nagłówku rozdziału — widoczny także gdy rozdział zwinięty.
    Obraz idzie w ::before (można mu podbić jasność filtrem), przyciemnienie pod
    tekst w ::after — inaczej gradient nałożony na i tak ciemny render gasi scenę. */
-.lud>summary{position:relative;min-height:120px;align-items:flex-end;padding:18px 26px;background:var(--panel);overflow:hidden}
+.lud>summary{position:relative;min-height:clamp(170px,23vw,290px);align-items:flex-end;padding:20px 26px;background:var(--panel);overflow:hidden}
 .lud>summary::before{content:"";position:absolute;inset:0;z-index:0;
   background:var(--lud-img) center 42%/cover no-repeat;filter:brightness(1.55) saturate(1.08)}
 .lud>summary::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
@@ -478,11 +478,11 @@ footer .brand{display:inline-block;margin-bottom:14px}
 .lud>summary h3{text-shadow:0 2px 14px rgba(0,0,0,.95)}
 .lud>summary .lud-tag{text-shadow:0 1px 10px rgba(0,0,0,.95)}
 .lud>summary:hover::before{filter:brightness(1.75) saturate(1.12)}
-.lud[open]>summary{min-height:142px}
+.lud[open]>summary{min-height:clamp(150px,18vw,230px)}
 
 /* scena nad nazwaną raną */
 .rana{padding:0;overflow:hidden}
-.rana-img{display:block;width:100%;height:190px;object-fit:cover;border-bottom:1px solid var(--line)}
+.rana-img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-bottom:1px solid var(--line)}
 .rana-body{padding:22px 24px}
 .rana-body h4{font-family:var(--font-disp);color:var(--ink);font-size:18px;margin-bottom:10px}
 
@@ -491,3 +491,15 @@ footer .brand{display:inline-block;margin-bottom:14px}
 .codex-card.z-herb .herb{width:64px;height:64px;border-radius:3px;border:1px solid var(--line);background:#070605;object-fit:cover}
 .codex-card.z-herb h4{margin-top:2px}
 @media(max-width:520px){.codex-card.z-herb{grid-template-columns:48px 1fr;gap:12px}.codex-card.z-herb .herb{width:48px;height:48px}}
+
+/* karta kodeksu ze sceną (miejsca opuszczone, legendy) */
+.codex-card.z-scena{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.codex-card.z-scena .cimg{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-bottom:1px solid var(--line)}
+.codex-card.z-scena .cbody{padding:20px 22px}
+.codex-card.z-scena h4{margin-bottom:8px}
+
+/* portret NPC — kadr pionowy, bo to twarz, nie scena */
+.codex-card.z-npc{display:grid;grid-template-columns:76px 1fr;gap:16px;align-items:start}
+.codex-card.z-npc .npc{width:76px;height:96px;object-fit:cover;border-radius:3px;border:1px solid var(--line);background:#070605}
+.codex-card.z-npc h4{margin-top:2px}
+@media(max-width:520px){.codex-card.z-npc{grid-template-columns:60px 1fr;gap:12px}.codex-card.z-npc .npc{width:60px;height:76px}}
