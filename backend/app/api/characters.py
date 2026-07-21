@@ -1304,6 +1304,23 @@ def get_character_treasure_maps(character_id: int):
         conn.close()
 
 
+# ── #1516: normalizacja rasy — jedno źródło zamiast hardcode'ów per endpoint ──
+
+def _normalize_race(value) -> str:
+    """Sprowadź rasę z requestu do znanego klucza; nieznana → 'human'.
+
+    Kanon ras trzyma `world_region_service.RACE_LABELS` (człowiek / krasnolud /
+    elf). Wcześniej oba endpointy tworzenia postaci miały własną krotkę
+    `("human", "dwarf")`, więc `race="elf"` z kreatora był **po cichu**
+    degradowany do człowieka: elf dostawał ludzkie staty, ludzkie czary startowe
+    i ludzką pulę do nauki. Bramki krainy (#1479) i archetypu (#1477) działają
+    dalej — tu tylko rozpoznajemy rasę, nie decydujemy o dostępie.
+    """
+    from app.services.world_region_service import RACE_LABELS
+    race = str(value or "human").strip().lower()
+    return race if race in RACE_LABELS else "human"
+
+
 # ── #1479: dostępność ras zależna od otwartych krain ─────────────────────────
 
 def _assert_race_region_open(race: str, user_id: int | None) -> None:
@@ -1375,9 +1392,7 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
     if archetype not in ("warrior", "scholar", "rogue"):
         archetype = "warrior"
 
-    race = str(req.get("race", "human") or "human").strip().lower()
-    if race not in ("human", "dwarf"):
-        race = "human"
+    race = _normalize_race(req.get("race"))
 
     # #1479 — rasa zakotwiczona w krainie (krasnolud → Siwe Granie) wymaga, by ta
     # kraina była otwarta. UI wyszarza kartę; backend nie ufa UI i odrzuca zapis.
@@ -3167,10 +3182,8 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     # (starter pack + gold come only from DB rows for warrior/scholar/rogue)
     created_sheet, archetype, starter_archetype_key = _create_roll_initial_sheet(req)
 
-    # Normalise + validate race (#970 R1)
-    _race = str(req.race or "human").strip().lower()
-    if _race not in ("human", "dwarf"):
-        _race = "human"
+    # Normalise + validate race (#970 R1, #1516 — elf też jest znaną rasą)
+    _race = _normalize_race(req.race)
 
     # #1479 — kraina ojczysta rasy musi być otwarta (patrz hero-first wyżej).
     # #1477 — i para rasa+archetyp musi być legalna (krasnolud bez Łotrzyka).

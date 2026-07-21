@@ -3061,6 +3061,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         SELECT c.id, 'magic_light', 1
         FROM characters c
         WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+          -- #1516: backfille biegną przy KAŻDYM starcie (brak rejestru w _exec),
+          -- więc bez tej bramki krasnolud i elf dostawali ludzkie czary z powrotem.
+          AND LOWER(COALESCE(c.race, 'human')) = 'human'
     """, "v2-spells-magic-light-backfill-all")
 
     # ── FAZA B / B6 (#648): seed czarów maga Faza 1 z rpg_spells_design_doc.md ──
@@ -3148,6 +3151,7 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
             SELECT 'detect_magic'
         ) s
         WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+          AND LOWER(COALESCE(c.race, 'human')) = 'human'  -- #1516
     """, "v2-spells-faza-b-b8-starter-backfill")
 
     # ── FAZA B / B11b (#983): najtańszy czar AoE maga — spark_burst (tier 1) ──
@@ -3168,6 +3172,7 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         SELECT c.id, 'spark_burst', 1
         FROM characters c
         WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+          AND LOWER(COALESCE(c.race, 'human')) = 'human'  -- #1516
     """, "v2-spells-b11b-spark-burst-backfill")
 
     # ── FAZA B / B10 (#657): pula absorpcji (temp-HP) dla tarcz maga ──────────
@@ -6180,6 +6185,74 @@ def _backfill_spell_race_lock(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _purge_race_illegal_spells(conn: sqlite3.Connection) -> None:
+    """#1516 — zabierz postaciom czary spoza szkoły ich rasy i oddaj zestaw rasowy.
+
+    Trzy backfille z FAZY B (`magic_light`, starter B8, `spark_burst`) rozdawały
+    czary każdemu Uczonemu bez patrzenia na rasę — i biegły przy każdym starcie,
+    więc krasnolud/elf dostawał ludzkie arkana z powrotem nawet po ręcznym
+    posprzątaniu. Bramkę dołożono wyżej; tu leczymy istniejące bazy.
+
+    Nielegalny = `game_config_spells.race_lock` nie zawiera rasy postaci. Takiego
+    czaru nie dało się nauczyć legalnie (`learn_spell` blokuje), więc kasujemy go
+    bez pytania o rangę. Uczony, któremu po czyszczeniu nie zostaje NIC, dostaje
+    startowy zestaw swojej rasy — inaczej wyszedłby z tego mag bez magii.
+    """
+    try:
+        conn.execute(
+            """
+            DELETE FROM character_spells
+            WHERE rowid IN (
+                SELECT cs.rowid
+                FROM character_spells cs
+                JOIN characters c ON c.id = cs.character_id
+                JOIN game_config_spells gs ON gs.key = cs.spell_key
+                WHERE ',' || REPLACE(
+                          LOWER(COALESCE(NULLIF(TRIM(gs.race_lock), ''), 'human')), ' ', ''
+                      ) || ','
+                      NOT LIKE '%,' || LOWER(COALESCE(c.race, 'human')) || ',%'
+            )
+            """
+        )
+        conn.commit()
+    except Exception:
+        return
+
+    # Uczony bez ani jednego czaru → oddaj startowy zestaw jego rasy.
+    try:
+        from app.services.spell_service import (
+            DWARF_SCHOLAR_STARTING_SPELLS,
+            ELF_SCHOLAR_STARTING_SPELLS,
+            HUMAN_SCHOLAR_STARTING_SPELLS,
+        )
+        starting = {
+            "human": HUMAN_SCHOLAR_STARTING_SPELLS,
+            "dwarf": DWARF_SCHOLAR_STARTING_SPELLS,
+            "elf": ELF_SCHOLAR_STARTING_SPELLS,
+        }
+        rows = conn.execute(
+            """
+            SELECT c.id, LOWER(COALESCE(c.race, 'human')) AS race
+            FROM characters c
+            WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+              AND NOT EXISTS (
+                  SELECT 1 FROM character_spells cs WHERE cs.character_id = c.id
+              )
+            """
+        ).fetchall()
+        for row in rows:
+            char_id, race = row[0], row[1]
+            for spell_key in starting.get(race, HUMAN_SCHOLAR_STARTING_SPELLS):
+                conn.execute(
+                    "INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank) "
+                    "VALUES (?, ?, 1)",
+                    (char_id, spell_key),
+                )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def _fix_1353_spell_metadata(conn: sqlite3.Connection) -> None:
     """#1353 WALKA-T3 — poprawa metadanych czarów na ISTNIEJĄCYCH bazach.
 
@@ -7971,6 +8044,7 @@ def run_admin_migrations() -> None:
         _seed_dwarf_spells(conn)  # #975 R6
         _seed_elf_spells(conn)  # #1474 — szkoła Stroiciela
         _backfill_spell_race_lock(conn)  # #1510 — jawny race_lock na każdym czarze
+        _purge_race_illegal_spells(conn)  # #1516 — czary spoza szkoły rasy + zestaw rasowy
         _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)
         _fix_1353_spell_metadata(conn)  # #1353 WALKA-T3 — rdzen_shield→defense + opisy
         _fix_1460_rdzen_effects(conn)  # #1460 — effect_json + attack_aoe + aoe (efekty specjalne Rdzenia)
