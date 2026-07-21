@@ -1,5 +1,14 @@
 # AI-GM V2 — World Builder, Hero Persistence & Dungeon Runs
 
+> ⚠️ **PRZESTARZAŁE w części o lokacjach i mapie (2026-07-21).** Ten dokument opisuje model
+> sprzed przebudowy #1243: pozycjonowanie lokacji po kolumnach `map_x`/`map_y` (dziś martwe,
+> wszystkie NULL) oraz tabelę `map_terrain` (nigdy nie zbudowana; teren żyje na `world_hexes.hex_type`).
+> Nie zna też pojęć `placement`/floating, `canonical`, `region`, `terrain_tags` ani `temporary`.
+>
+> **Aktualne źródło prawdy o świecie i lokacjach: [`docs/world/JAK_DZIALA_SWIAT.md`](../world/JAK_DZIALA_SWIAT.md)**
+> (kanon: heks = prawda, współrzędne na lokacji = kopia pochodna).
+> Pozostałe sekcje (bohater między kampaniami, lochy, debug) pozostają orientacyjne.
+
 > Covers: visual world map editor, NPC/enemy assignment, persistent hero across campaigns, dungeon runs as standalone content, and debug system.
 
 ---
