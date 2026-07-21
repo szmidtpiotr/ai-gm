@@ -241,6 +241,27 @@ def test_no_disengage_outside_player_turn(tmp_path):
         assert cs.resolve_elf_disengage(1) is None
 
 
+def test_elf_gets_ranged_attack_bonus(tmp_path):
+    """#1474 — łuk to elfia droga: +1 do rzutu ataku bronią dystansową."""
+    bow = {"key": "bow", "label": "Łuk", "weapon_type": "ranged", "damage_die": "1d6",
+           "linked_stat": "DEX", "attack_bonus": 0, "damage_bonus": 0}
+
+    def _attack(race: str) -> dict:
+        db = _make_db(tmp_path, race)
+        with patch.object(cs, "COMBAT_DB_PATH", str(db)), \
+             patch.object(cs, "roll_d20", return_value=10):
+            cs.initiate_combat(1, 1, ["bandit"])
+            _force_state(db, player_zone=cs.ZONE_RANGED)
+            return cs.resolve_attack(1, None, attacker="player", raw_d20=12, weapon_override=bow)
+
+    elf_out = _attack("elf")
+    human_out = _attack("human")
+
+    assert elf_out.get("elf_ranged_bonus") == cs.ELF_RANGED_ATTACK_BONUS
+    assert human_out.get("elf_ranged_bonus") is None
+    assert cs.ELF_RANGED_ATTACK_BONUS == 1
+
+
 def test_dc_is_documented_starting_value():
     assert cs.ELF_DISENGAGE_DC == 12
     assert cs.ELF_DISENGAGE_SKILL == "acrobatics"

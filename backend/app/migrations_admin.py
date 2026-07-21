@@ -6089,6 +6089,74 @@ def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _seed_elf_spells(conn: sqlite3.Connection) -> None:
+    """#1474 — szkoła Stroiciela: 6 czarów race-locked dla elfa leśnego.
+
+    Kanon magii (#1509): jedno źródło (Rdzeń), cztery techniki czerpania. Elf **stroi**
+    — kontrola, ochrona, iluzje, obrażenia niższe niż u człowieka-Uczonego i dużo niższe
+    niż u krasnoluda. Kolumny (`race_lock`, `effect_json`, `aoe`) dokłada wcześniejsza
+    migracja `_seed_dwarf_spells`; tu tylko dane. Liczby STARTOWE — Sandbox-tunable.
+    """
+    elf_spells = [
+        {
+            "key": "tune_thorn", "label": "Nastrojony Cierń", "tier": 1, "mana_cost": 1,
+            "spell_type": "attack", "damage_die": "1d6", "aoe": 0,
+            "effect_json": '{"on_hit_conditions":[{"key":"slowed","save":{"stat":"CON","dc":10}}]}',
+            "description": "1d6 dmg + spowolnienie (DC 10 CON). Cierń trafia tam, gdzie las każe.",
+            "is_active": 1, "race_lock": "elf",
+        },
+        {
+            "key": "leaf_veil", "label": "Zasłona Liści", "tier": 1, "mana_cost": 2,
+            "spell_type": "defense", "damage_die": None, "aoe": 0,
+            "effect_json": None,
+            "description": "Pochłania następny cios — powietrze gęstnieje liśćmi i cieniem.",
+            "is_active": 1, "race_lock": "elf",
+        },
+        {
+            "key": "root_snare", "label": "Pęta Korzeni", "tier": 2, "mana_cost": 2,
+            "spell_type": "effect", "damage_die": None, "aoe": 0,
+            "effect_json": '{"effect_type":"hobbled"}',
+            "description": "Korzenie chwytają wroga za kostki — unieruchomienie bez obrażeń.",
+            "is_active": 1, "race_lock": "elf",
+        },
+        {
+            "key": "false_grove", "label": "Fałszywy Gaj", "tier": 3, "mana_cost": 3,
+            "spell_type": "effect_aoe", "damage_die": None, "aoe": 1,
+            "effect_json": '{"effect_type":"confused"}',
+            "description": "Iluzja gaju miesza wrogom kierunki — dezorientacja obszarowa.",
+            "is_active": 1, "race_lock": "elf",
+        },
+        {
+            "key": "hush_of_boughs", "label": "Cisza Koron", "tier": 3, "mana_cost": 3,
+            "spell_type": "attack", "damage_die": "2d6", "aoe": 0,
+            "effect_json": '{"on_hit_conditions":[{"key":"stunned","save":{"stat":"WIS","dc":12}}]}',
+            "description": "2d6 dmg + ogłuszenie (DC 12 WIS). Las milknie i cisza uderza.",
+            "is_active": 1, "race_lock": "elf",
+        },
+        {
+            "key": "mend_bark", "label": "Kora Zrasta", "tier": 2, "mana_cost": 2,
+            "spell_type": "heal", "damage_die": "2d4", "aoe": 0,
+            "effect_json": None,
+            "description": "Leczy 2d4 — rana zarasta jak nacięcie w korze.",
+            "is_active": 1, "race_lock": "elf",
+        },
+    ]
+    for sp in elf_spells:
+        try:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_config_spells
+                    (key, label, tier, mana_cost, spell_type, damage_die, aoe, effect_json, description, is_active, race_lock)
+                VALUES
+                    (:key, :label, :tier, :mana_cost, :spell_type, :damage_die, :aoe, :effect_json, :description, :is_active, :race_lock)
+                """,
+                sp,
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def _fix_1353_spell_metadata(conn: sqlite3.Connection) -> None:
     """#1353 WALKA-T3 — poprawa metadanych czarów na ISTNIEJĄCYCH bazach.
 
@@ -7878,6 +7946,7 @@ def run_admin_migrations() -> None:
         _ensure_showcase_subscribers(conn)  # #914 W13
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
+        _seed_elf_spells(conn)  # #1474 — szkoła Stroiciela
         _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)
         _fix_1353_spell_metadata(conn)  # #1353 WALKA-T3 — rdzen_shield→defense + opisy
         _fix_1460_rdzen_effects(conn)  # #1460 — effect_json + attack_aoe + aoe (efekty specjalne Rdzenia)

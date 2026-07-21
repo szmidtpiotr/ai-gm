@@ -8065,6 +8065,12 @@ def _resolve_player_attack_turn(
         (_find_combatant(combatants, _player_comb_id) or {}).get("zone"),
         (weapon_row or {}).get("weapon_type"),
     )
+    # #1474: elf leśny wychowany z łukiem — +1 do rzutu ataku bronią dystansową.
+    # Wartość STARTOWA (Numbers Policy), strojna na Sandboxie. Melee i czary bez zmian.
+    if str((weapon_row or {}).get("weapon_type") or "").lower() == "ranged" and \
+            (_race_of(conn, ch_id) or "") == "elf":
+        roll_result = int(roll_result) + ELF_RANGED_ATTACK_BONUS
+        out["elf_ranged_bonus"] = ELF_RANGED_ATTACK_BONUS
     if _zone_pen_1508:
         roll_result = int(roll_result) + _zone_pen_1508
         out["engaged_ranged_penalty"] = _zone_pen_1508
@@ -9347,6 +9353,7 @@ def resolve_player_attack(
 # strojne na Sandboxie razem z karą zwarcia (#1508).
 ELF_DISENGAGE_DC = 12          # DC Medium — d20 + DEX_mod + rank(acrobatics) + proficiency
 ELF_DISENGAGE_SKILL = "acrobatics"
+ELF_RANGED_ATTACK_BONUS = 1    # +1 do rzutu ataku bronią dystansową (łuk to elfia droga)
 
 
 def resolve_elf_disengage(campaign_id: int) -> dict[str, Any] | None:

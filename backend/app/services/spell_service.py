@@ -73,6 +73,15 @@ _DWARF_SIDE_EFFECTS: dict[str, list[str]] = {
 # Czary startowe krasnoluda-Uczonego (zamiast ludzkiego zestawu)
 DWARF_SCHOLAR_STARTING_SPELLS = ("vein_tremor", "rdzen_shield")
 HUMAN_SCHOLAR_STARTING_SPELLS = ("fire_bolt", "minor_heal", "ward_of_iron", "detect_magic", "spark_burst")
+# #1474: elf-Stroiciel — kontrola i ochrona zamiast ognia. Pula rozłączna z ludzką
+# i krasnoludzką (race_lock='elf'), zestaw startowy wg tożsamości rasy.
+ELF_SCHOLAR_STARTING_SPELLS = ("tune_thorn", "leaf_veil", "root_snare")
+
+#: Rasy, których zestaw startowy jest inny niż ludzki (jedno miejsce zamiast if-ów).
+_RACE_STARTING_SPELLS: dict[str, tuple[str, ...]] = {
+    "dwarf": DWARF_SCHOLAR_STARTING_SPELLS,
+    "elf": ELF_SCHOLAR_STARTING_SPELLS,
+}
 
 
 def is_miscast(raw_d20: int, race: str = "human") -> bool:
@@ -266,12 +275,18 @@ def resolve_miscast(
     """
     level = int(sheet.get("level", 1) or 1)
     cur_hp = int(sheet.get("current_hp", 0) or 0)
-    is_dwarf = str(race or "human").strip().lower() == "dwarf"
+    _race_lo = str(race or "human").strip().lower()
+    is_dwarf = _race_lo == "dwarf"
+    # #1474: elf-Stroiciel psuje czar łagodniej i inaczej — magia harmonii karze
+    # dysonansem, nie eksplozją. Techniki czerpania różnią się (kanon #1509):
+    # krasnolud płaci krwią, człowiek chaosem, elf — nieposłuszeństwem lasu.
+    is_elf = _race_lo == "elf"
 
     # G8 #1472 (#1432): stun is NOT universal. Per game_mechanics.md miscast ladder —
     # stun only (L1-2), self-damage only (L3-4), damage+stun (L5-7), damage+stun+secondary
     # (L8+). Default False, then each branch opts in where the Księga says so.
-    result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": False, "narrative": "", "rdzen_miscast": is_dwarf}
+    result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": False, "narrative": "",
+                              "rdzen_miscast": is_dwarf, "tuning_miscast": is_elf}
 
     if soften:
         result["softened"] = True
@@ -286,7 +301,31 @@ def resolve_miscast(
             return result
         level = _MISCAST_TIER_LEVEL[tier]
 
-    if is_dwarf:
+    if is_elf:
+        # Strojenie: las odpowiada, ale nie tak, jak proszono. Drabina o STOPIEŃ
+        # łagodniejsza od ludzkiej — obrażenia własne mniejsze, ogłuszenie rzadsze,
+        # brak efektu kaskadowego na wysokich poziomach.
+        if level <= 4:
+            result["self_damage"] = 0
+            result["stun"] = False
+            result["narrative"] = (
+                "Nuta idzie fałszem — liście szeleszczą wstecz, echo wraca cudzym głosem. "
+                "Czar rozprasza się bez szkody."
+            )
+        elif level <= 7:
+            dmg = random.randint(1, 4)
+            result["self_damage"] = dmg
+            result["narrative"] = (
+                f"Las odpowiada nie tak, jak prosiłeś — splot zaciska się na tobie za {dmg} HP."
+            )
+        else:
+            dmg = random.randint(1, 6)
+            result["self_damage"] = dmg
+            result["stun"] = True
+            result["narrative"] = (
+                f"Cały gaj podchwytuje fałszywą nutę. {dmg} HP strat, w uszach dzwoni obcy chór."
+            )
+    elif is_dwarf:
         # Rdzeń-magia: żyła wibruje — inny flavor
         if level <= 2:
             result["self_damage"] = 0
@@ -773,6 +812,7 @@ def grant_starting_spells(
 
     Człowiek: fire_bolt, minor_heal, ward_of_iron, detect_magic, spark_burst (B8 #655 + B11b #983)
     Krasnolud (#975 R6): vein_tremor + rdzen_shield (Rdzeń-magia pula, rozłączna z ludzką)
+    Elf (#1474): tune_thorn + leaf_veil + root_snare (szkoła Stroiciela — kontrola i ochrona)
     """
     managed = conn is None
     if managed:
@@ -790,7 +830,7 @@ def grant_starting_spells(
         except Exception:
             pass
 
-        spells = DWARF_SCHOLAR_STARTING_SPELLS if race == "dwarf" else HUMAN_SCHOLAR_STARTING_SPELLS
+        spells = _RACE_STARTING_SPELLS.get(race, HUMAN_SCHOLAR_STARTING_SPELLS)
         for spell_key in spells:
             conn.execute(
                 "INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank) VALUES (?, ?, 1)",
