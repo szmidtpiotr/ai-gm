@@ -80,7 +80,9 @@ export const STAT_META: Record<StatKey, { name: string; desc: string }> = {
   LCK: { name: "Szczęście", desc: "kryty, rzadki łup" },
 };
 
-export const RANK_LABEL = ["—", "Trained", "Skilled"] as const;
+// #1523 — etykiety rang po polsku (UI gry jest polskie; „Trained/Skilled"
+// zostały z portu z app.js). Ranga 3 osiągalna dopiero na awansach.
+export const RANK_LABEL = ["—", "Wyszkolony", "Biegły", "Mistrz"] as const;
 
 export interface SkillRow {
   key: string;

@@ -14,6 +14,7 @@ import {
   CircleNotch,
   ArrowsLeftRight,
   ArrowUUpLeft,
+  CaretDown,
 } from "@phosphor-icons/react";
 import {
   useCreateCharacter,
@@ -33,7 +34,6 @@ import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  ALL_SKILL_ROWS,
   ARCHETYPE_BONUS,
   RACE_BLOCKED_ARCHETYPES,
   RACE_STAT_MODS,
@@ -57,6 +57,7 @@ import {
 } from "@/lib/creation";
 import type { Hero, IdentityPreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { SkillPickerSheet } from "@/components/game/creation/SkillPickerSheet";
 
 const STEPS = ["Rasa", "Tożsamość", "Cechy", "Umiej.", "Finał"];
 
@@ -831,6 +832,7 @@ function StepSkills({
   onRevert: (orig: string) => void;
   onReset: () => void;
 }) {
+  const [openDesc, setOpenDesc] = useState<string | null>(null);
   const used = Math.max(0, skillBudgetUsed(snapshot, levels));
   const slots = Object.keys(snapshot)
     .filter((k) => Number(snapshot[k] || 0) > 0)
@@ -851,9 +853,13 @@ function StepSkills({
     ]),
   );
   const meta = (k: string): SkillRow => catMeta.get(k) ?? skillMeta(k);
+  // #1523 — źródłem listy jest ŻYWY katalog (`game_config_skills`) + klucze już
+  // trzymane w arkuszu. Statyczne ALL_SKILL_ROWS służą wyłącznie za etykiety
+  // (skillMeta): siedzą w nich martwe klucze sprzed #1052 (melee_attack,
+  // spell_attack, sleight_of_hand), których backend nie zna — wybranie takiego
+  // kończyło się odmową dopiero przy finalizacji kreatora.
   const universe = new Set<string>([
     ...catalog.map((s) => s.key),
-    ...ALL_SKILL_ROWS.map((r) => r.key),
     ...Object.keys(snapshot),
   ]);
   const candidates = [...universe]
@@ -865,7 +871,11 @@ function StepSkills({
     <div>
       <h1 className="text-center font-serif text-title-lg font-semibold text-text">Umiejętności</h1>
       <p className="mt-1.5 text-center font-ui text-label text-text-3">
-        Zamiana (↔) jest darmowa. Podniesienie kosztuje punkt, obniżenie zwraca. Netto max {WIZARD_MAX_SWAPS}.
+        Wylosowane umiejętności bohatera. Dotknij nazwy, żeby zobaczyć, co robi
+        i zamienić ją na inną — zamiana nic nie kosztuje.
+      </p>
+      <p className="mt-1 text-center font-ui text-micro text-text-3">
+        Podniesienie rangi kosztuje punkt, obniżenie go zwraca. Netto max {WIZARD_MAX_SWAPS}.
       </p>
       <div className="my-4 text-center font-ui text-label text-text-2">
         Zmieniono: <b className="font-mono text-ember-glow">{used} / {WIZARD_MAX_SWAPS}</b>
@@ -879,80 +889,98 @@ function StepSkills({
           const cur = meta(curKey);
           const rank = levels[orig] ?? Number(snapshot[orig] || 0);
 
-          if (swapSlot === orig) {
-            return (
-              <div key={orig} className="flex items-center gap-2 rounded-md border border-line-ember bg-surface px-3 py-2.5">
-                <select
-                  autoFocus
-                  defaultValue=""
-                  onChange={(e) => e.target.value && onSwap(orig, e.target.value)}
-                  className="h-9 flex-1 rounded-sm border border-line bg-inset px-2 font-ui text-label text-text focus:border-line-ember focus:outline-none"
-                >
-                  <option value="">— Wybierz umiejętność —</option>
-                  {candidates.map((cd) => (
-                    <option key={cd.key} value={cd.key}>
-                      {cd.label} — {cd.stat}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setSwapSlot(null)}
-                  aria-label="Anuluj"
-                  className="flex h-8 w-8 items-center justify-center rounded-md border border-line text-text-2"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            );
-          }
-
           const changed = swapped || rank !== Number(snapshot[orig] || 0);
+          const expanded = openDesc === orig;
           return (
             <div
               key={orig}
               className={cn(
-                "flex items-center gap-2 rounded-md border px-3.5 py-2.5",
+                "overflow-hidden rounded-md border transition-colors",
                 changed ? "border-line-ember bg-ember/[0.04]" : "border-line bg-surface",
               )}
             >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate font-ui text-label font-semibold text-text">{cur.label}</span>
-                  <span className="shrink-0 font-ui text-micro text-text-3">— {cur.stat}</span>
-                  {swapped ? (
-                    <button onClick={() => onRevert(orig)} aria-label="Cofnij zamianę" className="text-text-3 hover:text-ember-glow">
-                      <ArrowUUpLeft size={14} />
-                    </button>
-                  ) : (
-                    <button onClick={() => setSwapSlot(orig)} aria-label="Zamień" className="text-text-3 hover:text-ember-glow">
-                      <ArrowsLeftRight size={14} />
-                    </button>
-                  )}
-                </div>
+              <div className="flex items-center gap-2 px-3.5 py-2.5">
+                {/* Nazwa + cecha + rozwijanie opisu — cały blok jest przyciskiem,
+                    żeby na telefonie nie trzeba było trafiać w ikonkę. */}
+                <button
+                  type="button"
+                  onClick={() => setOpenDesc(expanded ? null : orig)}
+                  aria-expanded={expanded}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                >
+                  <span className="truncate font-ui text-label font-semibold text-text">
+                    {cur.label}
+                  </span>
+                  <span className="shrink-0 font-mono text-micro text-text-3">{cur.stat}</span>
+                  <CaretDown
+                    size={12}
+                    className={cn(
+                      "shrink-0 text-text-3 transition-transform",
+                      expanded && "rotate-180",
+                    )}
+                  />
+                </button>
+                <button
+                  onClick={() => onLevel(orig, -1)}
+                  disabled={!canAdjSkill(orig, -1, snapshot, levels)}
+                  aria-label={`Obniż: ${cur.label}`}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-text-2 hover:border-line-ember disabled:opacity-30"
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="w-24 shrink-0 text-center font-ui text-micro text-text-2">
+                  <b className="font-mono text-label text-text">{rank}</b>{" "}
+                  <span className="text-text-3">{RANK_LABEL[rank] || rank}</span>
+                </span>
+                <button
+                  onClick={() => onLevel(orig, 1)}
+                  disabled={!canAdjSkill(orig, 1, snapshot, levels)}
+                  aria-label={`Podnieś: ${cur.label}`}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-text-2 hover:border-line-ember disabled:opacity-30"
+                >
+                  <Plus size={14} />
+                </button>
               </div>
-              <button
-                onClick={() => onLevel(orig, -1)}
-                disabled={!canAdjSkill(orig, -1, snapshot, levels)}
-                aria-label="Obniż"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-text-2 hover:border-line-ember disabled:opacity-30"
-              >
-                <Minus size={14} />
-              </button>
-              <span className="w-24 shrink-0 text-center font-mono text-micro text-text-2">
-                {rank} · {RANK_LABEL[rank] || rank}
-              </span>
-              <button
-                onClick={() => onLevel(orig, 1)}
-                disabled={!canAdjSkill(orig, 1, snapshot, levels)}
-                aria-label="Podnieś"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-text-2 hover:border-line-ember disabled:opacity-30"
-              >
-                <Plus size={14} />
-              </button>
+
+              {expanded && (
+                <div className="border-t border-line-soft bg-bg px-3.5 py-2.5">
+                  <p className="font-serif text-micro leading-relaxed text-text-2">
+                    {cur.hint || "Brak opisu w katalogu."}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSwapSlot(orig)}
+                      className="gap-1.5"
+                    >
+                      <ArrowsLeftRight size={13} /> Zamień na inną
+                    </Button>
+                    {swapped && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRevert(orig)}
+                        className="gap-1.5 text-text-3"
+                      >
+                        <ArrowUUpLeft size={13} /> Cofnij ({skillMeta(orig).label})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      <SkillPickerSheet
+        open={!!swapSlot}
+        onOpenChange={(v) => !v && setSwapSlot(null)}
+        currentLabel={swapSlot ? meta(swapMap[swapSlot] ?? swapSlot).label : ""}
+        candidates={candidates}
+        onPick={(target) => swapSlot && onSwap(swapSlot, target)}
+      />
 
       <div className="mt-4 flex justify-center">
         <Button variant="ghost" size="sm" onClick={onReset}>
