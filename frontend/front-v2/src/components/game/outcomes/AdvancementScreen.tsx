@@ -137,6 +137,7 @@ export function AdvancementScreen({
             />
           ) : tab === "skills" ? (
             <SkillsTab
+              characterId={characterId}
               sheet={sheet}
               costs={xp.data?.rank_up_costs ?? {}}
               ceiling={xp.data?.skill_rank_ceiling ?? 3}
@@ -207,8 +208,9 @@ function StatsTab({
 
 // ── Umiejętności ──────────────────────────────────────────────────────────────
 function SkillsTab({
-  sheet, costs, ceiling, avail, disabled, onBuy,
+  characterId, sheet, costs, ceiling, avail, disabled, onBuy,
 }: {
+  characterId: number | undefined;
   sheet: HeroSheet | undefined;
   costs: Record<string, number>;
   ceiling: number;
@@ -216,7 +218,7 @@ function SkillsTab({
   disabled: boolean;
   onBuy: (skillKey: string) => void;
 }) {
-  const catalog = usePublicSkills();
+  const catalog = usePublicSkills(true, characterId);
   const owned = (sheet?.skills && typeof sheet.skills === "object"
     ? (sheet.skills as Record<string, number>)
     : {}) as Record<string, number>;

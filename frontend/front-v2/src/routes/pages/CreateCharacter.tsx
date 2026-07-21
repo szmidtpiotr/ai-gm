@@ -37,6 +37,7 @@ import {
   ARCHETYPE_BONUS,
   RACE_BLOCKED_ARCHETYPES,
   RACE_STAT_MODS,
+  skillAllowed,
   RANK_LABEL,
   STAT_KEYS,
   STAT_META,
@@ -403,7 +404,8 @@ export default function CreateCharacter() {
         )}
         {step === 3 && (
           <StepSkills
-            catalog={skillCatalog ?? []}
+            catalog={(skillCatalog ?? []).filter((sk) => skillAllowed(sk.key, archetype, race))}
+            allow={(k) => skillAllowed(k, archetype, race)}
             snapshot={snapshot}
             levels={levels}
             swapMap={swapMap}
@@ -806,6 +808,7 @@ function Derived({
 // ── Krok 4: Umiejętności ────────────────────────────────────────────────────
 function StepSkills({
   catalog,
+  allow,
   snapshot,
   levels,
   swapMap,
@@ -817,6 +820,7 @@ function StepSkills({
   onReset,
 }: {
   catalog: PublicSkill[];
+  allow: (skillKey: string) => boolean;
   snapshot: Record<string, number>;
   levels: Record<string, number>;
   swapMap: Record<string, string>;
@@ -853,7 +857,7 @@ function StepSkills({
     ...Object.keys(snapshot),
   ]);
   const candidates = [...universe]
-    .filter((k) => !Number(snapshot[k] || 0) && !visible.has(k))
+    .filter((k) => !Number(snapshot[k] || 0) && !visible.has(k) && allow(k))
     .map(meta)
     .sort((a, b) => a.label.localeCompare(b.label));
 

@@ -83,12 +83,17 @@ export interface PublicSkill {
 
 /** GET /mechanics/skills → publiczny katalog umiejętności (label/cecha/opis).
  * Zasila tooltip opisu w panelu Umiejętności + ekran awansu (V2). */
-export function usePublicSkills(enabled = true) {
+export function usePublicSkills(enabled = true, characterId?: number) {
   return useQuery({
-    queryKey: ["public-skills"],
+    queryKey: ["public-skills", characterId ?? null],
     enabled,
     staleTime: 10 * 60_000, // config, rzadko się zmienia
-    queryFn: () => apiFetch<{ skills: PublicSkill[] }>(`/mechanics/skills`),
+    queryFn: () =>
+      apiFetch<{ skills: PublicSkill[] }>(
+        // #1522 — z characterId backend odsiewa umiejętności zamknięte dla tej
+        // klasy/rasy (znane postaci zostają, żeby dało się je rozwijać).
+        characterId ? `/mechanics/skills?character_id=${characterId}` : `/mechanics/skills`,
+      ),
     select: (d) => d.skills ?? [],
   });
 }

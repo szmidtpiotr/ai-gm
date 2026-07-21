@@ -386,6 +386,16 @@ Bilans czarów bojowych: <b>człowiek 34 · krasnolud 12 · elf 11</b> (pule ca�
 Wyłączone jako duplikaty: <code>frost_bolt</code>, <code>lightning_arrow</code> (ściśle gorsze
 od Ognistego Pocisku i Lodowej Lancy, nikt ich nie znał). <code>acid_splash</code> dostał rolę
 antypancerną, <code>magic_bolt</code> przeszedł na T2 (2d6 za 2 many bił wszystko na T1).</p>
+<p><b>Bramka umiejętności klasa+rasa (#1522):</b> do tej pory kreator dawał każdemu archetypowi
+cały katalog 43 umiejętności — Zwiadowca bez many mógł wziąć <i>Tarczę Many</i>. Teraz trzy grupy
+są zamknięte: MAGICZNE (<code>arcana</code>, <code>arcane_ward</code>, <code>mana_shield</code>,
+<code>magic_sense</code>) = Uczony; CIĘŻKA WALKA (<code>shield_block</code>,
+<code>two_handed</code>, <code>wrestling</code>) = Wojownik; ZŁODZIEJSKIE (<code>lockpick</code>,
+<code>pickpocket</code>, <code>disguise</code>) = Łotrzyk. Rasa odblokowuje: elf →
+<code>magic_sense</code>, krasnolud → <code>shield_block</code> + <code>two_handed</code>.
+Reguła siedzi w <code>backend/app/services/skill_access_service.py</code> (jedno źródło: rzut
+startowy, zamiana w kreatorze, nauka za XP, katalog <code>/api/mechanics/skills?character_id=</code>).
+Istniejące postacie zachowują to, co już mają — bramka działa na nowe nabycia.</p>
 <p><b>Uwaga o starcie:</b> Czarnobór nie ma jeszcze zaseedowanej mapy, więc kampania elfa
 startuje na razie tam, gdzie kampania człowieka (Kresy). Kotwica startowa w krainie ojczystej
 dojdzie razem z wdrożeniem Czarnoboru (sesja CB-8). Sama rasa jest już zabramkowana statusem

@@ -152,9 +152,13 @@ def get_creator_help():
 
 
 @router.get("/mechanics/skills")
-def get_public_skills():
+def get_public_skills(character_id: int | None = None):
     """Skill catalog (key, label, linked_stat, description). No auth required.
-    Powers the sheet Skills panel tooltip + advancement screen (V2)."""
+    Powers the sheet Skills panel tooltip + advancement screen (V2).
+
+    #1522 — z `?character_id=` katalog jest odsiany bramką archetyp+rasa, tak samo
+    jak nauka za XP: Zwiadowca nie zobaczy Tarczy Many na liście do kupienia.
+    Umiejętności, które postać już zna, zostają widoczne (rozwijać wolno)."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -162,7 +166,28 @@ def get_public_skills():
             "SELECT key, label, linked_stat, description, rank_ceiling "
             "FROM game_config_skills ORDER BY label"
         ).fetchall()
-        return {"skills": [dict(r) for r in rows]}
+        items = [dict(r) for r in rows]
+        if character_id:
+            import json as _json
+
+            from app.services.skill_access_service import skill_allowed
+
+            ch = conn.execute(
+                "SELECT sheet_json, COALESCE(race, 'human') AS race FROM characters WHERE id = ?",
+                (character_id,),
+            ).fetchone()
+            if ch:
+                try:
+                    sheet = _json.loads(ch["sheet_json"] or "{}")
+                except Exception:
+                    sheet = {}
+                archetype = sheet.get("archetype")
+                known = {k for k, v in (sheet.get("skills") or {}).items() if int(v or 0) > 0}
+                items = [
+                    it for it in items
+                    if it["key"] in known or skill_allowed(it["key"], archetype, ch["race"])
+                ]
+        return {"skills": items}
     finally:
         conn.close()
 

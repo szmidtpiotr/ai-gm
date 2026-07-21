@@ -39,6 +39,37 @@ export const RACE_STAT_MODS: Record<Race, Partial<Record<StatKey, number>>> = {
   elf: { DEX: 2, WIS: 1, CON: -1 },
 };
 
+// #1522 — lustro `backend/app/services/skill_access_service.py`. Umiejętność
+// spoza tej mapy jest wspólna dla wszystkich; wpis = lista klas, które mogą ją
+// mieć. Rasa potrafi odblokować to, co zamknęła klasa (elf czyta pęknięcia
+// Rdzenia, krasnolud wyrasta przy tarczy i kowadle).
+export const SKILL_ARCHETYPE_LOCK: Record<string, Archetype[]> = {
+  arcana: ["scholar"],
+  arcane_ward: ["scholar"],
+  mana_shield: ["scholar"],
+  magic_sense: ["scholar"],
+  shield_block: ["warrior"],
+  two_handed: ["warrior"],
+  wrestling: ["warrior"],
+  lockpick: ["rogue"],
+  pickpocket: ["rogue"],
+  disguise: ["rogue"],
+};
+
+export const RACE_SKILL_UNLOCK: Record<Race, string[]> = {
+  human: [],
+  elf: ["magic_sense"],
+  dwarf: ["shield_block", "two_handed"],
+};
+
+/** Czy ta para klasa+rasa może mieć tę umiejętność (lustro backendu). */
+export function skillAllowed(skillKey: string, archetype: Archetype, race: Race): boolean {
+  const lock = SKILL_ARCHETYPE_LOCK[skillKey];
+  if (!lock) return true;
+  if (lock.includes(archetype)) return true;
+  return (RACE_SKILL_UNLOCK[race] ?? []).includes(skillKey);
+}
+
 export const STAT_META: Record<StatKey, { name: string; desc: string }> = {
   STR: { name: "Siła", desc: "obrażenia w zwarciu, udźwig" },
   DEX: { name: "Zręczność", desc: "inicjatywa, unik, broń dystansowa" },

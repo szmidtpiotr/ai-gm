@@ -450,6 +450,20 @@ def spend_skill_rank_up(
     if current >= ceiling:
         raise ValueError("skill_at_ceiling")
 
+    # #1522 — bramka archetyp+rasa. Sprawdzamy tylko przy NAUCE (0→1): postać,
+    # która skill już ma (stara, sprzed bramki), może go rozwijać dalej — nic
+    # nikomu nie odbieramy, zamykamy tylko nowe nabycia.
+    if current == 0:
+        from app.services.skill_access_service import skill_allowed
+        race_row = conn.execute(
+            "SELECT COALESCE(race, 'human') AS race FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not skill_allowed(
+            sk, sheet.get("archetype"), race_row["race"] if race_row else "human"
+        ):
+            raise ValueError("skill_locked_for_class")
+
     new_rank = current + 1
     # #1467 — learning a NEW skill (rank 0→1) counts toward the per-level cap
     # (max 2). Rank-ups of an already-known skill (current>=1) are unlimited.

@@ -556,23 +556,36 @@ def _normalize_stat_override_key(raw: str) -> str | None:
     return _STAT_OVERRIDE_ALIASES.get(kl)
 
 
-def _creation_allowed_skill_keys() -> frozenset[str]:
+def _creation_allowed_skill_keys(
+    archetype: str | None = None, race: str | None = "human"
+) -> frozenset[str]:
     """FAZA S (#617) — keys a character may carry at creation. The rolled
     starting set stays archetype-weighted (CREATION_SKILL_POOL), but swaps may
     target ANY skill in the live game_config_skills catalog so the new skill
     engine (gamble/haggling/lockpick/…) is reachable in the wizard. Falls back
-    to the legacy pool if the catalog can't be read."""
+    to the legacy pool if the catalog can't be read.
+
+    #1522 — z podanym archetypem/rasą lista jest dodatkowo odsiana bramką
+    klasową (magia / ciężka walka / złodziejskie). Bez argumentów zachowuje
+    stare zachowanie (cały katalog) dla wywołań spoza kreatora."""
+    from app.services.skill_access_service import filter_allowed_skills
+
     try:
         keys = {str(s.get("key")).strip() for s in list_skills() if s.get("key")}
     except Exception:  # pragma: no cover - defensive: bad DB read
         keys = set()
-    return frozenset(keys | set(CREATION_SKILL_POOL))
+    all_keys = keys | set(CREATION_SKILL_POOL)
+    if archetype is None:
+        return frozenset(all_keys)
+    return frozenset(filter_allowed_skills(sorted(all_keys), archetype, race))
 
 
 def _validate_creation_skills_after_swap(
     skills_orig: dict[str, int],
     skills_after: dict[str, int],
     slot_current: dict[str, str] | None,
+    archetype: str | None = None,
+    race: str | None = "human",
 ) -> int:
     """
     Rolled creation slots (skills_orig[k] > 0) may move to another skill key via swap.
@@ -583,7 +596,7 @@ def _validate_creation_skills_after_swap(
     if not rolled:
         return 0
 
-    allowed = _creation_allowed_skill_keys()
+    allowed = _creation_allowed_skill_keys(archetype, race)
     sc = slot_current or {}
     seen_targets: set[str] = set()
     mapping: dict[str, str] = {}
@@ -591,9 +604,13 @@ def _validate_creation_skills_after_swap(
         raw = sc.get(r, r)
         ck = str(raw).strip()
         if ck not in allowed:
+            # #1522 — rozdziel „nie ma takiej umiejętności" od „ta klasa jej nie używa",
+            # inaczej gracz dostaje komunikat o nieznanym kluczu przy poprawnym skillu.
+            from app.services.skill_access_service import skill_block_reason
+            reason = skill_block_reason(ck, archetype, race) if archetype else None
             raise HTTPException(
                 status_code=400,
-                detail=f"skill_slot_current: unknown skill {ck!r} for rolled slot {r!r}.",
+                detail=reason or f"skill_slot_current: unknown skill {ck!r} for rolled slot {r!r}.",
             )
         if ck in seen_targets:
             raise HTTPException(
@@ -640,12 +657,13 @@ def _validate_creation_skills_after_swap(
 
 
 def _coerce_creation_skills_payload(
-    incoming: dict | None, sheet_skills: dict
+    incoming: dict | None, sheet_skills: dict,
+    archetype: str | None = None, race: str | None = "human",
 ) -> dict[str, int]:
     base = {k: int(sheet_skills.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
     if incoming is None:
         return base
-    allowed = _creation_allowed_skill_keys()
+    allowed = _creation_allowed_skill_keys(archetype, race)
     out = dict(base)
     for raw_k, raw_v in incoming.items():
         k = str(raw_k).strip()
@@ -1041,11 +1059,13 @@ def _create_roll_initial_sheet(req) -> tuple[dict, str, str | None]:
     )
     archetype = starter_archetype_key or "warrior"
     base_sheet["archetype"] = archetype
+    # #1522 — rasa musi być znana PRZED losowaniem skilli (bramka + bias rasowy).
+    race = _normalize_race(getattr(req, "race", "human"))
     base_sheet["stats"] = {
         k: max(STAT_ROLL_MIN, min(STAT_ROLL_MAX, roll_4d6_drop_lowest()))
         for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
     }
-    skills_rolled = roll_creation_skills(archetype)
+    skills_rolled = roll_creation_skills(archetype, race=race)
     base_sheet["skills"] = skills_rolled
     base_sheet["skills_at_creation"] = dict(skills_rolled)
     created_sheet = _build_character_sheet(
@@ -1055,7 +1075,6 @@ def _create_roll_initial_sheet(req) -> tuple[dict, str, str | None]:
     )
     # Apply racial modifiers AFTER archetype bonuses (#971 R2).
     # Recalculate HP/mana because CON/INT may have changed.
-    race = str(getattr(req, "race", "human") or "human").strip().lower()
     apply_racial_modifiers(created_sheet, race)
     if race != "human":
         con_val = created_sheet["stats"].get("CON", 10)
@@ -1420,7 +1439,7 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
         k: max(STAT_ROLL_MIN, min(STAT_ROLL_MAX, roll_4d6_drop_lowest()))
         for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
     }
-    skills_rolled = roll_creation_skills(archetype)
+    skills_rolled = roll_creation_skills(archetype, race=race)
     base_sheet["skills"] = skills_rolled
     base_sheet["skills_at_creation"] = dict(skills_rolled)
 
@@ -2049,6 +2068,11 @@ def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest, author
                 raise HTTPException(
                     status_code=400,
                     detail="Unknown skill — must exist in game_config_skills catalog.",
+                ) from None
+            if code == "skill_locked_for_class":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Ta umiejętność jest zastrzeżona dla innej klasy (#1522).",
                 ) from None
             if code == "skill_at_ceiling":
                 raise HTTPException(status_code=400, detail="Skill rank already at ceiling") from None
@@ -2805,8 +2829,10 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     else:
         skills_orig = {k: int(skills_sheet.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
 
-    skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet)
-    _validate_creation_skills_after_swap(skills_orig, skills_after, req.skill_slot_current)
+    skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet, archetype, race)
+    _validate_creation_skills_after_swap(
+        skills_orig, skills_after, req.skill_slot_current, archetype, race
+    )
 
     sheet["stats"] = new_stats
     sheet["skills"] = skills_after

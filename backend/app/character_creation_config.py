@@ -102,25 +102,41 @@ def _weighted_sample_without_replacement(
     return out
 
 
-def roll_creation_skills(archetype: str, rng: random.Random | None = None) -> dict[str, int]:
+def roll_creation_skills(
+    archetype: str, rng: random.Random | None = None, race: str = "human"
+) -> dict[str, int]:
     """
     Weighted random skill ranks at creation. All keys in _CREATION_SKILL_POOL appear;
     inactive skills are 0. Ranks are capped at MAX_SKILL_LVL_AT_CREATION.
+
+    #1522 — pula jest odsiana bramką archetyp+rasa (`skill_access_service`), więc
+    Zwiadowca nie wylosuje Arkanów, a Uczony Bloku Tarczą. Rasa dokłada własny
+    bias (elf w kniei, krasnolud w kamieniu), ale niczego nie odbiera.
     """
+    from app.services.skill_access_service import (
+        RACE_SKILL_WEIGHTS,
+        filter_allowed_skills,
+    )
+
     g = rng or random.Random()
     a = (archetype or "warrior").strip().lower()
     if a not in SKILL_BUDGET:
         a = "warrior"
+    r = str(race or "human").strip().lower()
     cfg = SKILL_BUDGET[a]
     preferred = set(ARCHETYPE_SKILL_WEIGHTS.get(a, ()))
-    pool = sorted(CREATION_SKILL_POOL)
+    race_preferred = set(RACE_SKILL_WEIGHTS.get(r, ()))
+    pool = filter_allowed_skills(sorted(CREATION_SKILL_POOL), a, r)
 
     def wfn(key: str) -> int:
-        return 3 if key in preferred else 1
+        w = 3 if key in preferred else 1
+        return w * 2 if key in race_preferred else w
 
     n_act = min(cfg["active_skills"], len(pool))
     picked = _weighted_sample_without_replacement(pool, wfn, n_act, g)
 
+    # Klucze spoza puli tej pary archetyp+rasa zostają w arkuszu z rangą 0 —
+    # nie znikają, żeby stary kod czytający pełny zestaw kluczy nie padał.
     ranks: dict[str, int] = {k: 0 for k in CREATION_SKILL_POOL}
     for pk in picked:
         ranks[pk] = 1
