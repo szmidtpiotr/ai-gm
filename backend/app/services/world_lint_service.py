@@ -478,11 +478,28 @@ def _rule_duplicate_label_in_region(conn: sqlite3.Connection) -> list[dict]:
     for r in rows:
         by_region.setdefault(str(r["region"] or ""), []).append(r)
 
+    #: Kanoniczne pinezki — dwie karty stojące na RÓŻNYCH heksach to z definicji
+    #: dwa różne miejsca, choćby nazywały się prawie tak samo (#1527: cztery
+    #: hołdy rodowe „X — Wyssany Hołd", każdy na własnym heksie).
+    on_map: dict[str, tuple[int, int]] = {}
+    if _table_exists(conn, "world_hexes"):
+        for h in conn.execute(
+            "SELECT q, r, location_key FROM world_hexes "
+            "WHERE map_level = 0 AND is_active = 1 "
+            "AND location_key IS NOT NULL AND location_key != ''"
+        ).fetchall():
+            on_map[h["location_key"]] = (int(h["q"]), int(h["r"]))
+
     issues: list[dict] = []
     for region, items in by_region.items():
         for i in range(len(items)):
             for j in range(i + 1, len(items)):
                 a, b = items[i], items[j]
+                pin_a, pin_b = on_map.get(a["key"]), on_map.get(b["key"])
+                if pin_a and pin_b and pin_a != pin_b:
+                    continue   # dwa osadzone miejsca = dwa miejsca, nie kopia
+                if not _labels_look_like_the_same_place(a["label"], b["label"]):
+                    continue
                 ratio = SequenceMatcher(
                     None, _norm_label(a["label"]), _norm_label(b["label"])
                 ).ratio()
@@ -492,10 +509,38 @@ def _rule_duplicate_label_in_region(conn: sqlite3.Connection) -> list[dict]:
                     "duplicate_label_in_region", f"{region}|{a['key']}|{b['key']}",
                     f"„{a['label']}” ≈ „{b['label']}” w krainie „{region}”",
                     f"Podobieństwo etykiet {ratio:.2f} ≥ {DUPLICATE_SIMILARITY_THRESHOLD}. "
-                    f"Klucze: {a['key']} / {b['key']}. Którą kopię zostawić — decyzja człowieka.",
+                    f"Klucze: {a['key']} / {b['key']}. "
+                    + ("Obie karty są poza mapą świata. "
+                       if not pin_a and not pin_b else
+                       f"Na mapie stoi: {a['key'] if pin_a else b['key']} "
+                       f"(heks {(pin_a or pin_b)[0]},{(pin_a or pin_b)[1]}). ")
+                    + "Którą kopię zostawić — decyzja człowieka.",
                     _SEVERITY_WARNING,
                 ))
     return issues
+
+
+#: Separatory członu wyróżniającego w nazwach seryjnych („Frosthold — Wyssany Hołd").
+_LABEL_SEPARATORS = ("—", "–", " - ", ":")
+
+
+def _labels_look_like_the_same_place(label_a: str, label_b: str) -> bool:
+    """Czy to ta sama nazwa, czy dwie pozycje jednej SERII?
+
+    Kanon lubi nazwy seryjne: „Frosthold — Wyssany Hołd", „Grauhold — Wyssany
+    Hołd". Wspólny ogon ciągnie podobieństwo całych etykiet powyżej progu, więc
+    przy wspólnym ogonie porównujemy wyłącznie CZŁON WYRÓŻNIAJĄCY.
+    """
+    a, b = _norm_label(label_a), _norm_label(label_b)
+    if a == b:
+        return True
+    for sep in _LABEL_SEPARATORS:
+        if sep in a and sep in b:
+            head_a, tail_a = (p.strip() for p in a.split(sep, 1))
+            head_b, tail_b = (p.strip() for p in b.split(sep, 1))
+            if tail_a == tail_b:   # ten sam ogon = seria; decyduje głowa
+                return SequenceMatcher(None, head_a, head_b).ratio() >= DUPLICATE_SIMILARITY_THRESHOLD
+    return True
 
 
 _RULES = (

@@ -330,6 +330,50 @@ def test_duplicate_labels_in_same_region_are_reported(conn):
     assert issue["fixable"] is False, "wybor ktora kopie zostawic nalezy do czlowieka"
 
 
+def test_two_cards_on_different_hexes_are_never_a_duplicate(conn):
+    """Dwa miejsca stojace fizycznie gdzie indziej to z definicji dwa miejsca.
+
+    Zywy przypadek (#1527): „Frosthold — Wyssany Hold" (17,-47) i „Grauhold —
+    Wyssany Hold" (25,-33) to dwa kanoniczne holdy rodowe, kazdy na wlasnym
+    heksie. Lint parowal je, bo wspolny czlon „— Wyssany Hold" ciagnie
+    podobienstwo etykiet powyzej progu.
+    """
+    _add_location(conn, "frosthold", label="Frosthold — Wyssany Hołd",
+                  world_hex_q=17, world_hex_r=-47, region="siwe_granie")
+    _add_location(conn, "grauhold", label="Grauhold — Wyssany Hołd",
+                  world_hex_q=25, world_hex_r=-33, region="siwe_granie")
+    conn.executemany(
+        "INSERT INTO world_hexes (q, r, map_level, is_active, location_key) VALUES (?,?,?,?,?)",
+        [(17, -47, 0, 1, "frosthold"), (25, -33, 0, 1, "grauhold")],
+    )
+    conn.execute("INSERT INTO world_regions (key, label, status) VALUES ('siwe_granie','Siwe Granie','live')")
+    conn.commit()
+
+    assert "duplicate_label_in_region" not in _rules(run_world_lint(conn))
+
+
+def test_series_names_with_shared_tail_are_not_duplicates(conn):
+    """Seria nazw („X — Wyssany Hold") rozni sie CZLONEM WYROZNIAJACYM."""
+    _add_location(conn, "silberhold", label="Silberhold — Wyssany Hołd")
+    _add_location(conn, "kohlgrund", label="Kohlgrund — Wyssany Hołd")
+
+    assert "duplicate_label_in_region" not in _rules(run_world_lint(conn))
+
+
+def test_identical_labels_are_still_caught_when_only_one_stands_on_the_map(conn):
+    """Prawdziwy duplikat: ta sama karczma dwa razy, jedna kopia bez heksa."""
+    _add_location(conn, "trzech_krukow", label="Karczma Pod Trzema Krukami",
+                  world_hex_q=23, world_hex_r=23)
+    _add_location(conn, "trzech_krukow_2", label="Karczma Pod Trzema Krukami")
+    conn.execute(
+        "INSERT INTO world_hexes (q, r, map_level, is_active, location_key) VALUES (?,?,?,?,?)",
+        (23, 23, 0, 1, "trzech_krukow"),
+    )
+    conn.commit()
+
+    assert "duplicate_label_in_region" in _rules(run_world_lint(conn))
+
+
 def test_same_label_in_other_region_is_not_a_duplicate(conn):
     _add_location(conn, "kaplica_kresy", label="Opuszczona kaplica", region="kresy")
     _add_location(conn, "kaplica_cb", label="Opuszczona kaplica", region="czarnobor")

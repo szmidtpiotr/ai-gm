@@ -247,6 +247,8 @@ Czego celowo **nie ma**: guzika „napraw wszystko" dla całej listy. Taki guzik
 
 **Znacznik 🩺 poza Kontrolą świata.** Wiersze w zakładkach Lokacje, ⚓ Floating i Do zatwierdzenia noszą znacznik przy nazwie (czerwony = błąd struktury, pomarańczowy = brak treści), a rodzic w drzewie pokazuje **🩺N** — ile problemów czeka w zwiniętej gałęzi. Dzięki temu pracując nad lokacjami widać chorą kartę od razu, bez przełączania się do lintu i z powrotem.
 
+**Kiedy duplikat NIE jest duplikatem.** Reguła podobieństwa nazw ma dwa wyłączenia, oba wzięte z żywych danych: (1) jeśli obie karty stoją na **różnych heksach** kanonu, to z definicji dwa różne miejsca — choćby nazywały się prawie tak samo; (2) przy nazwach **seryjnych** („Frosthold — Wyssany Hołd", „Grauhold — Wyssany Hołd") porównywany jest wyłącznie człon wyróżniający, bo wspólny ogon sam z siebie wywindowałby podobieństwo powyżej progu. Bez tych wyłączeń lint parował cztery kanoniczne hołdy rodowe Siwych Grań.
+
 **Progi (wartości startowe, do strojenia):** podobieństwo nazw uznane za duplikat = **0.85**, limit listy = **200** pozycji.
 
 ---
