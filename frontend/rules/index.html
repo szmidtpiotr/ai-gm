@@ -460,6 +460,12 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#rasy-kowalskie">Kowalskie oko</a></li>
           <li><a href="#rasy-wzrok">Wzrok górnika</a></li>
           <li><a href="#rasy-rdzen">Rdzeń-magia</a></li>
+          <li><a href="#rasy-elf">Elf leśny</a></li>
+          <li><a href="#rasy-elf-droga">Droga elfa</a></li>
+          <li><a href="#rasy-knieja">Knieja pod stopami</a></li>
+          <li><a href="#rasy-zmierzch">Zmierzchowy wzrok</a></li>
+          <li><a href="#rasy-odskok">Odskok</a></li>
+          <li><a href="#rasy-zniknięcie">Zniknięcie w kniei</a></li>
         </ul>
       </li>
       <li class="chap">
@@ -2320,7 +2326,7 @@ document.addEventListener('DOMContentLoaded',function(){
     <section id="rasy">
       <p class="eyebrow">Kreacja postaci</p>
       <h1><span class="num">X</span>Rasy bohatera</h1>
-      <p class="subtitle">Człowiek i Krasnolud — dwa sposoby bycia w tym świecie</p>
+      <p class="subtitle">Człowiek, Krasnolud i Elf leśny — trzy sposoby bycia w tym świecie</p>
       <hr class="rule">
 
       <p>Rasę wybierasz w Kroku 0 kreatora postaci, przed wyborem archetypu. Rasa nadaje stałe modyfikatory statystyk i odblokowuje unikalne cechy — widoczne na karcie postaci w sekcji <em>Cechy rasowe</em>. Narrator zna rasę twojego bohatera i reaguje na nią w dialogach z NPC, opisach miejsc i narracji magicznej.</p>
@@ -2408,6 +2414,55 @@ document.addEventListener('DOMContentLoaded',function(){
         </table>
         <p><strong>Miscast (Rdzeń-czerpanie):</strong> porażka zaklęcia na <em>Nat 1 i Nat 2</em> (nie tylko Nat 1). Narrator opisuje to inaczej niż ludzki miscast: żyła ziemi vibruje w kościach, krew z uszu lub nosa, zapach rozgrzanego metalu, stukot głębinowych machin.</p>
         <p><em>Ludzki uczony</em> nie może nauczyć się czarów Rdzenia — są zablokowane (race_lock = dwarf). <em>Krasnolud-uczony</em> nie może nauczyć się standardowych czarów arcańskich.</p>
+      </div>
+
+      <h2 id="rasy-elf">Elf leśny</h2>
+      <p>Skryci strażnicy starych granic z <strong>Czarnoboru</strong>. Znają mapę pęknięć Rdzenia lepiej niż ktokolwiek — bo od pokoleń je <em>stroją</em>, zamiast wydzierać z nich moc. Żyją długo, chodzą lekko i pamiętają rzeczy, o których ludzie zdążyli zapomnieć dwa razy. <em>Mroczne elfy</em>, na które trafisz w walce, to ich kuzyni — stroiciele, którzy zaczęli pęknięcia rozdzierać.</p>
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Elf leśny · modyfikatory statystyk</h4>
+        <p>Stosowane PO bonusach archetypu:</p>
+        <ul>
+          <li><strong>+2 ZRĘ</strong> — celność łuku, lekki krok, refleks</li>
+          <li><strong>+1 MĄD</strong> — czujność i wyczucie lasu</li>
+          <li><strong>−1 KON</strong> — smukła budowa, mniej ciosów do przyjęcia</li>
+        </ul>
+        <p><em>Przykład:</em> Zwiadowca-elf startuje z DEX 14 zamiast 12 i WIS 11 zamiast 10, ale CON 9 zamiast 10.</p>
+      </div>
+
+      <h2 id="rasy-elf-droga">Droga elfa</h2>
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Archetypy · elf ma dwie drogi</h4>
+        <p>Elf wybiera <strong>Zwiadowcę</strong> (łucznik-tropiciel) albo <strong>Uczonego-Stroiciela</strong>. Karta <em>Wojownika</em> nie pojawia się w kreatorze po wybraniu tej rasy — ściana tarcz to nie jest elfia droga (stąd −1 KON).</p>
+        <p><strong>Zwiadowca zaczyna walkę na DYSTANSIE</strong>, nie w zwarciu — to jego naturalna pozycja.</p>
+      </div>
+
+      <h2 id="rasy-knieja">Knieja pod stopami</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Knieja pod stopami</h4>
+        <p>Na heksach <strong>leśnych i bagiennych</strong> elf dostaje <strong>+2</strong> do testów <em>skradania</em>, <em>przetrwania</em>, <em>percepcji</em> i <em>tropienia</em>.</p>
+        <p><em>Przykład:</em> skradanie w borze — zamiast k20 + ZRĘ rzucasz k20 + ZRĘ + 2. Na równinie, w mieście czy w górach bonus nie działa: elf jest tam zwykłym wędrowcem.</p>
+      </div>
+
+      <h2 id="rasy-zmierzch">Zmierzchowy wzrok</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Zmierzchowy wzrok</h4>
+        <p>Zmrok i noc <strong>nie utrudniają elfowi patrzenia</strong> — podwyższona nocą trudność testów percepcji wraca u niego do wartości dziennej.</p>
+        <p><em>Uwaga:</em> to nie jest widzenie w absolutnej ciemności. Pod ziemią, w lochu, elf radzi sobie jak człowiek — tam przewagę ma krasnolud (<a href="#rasy-wzrok">Wzrok górnika</a>).</p>
+      </div>
+
+      <h2 id="rasy-odskok">Odskok</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Odskok</h4>
+        <p>Po własnym <strong>strzale lub czarze oddanym ze zwarcia</strong> elf natychmiast próbuje wyrwać się na dystans — <strong>za darmo, bez utraty tury</strong>.</p>
+        <p><strong>Test:</strong> k20 + ZRĘ + ranga <em>Akrobatyki</em> + biegłość, przeciw trudności <strong>12</strong>. Sukces — jesteś na dystansie. Porażka — zostajesz w zwarciu, nic więcej się nie dzieje. Raz na rundę.</p>
+        <p><em>Dlaczego to nie jest darmowa wygrana:</em> strzał ze zwarcia ma <strong>−2</strong> do trafienia (<a href="#r4-strefy">kara zwarcia</a>), a wróg, który do ciebie doskoczy, wciąż stoi obok, jeśli test się nie uda.</p>
+      </div>
+
+      <h2 id="rasy-zniknięcie">Zniknięcie w kniei</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Zniknięcie w kniei</h4>
+        <p><strong>Raz na dobę</strong> w lesie lub na bagnie ucieczka z walki udaje się elfowi <strong>automatycznie</strong> — bez rzutu przeciwnego, niezależnie od tego, jak szybki jest przeciwnik.</p>
+        <p>Poza dzikim terenem (miasto, gościniec, loch, góry) uciekasz normalnie, testem. Atut wraca następnego dnia gry.</p>
       </div>
 
     </section>

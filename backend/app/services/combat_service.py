@@ -6565,6 +6565,30 @@ def resolve_player_flee(campaign_id: int) -> dict[str, Any]:
     if player.get("pending_reaction"):
         return {"ok": False, "reason": "pending_reaction_open"}
 
+    # #1474 „Zniknięcie w kniei" — raz na dobę gry elf w lesie/na bagnie znika bez rzutu.
+    # Sprawdzane PRZED karami z kondycji: to nie jest bieg, tylko rozpłynięcie się w gąszczu.
+    # Poza dzikim terenem, po wykorzystaniu limitu albo dla innej rasy → zwykła ucieczka.
+    try:
+        from app.services import elf_traits_service as _elf
+        with _conn() as _c:
+            _race = _race_of(_c, int(_c.execute(
+                "SELECT character_id FROM active_combat WHERE campaign_id = ? AND status='active'",
+                (campaign_id,),
+            ).fetchone()["character_id"]))
+            _hex_type = _elf.current_hex_type(_c, campaign_id)
+            _vanish = _elf.vanish_available(_c, campaign_id, _race, _hex_type)
+            if _vanish:
+                _elf.consume_vanish(_c, campaign_id)
+    except Exception:
+        _vanish = False
+    if _vanish:
+        end_combat(campaign_id, "fled")
+        return {
+            "ok": True, "fled": True, "blocked": False, "auto": True,
+            "elf_vanish": {"hex_type": _hex_type, "guaranteed": True},
+            "combat_state": load_combat_snapshot(campaign_id),
+        }
+
     penalty, blocked = flee_penalty_from_conditions(player.get("conditions") or [])
     if blocked:
         try:

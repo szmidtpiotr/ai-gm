@@ -835,6 +835,34 @@ def resolve_skill_test(
         tod_perception_dc_bonus = 0
         tod_stealth_bonus = 0
 
+    # #1474 — cechy elfa leśnego zależne od terenu i pory dnia:
+    #   • „Knieja pod stopami" — +2 do skradania/przetrwania/percepcji na heksie
+    #     leśnym lub bagiennym (bonus do rzutu),
+    #   • „Zmierzchowy wzrok" — nocna kara do percepcji (podbite DC #1463) go nie
+    #     dotyczy; DC wraca do dziennego progu.
+    # Defensywnie: brak heksa / brak zegara / inna rasa → zero zmian.
+    elf_terrain_bonus = 0
+    elf_twilight_dc_relief = 0
+    try:
+        from app.services import elf_traits_service as _elf
+        _race_row = conn.execute(
+            "SELECT race FROM characters WHERE id = ? LIMIT 1", (int(character_id),)
+        ).fetchone()
+        _race = str((_race_row["race"] if _race_row else "") or "")
+        if _elf.is_elf(_race):
+            _hex_type = _elf.current_hex_type(conn, campaign_id)
+            elf_terrain_bonus = _elf.wild_terrain_bonus(_race, skill_key, _hex_type)
+            if elf_terrain_bonus:
+                mod_total += elf_terrain_bonus
+            elf_twilight_dc_relief = _elf.twilight_sight_offset(
+                _race, skill_key, tod_perception_dc_bonus,
+            )
+            if elf_twilight_dc_relief and counter.get("counter_type") == "dc":
+                counter["dc"] = int(counter.get("dc", 12)) - elf_twilight_dc_relief
+    except Exception:
+        elf_terrain_bonus = 0
+        elf_twilight_dc_relief = 0
+
     # Opponent side (rolled once — a forced reroll keeps the same threshold).
     opponent_total, opponent_roll = _resolve_opponent(conn, counter, campaign_id)
 
@@ -856,6 +884,8 @@ def resolve_skill_test(
         "darkvision_bonus": darkvision_delta,  # #1461: +3 dwarf / −4 human w lochu (0 poza)
         "tod_perception_dc_bonus": tod_perception_dc_bonus,  # #1463: dusk +1 / night +2
         "tod_stealth_bonus": tod_stealth_bonus,              # #1463: night +2
+        "elf_terrain_bonus": elf_terrain_bonus,              # #1474: +2 las/bagno
+        "elf_twilight_dc_relief": elf_twilight_dc_relief,    # #1474: zniesiona kara nocy
     }
 
     # S11 (#606) — wymuszony przerzut ("zły omen"): klątwa psuje UDANY (korzystny) test.
