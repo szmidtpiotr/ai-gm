@@ -404,6 +404,9 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE campaign_templates ADD COLUMN required_npc_keys TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE campaign_templates ADD COLUMN required_beats TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE campaign_templates ADD COLUMN player_visible INTEGER NOT NULL DEFAULT 1",
+    # #1532/#1534 (Łańcuch Tropów) — stable slug per template. Numeric id is unstable
+    # across DEV/PROD/reseed, so trail.next.target_template_key points at this slug.
+    "ALTER TABLE campaign_templates ADD COLUMN template_key TEXT",
     "ALTER TABLE game_config_stats ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_skills ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_dc ADD COLUMN locked_at TEXT",

@@ -183,6 +183,40 @@ class PlotReward(BaseModel):
         return v
 
 
+class TrailProof(BaseModel):
+    """#1532 — the Dowód (proof-of-knowledge) a campaign grants at every ending.
+    Written to the HERO (hero_proofs), never inventory. `key` is an ASCII-stable
+    slug so DEV/PROD/reseed keep the same proof identity."""
+    key: str
+    region: str
+    meta_thread: str | None = None
+    label: str
+    chronicle_line: str
+
+
+class TrailNext(BaseModel):
+    """#1532 — the Trop card shown on the epilogue: where this campaign points next.
+    `target_template_key` is a stable slug (numeric id is unstable). `startable`
+    is False when the target campaign is not built yet — card still lands in the
+    Kronika, the [Ruszaj za tropem] button is disabled ("Wkrótce")."""
+    target_region: str
+    target_template_key: str
+    startable: bool = False
+    card_title: str
+    card_body: str
+    campaign_hint: str = ""
+    direction_hint: str = ""
+
+
+class PlotTrail(BaseModel):
+    """#1532 — Łańcuch Tropów, top-level plan block (NOT on endings[]).
+    Proof + next are shared across all endings; endings differ only in what the
+    hero DID with the knowledge, so the trail lives once at plan level. Optional
+    → existing templates without a trail validate unchanged."""
+    proof: TrailProof
+    next: TrailNext
+
+
 class EnginePrivate(BaseModel):
     secret_predisposition_hint: str
     hidden_twist: str
@@ -198,6 +232,7 @@ class CampaignPlan(BaseModel):
     key_locations: list[PlotLocation]
     key_enemies: list[PlotEnemy] = []
     rewards: list[PlotReward] = []  # #1301 — loot spine, materialized after gen
+    trail: PlotTrail | None = None  # #1532 — Łańcuch Tropów (Dowód + Trop do następnej krainy)
     active_act: int = 1
     scene_log: list[str] = []
     deviations: list[str] = []

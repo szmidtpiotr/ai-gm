@@ -151,7 +151,7 @@ Bez zmian: Most Czarnej Rzeki · Zgliszcza · Karczma Pod Trzema Krukami · Pust
 
 ## 9. Kampanie krainy
 
-- **#1497 „Popiół ze Zgliszcz"** (główna, dla ludzi) — śledztwo: ocalały ze Zgliszcz, rejestry myta z Mostu, sygnet bez herbu. Stawka: wieś, prawda i cena obu. **Rozwiązanie zagadki jest spoilerem — nie trafia ani do wizytówki, ani do Księgi.**
+- **#1497 „Popiół ze Zgliszcz"** (główna, dla ludzi) — śledztwo: ocalały ze Zgliszcz, rejestry myta z Mostu, sygnet bez herbu. Stawka: wieś, prawda i cena obu. **Rozwiązanie zagadki jest spoilerem — nie trafia ani do wizytówki, ani do Księgi.** **Zbudowana i opublikowana w Kuźni** (#1534, szablon `template_key=kresy_popiol_ze_zgliszcz`): 3 akty / 12 beatów, start w Cieszburgu (heks 13,22, zmierzch), trudność 3, 3 zakończenia (prawda publiczna / cicha sprawiedliwość / cena milczenia). Oś fabuły = wyłącznie ludzie (agent Rady Czterech **Dietrich Miara**, lokalna ręka faktor **Bruno Miech**); ghoule ze Zgliszcz zostają tłem lokacji. Trop na końcu prowadzi do Siwych Grani („Stukanie", #1535). Nowi NPC (przez serwis konwencji #1527): **Wendel Cień** (ocalały z targu), **Radzim, Czterdziesty Drugi**, **Dietrich Miara**.
 - **#1498 „Ostatnia Warta"** (druga, na później) — Strzegwacht dostaje rozkaz wycofania po 200 latach; gracz próbuje utrzymać granicę bez Korony. Rym z „Wycofaniem" z Martwych Pustkowi (#1496).
 
 Obie używają **wyłącznie istniejących lokacji** — mapa Kresów zamknięta.

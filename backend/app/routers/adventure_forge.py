@@ -276,6 +276,8 @@ def _template_to_dict(row: sqlite3.Row) -> dict:
         "required_npc_keys": json.loads(row["required_npc_keys"] or "[]") if "required_npc_keys" in keys else [],
         "required_beats": json.loads(row["required_beats"] or "[]") if "required_beats" in keys else [],
         "player_visible": row["player_visible"] if "player_visible" in keys else 1,
+        # #1532/#1534 — stable slug for Łańcuch Tropów.
+        "template_key": row["template_key"] if "template_key" in keys else None,
     }
 
 
@@ -520,6 +522,8 @@ class CreateTemplateReq(BaseModel):
     required_npc_keys: list[str] = []
     required_beats: list[str] = []
     player_visible: bool = True
+    # #1532/#1534 — stable slug for Łańcuch Tropów cross-references.
+    template_key: Optional[str] = None
 
 
 class PatchTemplateReq(BaseModel):
@@ -535,6 +539,11 @@ class PatchTemplateReq(BaseModel):
     required_npc_keys: Optional[list[str]] = None
     required_beats: Optional[list[str]] = None
     player_visible: Optional[bool] = None
+    # #1532/#1534 — stable slug for Łańcuch Tropów cross-references.
+    template_key: Optional[str] = None
+    # #1534 — start hex (was DB-only before; expose so builders can set start_hex).
+    start_hex_q: Optional[int] = None
+    start_hex_r: Optional[int] = None
 
 
 # ── Chat endpoints ────────────────────────────────────────────────────────────
@@ -970,8 +979,8 @@ def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_adm
         cur = conn.execute(
             """INSERT INTO campaign_templates
                (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids, status, created_by, adventure_idea_id,
-                required_npc_keys, required_beats, player_visible)
-               VALUES (?, ?, ?, ?, ?, ?, 'draft', 'admin', ?, ?, ?, ?)""",
+                required_npc_keys, required_beats, player_visible, template_key)
+               VALUES (?, ?, ?, ?, ?, ?, 'draft', 'admin', ?, ?, ?, ?, ?)""",
             (
                 req.title, req.description, req.difficulty_rating, req.atmosphere,
                 json.dumps(gm_plan, ensure_ascii=False),
@@ -980,6 +989,7 @@ def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_adm
                 json.dumps(req.required_npc_keys, ensure_ascii=False),
                 json.dumps(req.required_beats, ensure_ascii=False),
                 1 if req.player_visible else 0,
+                req.template_key,
             ),
         )
         conn.commit()
@@ -1231,6 +1241,13 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
         if req.player_visible is not None:
             updates.append("player_visible = ?")
             params.append(1 if req.player_visible else 0)
+        # #1532/#1534 — stable slug + explicit start hex.
+        if req.template_key is not None:
+            updates.append("template_key = ?"); params.append(req.template_key)
+        if req.start_hex_q is not None:
+            updates.append("start_hex_q = ?"); params.append(req.start_hex_q)
+        if req.start_hex_r is not None:
+            updates.append("start_hex_r = ?"); params.append(req.start_hex_r)
         if not updates:
             return _template_to_dict(row)
         params.append(template_id)

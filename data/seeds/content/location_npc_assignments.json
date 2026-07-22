@@ -454,5 +454,12 @@
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
+  },
+  {
+    "location_key": "cieszowice",
+    "npc_key": "wendel_cien",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
   }
 ]
