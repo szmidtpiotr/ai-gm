@@ -17,10 +17,12 @@ Usługi (nocleg/naprawa) NIE tutaj — `location_services.py` wnioskuje je z pod
 lokacji: Gościnne Drzewo ('guest-inn' → 'inn' → nocleg), Łukodzielnia ('bowyer-forge'
 → 'forge' → naprawa). Suby dostają podtypy w seed_szept_koron.py; verify() to sprawdza.
 
-TODO (dziegieć/sól-analog): §6 opisuje dziegieć czarnodrzewny i futra jako filar
-ekonomii krainy. Futra są w katalogu (fur_mantle, wolf_hide_cloak, bear_hide,
-wolf_pelt) — dziegieć jeszcze NIE (0 trafień na 'dziegie'/'tar-consumable'). Gdy
-przyszła fala doda przedmiot dziegieć — dopisać klucz do BARTEL i puścić seeder.
+CB-7 (#1490): dziegieć czarnodrzewny (consumable `dziegiec_czarnodrzewny`) +
+próchno świetlne (item `prochno_swietlne`) dodane do katalogu (data/seeds/content)
+i do asortymentu BARTELA — filar ekonomii krainy wg §6 (lustro soli Grań). Smolarnia
+na Palach nie ma jeszcze przypisanego kupca (tylko lokacja), więc Bartel @ Ostęp
+Graniczny jest oknem sprzedaży obu smaczków. TODO(CB-przyszłe): własny smolarz-kupiec
+w Smolarni na Palach, gdy dojdzie obsada bagiennej osady.
 
 Idempotentny: UPDATE po kluczu NPC. Każdy klucz walidowany względem katalogu.
 
@@ -80,9 +82,12 @@ SHOPS: list[dict] = [
         npc_key="bartel_kupiec",
         location_key="ostep_graniczny",
         # Ostęp Graniczny: okno handlu z Kresami — towary ludzkie na drogę,
-        # futra na przełęcze, jedno ludzkie ostrze. Dziegieć: patrz TODO w nagłówku.
+        # futra na przełęcze, jedno ludzkie ostrze. CB-7: dwa smaczki Czarnoboru —
+        # dziegieć czarnodrzewny (smarowidło) i próchno świetlne (zimne światło).
         stock=[
             ("item", "torch"),
+            ("item", "prochno_swietlne"),
+            ("consumable", "dziegiec_czarnodrzewny"),
             ("item", "tinderbox"),
             ("item", "oil_flask"),
             ("item", "rope_hemp"),

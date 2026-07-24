@@ -2473,6 +2473,51 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                 ),
             }
 
+        # CB-7 #1490 — dziegieć czarnodrzewny = smarowidło maskujące zapach.
+        # Kondycje silnika są rundowe (walka); ten buff jest DZIENNY (podróż +
+        # skradanie), więc trzymamy go w session_flags kampanii (wzorzec cooldownów
+        # zielarstwa), a nie jako kondycję sheetu. Intercept jak przy przedmiocie-
+        # mapie: własny efekt, zwykłe zużycie ze stacka.
+        from app.services import bor_survival_service as _bor
+        _salve = _bor.salve_payload_from_item(row["effect_json"]) or _bor.salve_payload_from_item(
+            row["legacy_effect_json"] if "legacy_effect_json" in row.keys() else None
+        )
+        if _salve:
+            campaign_id = int(row["campaign_id"] or 0)
+            if campaign_id <= 0:
+                raise ValueError("salve requires an active campaign")
+            _buff = _bor.apply_scent_mask_buff(conn, campaign_id)
+            cur_qty = int(row["quantity"] or 1)
+            next_qty = cur_qty - 1
+            if next_qty > 0:
+                mut = conn.execute(
+                    "UPDATE character_inventory SET quantity = quantity - 1 WHERE id = ? AND quantity = ?",
+                    (iid, cur_qty),
+                )
+            else:
+                mut = conn.execute(
+                    "DELETE FROM character_inventory WHERE id = ? AND quantity = ?",
+                    (iid, cur_qty),
+                )
+            if mut.rowcount == 0:
+                raise ValueError("inventory entry not found")
+            conn.commit()
+            return {
+                "inventory_id": iid,
+                "character_id": cid,
+                "item": {"key": catalog_key, "label": item_label, "item_type": raw_item_type or "consumable"},
+                "remaining_quantity": max(0, next_qty),
+                "consumed": True,
+                "scent_mask": _buff,
+                "effects_applied": [{"type": "scent_mask", **_buff}],
+                "narrative": (
+                    "Wcierasz cuchnący dziegieć czarnodrzewny w skórę i sprzęt. Zapach "
+                    "człowieka znika pod wonią smoły — bestie boru zwietrzą tylko martwe "
+                    "drewno. Skradanie idzie łatwiej, a leśne bestie rzadziej wpadają na "
+                    "twój trop przez cały dzień."
+                ),
+            }
+
         if raw_item_type == "consumable" or row["legacy_consumable_key"]:
             item_type = "consumable"
         else:

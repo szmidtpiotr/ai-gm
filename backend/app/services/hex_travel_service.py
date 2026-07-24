@@ -925,6 +925,26 @@ def resolve_chain_travel(
     except Exception:
         pass
 
+    # CB-7 #1490 — smaczki Czarnoboru (docs/.../czarnobor.md §6):
+    #   • pochodnia (otwarty ogień) nocą PODBIJA szansę spotkań (płomień wabi),
+    #     próchno świetlne (zimne) nie → _light_enc_mult,
+    #   • dziegieć czarnodrzewny obniża szansę spotkań na hexach LEŚNYCH przez
+    #     1 dzień gry → _scent_mask_active + per-hex forest_encounter_mult.
+    _light_enc_mult = 1.0
+    _scent_mask_active = False
+    _cur_hours = 0
+    try:
+        from app.services import bor_survival_service as _bor
+        from app.services.clock_service import get_clock_state as _get_clock_h
+        _cur_hours = int(_get_clock_h(campaign_id, conn=conn).get("ingame_hours", 0) or 0)
+        _light_enc_mult = _bor.light_encounter_mult(
+            has_open_flame=_bor.carries_open_flame_light(conn, character_id),
+            night_march=night_march,
+        )
+        _scent_mask_active = _bor.scent_mask_active(_sf_budget, _cur_hours)
+    except Exception:
+        pass
+
     if from_hex not in hexes and from_hex != to_hex:
         # Player is not on a hex yet — allow if destination exists
         pass
@@ -1093,6 +1113,9 @@ def resolve_chain_travel(
             m *= ROAD_ENCOUNTER_MULT
         m *= _event_enc_mult  # #1193: rajdy bandytów zagęszczają spotkania w regionie
         m *= _companion_enc_mult  # #1192: pies gończy ostrzega przed zasadzką
+        m *= _light_enc_mult  # CB-7: pochodnia wabi nocą; próchno (zimne światło) nie
+        if _scent_mask_active:  # CB-7: dziegieć maskuje zapach na hexach leśnych
+            m *= _bor.forest_encounter_mult(_sf_budget, _cur_hours, hex_data.get("hex_type"))
         return m
 
     # #1390 Fix 3 — cap na CAŁĄ podróż. Rzut leci per hex (stop na 1. trafieniu),

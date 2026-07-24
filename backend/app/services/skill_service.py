@@ -835,6 +835,20 @@ def resolve_skill_test(
         tod_perception_dc_bonus = 0
         tod_stealth_bonus = 0
 
+    # CB-7 #1490 — dziegieć czarnodrzewny: smarowidło maskujące zapach daje bonus
+    # do skradania póki buff aktywny (session_flags, 1 dzień gry). Defensywne.
+    dziegiec_stealth_bonus = 0
+    try:
+        if str(skill_key).strip().lower() == "stealth":
+            from app.services import bor_survival_service as _bor
+            from app.services.clock_service import get_clock_state as _get_clock_h
+            _dz_h = int(_get_clock_h(int(campaign_id), conn=conn).get("ingame_hours", 0) or 0)
+            dziegiec_stealth_bonus = _bor.dziegiec_stealth_bonus(session_flags, _dz_h)
+            if dziegiec_stealth_bonus:
+                mod_total += dziegiec_stealth_bonus
+    except Exception:
+        dziegiec_stealth_bonus = 0
+
     # #1474 — cechy elfa leśnego zależne od terenu i pory dnia:
     #   • „Knieja pod stopami" — +2 do skradania/przetrwania/percepcji na heksie
     #     leśnym lub bagiennym (bonus do rzutu),
