@@ -404,6 +404,50 @@ TILES: list[dict] = [
          desc="Grobla urywa się w toń. Krok dalej to już samo dno."),
 ]
 
+# Prompt EN do generacji grafiki (interior; ściany/drzwi dokłada compositor).
+TILE_IMAGE_PROMPTS: dict[str, str] = {
+    "Zatopiona Grobla": "a submerged earthen causeway leading into the drowned village, water lapping over the muddy track, broken fence posts",
+    "Rozlane Podwórze": "a flooded farmyard turned into a stagnant pond, a half-sunken wooden cart, floating planks",
+    "Chata pod Wodą": "the interior of a half-submerged peasant cottage, brown water pouring through a broken shutter, floating debris and a drowned table",
+    "Zapadła Stodoła": "a collapsed barn sunk into the mud, broken timber beams half-buried in bog water, scattered rotten hay",
+    "Kożuch na Stawie": "a stagnant pond thickly covered in green duckweed scum, slow bubbles rising, tangled reeds",
+    "Zalana Piwnica": "a flooded stone cellar, waist-deep murky black water, submerged wooden stairs and floating barrels",
+    "Cmentarzyk na Kępie": "a tiny village graveyard on a dry hummock, tilted wooden crosses, freshly disturbed muddy graves, ringed by swamp water",
+    "Mielizna Utopców": "a wide muddy bog shallows, clumps of reeds and dark sinkholes, pale drowned hands breaking the surface",
+    "Studnia Wiecu": "a flooded village square with an old stone well at the center, wooden benches arranged around it, black still water",
+    "Skrzynia Sołtysa": "a flooded village-elder's chamber, an iron-bound wooden chest sitting half-submerged, waterlogged shelves",
+    "Sucha Kępa": "a small patch of dry raised ground amid the swamp, sheltered by tall reeds, a smoldering safe campfire spot",
+    "Izba Wójta": "the largest village cottage with a partial remnant roof, a murky mud-caked seat of honor, ceremonial candles guttering on black water",
+    "Wiec Utopionych": "a flooded village square meeting ground, water knee-deep, rows of empty wooden benches facing a headman's cottage, low fog",
+    "Ślepe Rozlewisko (N)": "a wide dead-end backwater of stagnant swamp water, tall reeds closing off the far side, no exit",
+    "Ślepe Rozlewisko (S)": "a dead-end swamp channel choked with reeds and duckweed, still black water, no way through",
+    "Ślepe Rozlewisko (E)": "a sunken collapsed cottage blocking the way, dead-end pool of murky bog water",
+    "Ślepe Rozlewisko (W)": "a causeway breaking off into deep dark open water, a dead-end drop into the mire",
+}
+
+# Wygenerowane grafiki (FLUX .170, kafle skompozytowane ze ścianami+drzwiami) —
+# PNG zacommitowane w frontend/images/tiles/. Mapa label→URL relinkuje obrazki po
+# reseedzie na czystej DB (image_url to string, niezależny od nowego id kafla).
+TILE_IMAGE_FILES: dict[str, str] = {
+    "Zatopiona Grobla": "/images/tiles/dungeon_tile_348_1784903367.png",
+    "Rozlane Podwórze": "/images/tiles/dungeon_tile_349_1784903393.png",
+    "Chata pod Wodą": "/images/tiles/dungeon_tile_350_1784903417.png",
+    "Zapadła Stodoła": "/images/tiles/dungeon_tile_351_1784903442.png",
+    "Kożuch na Stawie": "/images/tiles/dungeon_tile_352_1784903467.png",
+    "Zalana Piwnica": "/images/tiles/dungeon_tile_353_1784903492.png",
+    "Cmentarzyk na Kępie": "/images/tiles/dungeon_tile_354_1784903517.png",
+    "Mielizna Utopców": "/images/tiles/dungeon_tile_355_1784903542.png",
+    "Studnia Wiecu": "/images/tiles/dungeon_tile_356_1784903567.png",
+    "Skrzynia Sołtysa": "/images/tiles/dungeon_tile_357_1784903591.png",
+    "Sucha Kępa": "/images/tiles/dungeon_tile_358_1784903617.png",
+    "Izba Wójta": "/images/tiles/dungeon_tile_359_1784903641.png",
+    "Wiec Utopionych": "/images/tiles/dungeon_tile_360_1784903666.png",
+    "Ślepe Rozlewisko (N)": "/images/tiles/dungeon_tile_361_1784903690.png",
+    "Ślepe Rozlewisko (S)": "/images/tiles/dungeon_tile_362_1784903715.png",
+    "Ślepe Rozlewisko (E)": "/images/tiles/dungeon_tile_363_1784903739.png",
+    "Ślepe Rozlewisko (W)": "/images/tiles/dungeon_tile_364_1784903764.png",
+}
+
 # ── 5. STREFA WARDÓW: pierścień spokoju wokół Szeptu Koron ─────────────────────
 # §6 smaczek: działający ward = spokój. Silnik (#1390) czyta jawne encounter_chance=0
 # jako świadomą strefę bezpieczną. Szept Koron = hub, wardy nastrajane; pierścień
@@ -559,11 +603,20 @@ def seed_dungeon_tiles(conn: sqlite3.Connection) -> dict:
     )
     res["category"] += cur.rowcount
     for t in TILES:
+        img_prompt = TILE_IMAGE_PROMPTS.get(t["label"], "")
+        img_url = TILE_IMAGE_FILES.get(t["label"])
         exists = conn.execute(
             "SELECT 1 FROM dungeon_tiles WHERE category_key = ? AND label = ?",
             (tc["key"], t["label"]),
         ).fetchone()
         if exists:
+            # Dociągnij prompt+obraz przy powtórce (content-as-code) — nie kasuj
+            # istniejącego image_url, gdy nie mamy nowego.
+            conn.execute(
+                "UPDATE dungeon_tiles SET image_gen_prompt = ?, "
+                "image_url = COALESCE(?, image_url) WHERE category_key = ? AND label = ?",
+                (img_prompt, img_url, tc["key"], t["label"]),
+            )
             continue
         enemies_json = json.dumps(
             [{"enemy_key": k, "count": n} for k, n in t["enemies"]]
@@ -578,10 +631,10 @@ def seed_dungeon_tiles(conn: sqlite3.Connection) -> dict:
         conn.execute(
             "INSERT INTO dungeon_tiles (category_key, label, doors_json, enemies_json, "
             "items_json, active_states_json, exit_conditions_json, room_description, "
-            "is_boss_tile, is_active) "
-            "VALUES (?, ?, ?, ?, ?, '[]', ?, ?, ?, 1)",
+            "image_gen_prompt, image_url, is_boss_tile, is_active) "
+            "VALUES (?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, 1)",
             (tc["key"], t["label"], doors_json, enemies_json,
-             items_json, exit_cond, t["desc"], int(t["boss"])),
+             items_json, exit_cond, t["desc"], img_prompt, img_url, int(t["boss"])),
         )
         res["tiles"] += 1
     return res
