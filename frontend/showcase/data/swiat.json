@@ -21,11 +21,11 @@
   },
   {
    "name": "Czarnobór",
-   "tag": "Las i bagno",
+   "tag": "Bór elfów",
    "img": "assets/img/kraina-czarnobor.webp",
-   "desc": "Dzicz, w której znika się bez śladu. Bór Zmarłych, Bagienna Knieja, Trzęsawiska Mgieł — cienie wstają po zmroku, a Rdzeń jest tu blisko powierzchni. W głębi żyją skryte leśne elfy.",
+   "desc": "Dzicz, w której znika się bez śladu — las tak stary, że pamięta czasy przed Imperium. Strzegą go leśne elfy, strojąc żywe wardy nad pęknięciami Rdzenia. Lecz stróżowe drzewa gasną jedno po drugim, bór coraz częściej milczy — i nikt nie wie dlaczego.",
    "anchor": "kraina-czarnobor",
-   "available": false,
+   "available": true,
    "key": "czarnobor"
   },
   {
