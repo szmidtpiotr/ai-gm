@@ -90,8 +90,8 @@ REGION_MAP: dict[str, str] = {
     'pocz_tek_cie_ki_za_sk_adem_drewna': 'kresy',
     'ruiny_stra_nicy_przy_urwisku': 'kresy',
 
-    # ── CZARNOBÓR (C) — Bór Zmarłych, Las Czarnych Drzew, Bagienna Knieja,
-    #                   Trzęsawiska Mgieł, Step Wilków, Złoty Las ──────────────
+    # ── CZARNOBÓR (C) — Bór Zmarłych, Knieja Czarnych Drzew, Bagienna Knieja,
+    #                   Trzęsawiska Mgieł, Step Wilków ──────────────
     'bor_zmarlych': 'czarnobor',
     'bor_cmentarz_przy_drodze': 'czarnobor',
     'bor_kosciol_zapomniany': 'czarnobor',
@@ -115,11 +115,10 @@ REGION_MAP: dict[str, str] = {
     'step_kurhan_chana': 'czarnobor',
     'step_obozowisko_koczownikow': 'czarnobor',
     'step_strazowanica': 'czarnobor',
-    'zloty_las': 'czarnobor',
-    'zloty_chata_lesnika': 'czarnobor',
-    'zloty_jezioro_lustro': 'czarnobor',
-    'zloty_oltarz_lesny': 'czarnobor',
-    'zloty_polana_elfow': 'czarnobor',
+    # Złoty Las (+suby) usunięty z Czarnoboru 2026-07-24 (CB-4): lore krainy §4
+    # (zatw. 2026-07-20) go NIE wymienia. To generyczna bazowa lokacja świata —
+    # tag 'czarnobor' był artefaktem auto-heurystyki 06-29 (#1029) SPRZED lore.
+    # Nowsza, zatwierdzona przebudowa krainy go wyklucza → region=NULL (floating).
 
     # ── SIWE GRANIE (D) — Kopalnia Czarnego Hutmana, Krzyż Gór, Lodowy Pas,
     #                     Tundra Wiecznego Mrozu, Czarne Skały ─────────────────

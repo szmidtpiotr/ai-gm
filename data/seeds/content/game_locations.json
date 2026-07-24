@@ -1726,7 +1726,7 @@
     "npc_keys": "[]",
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
-    "updated_at": "2026-06-11 15:22:10",
+    "updated_at": "2026-07-24 11:08:07",
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -1746,7 +1746,7 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"town\", \"plains\", \"forest\"]",
-    "region": "czarnobor",
+    "region": null,
     "enrichment_locked": 0
   },
   {
@@ -1761,7 +1761,7 @@
     "npc_keys": "[]",
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
-    "updated_at": "2026-06-11 15:22:10",
+    "updated_at": "2026-07-24 11:08:07",
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -1781,7 +1781,7 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "region": "czarnobor",
+    "region": null,
     "enrichment_locked": 0
   },
   {
@@ -1796,7 +1796,7 @@
     "npc_keys": "[]",
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
-    "updated_at": "2026-06-11 15:22:10",
+    "updated_at": "2026-07-24 11:08:07",
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -1816,7 +1816,7 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "region": "czarnobor",
+    "region": null,
     "enrichment_locked": 0
   },
   {
@@ -1831,7 +1831,7 @@
     "npc_keys": "[]",
     "is_active": 1,
     "created_at": "2026-06-11 15:22:10",
-    "updated_at": "2026-06-11 15:22:10",
+    "updated_at": "2026-07-24 11:08:07",
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -1851,7 +1851,7 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\", \"forest\"]",
-    "region": "czarnobor",
+    "region": null,
     "enrichment_locked": 0
   },
   {
@@ -2076,7 +2076,7 @@
     "npc_keys": "[]",
     "is_active": 1,
     "created_at": "2026-06-11 15:22:11",
-    "updated_at": "2026-06-11 15:22:11",
+    "updated_at": "2026-07-24 11:08:07",
     "approved": 1,
     "created_by": "seed",
     "canonical": 1,
@@ -2096,7 +2096,7 @@
     "world_hex_q": null,
     "world_hex_r": null,
     "terrain_tags": "[\"plains\",\"forest\"]",
-    "region": "czarnobor",
+    "region": null,
     "enrichment_locked": 0
   },
   {
