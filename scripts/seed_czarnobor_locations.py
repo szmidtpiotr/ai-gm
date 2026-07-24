@@ -29,20 +29,20 @@ REGION = "czarnobor"
 # ── Istniejące POI (z pliku seedu) — zostają na hexach z CB-3; poprawiamy opisy
 #    i etykiety wg lore §4. (key, hex_q, hex_r, new_label, new_description)
 POI_UPDATES = [
-    ("bor_zmarlych", 69, 8, "Bór Zmarłych",
+    ("bor_zmarlych", 69, -17, "Bór Zmarłych",
      "Pierwszy wygasły okręg sieci stróżowych drzew — pnie sczerniały jak smoła, "
      "gdy wardy zgasły. Czarny las wciąż rozrasta się ku Kresom. Żywi tu nie nocują; "
      "pod korzeniami coś pamięta."),
-    ("las_czarnych_drzew", 61, 20, "Knieja Czarnych Drzew",
+    ("las_czarnych_drzew", 61, -5, "Knieja Czarnych Drzew",
      "Gęsta knieja smolistych, wygasłych stróżowych drzew na skraju Boru Zmarłych. "
      "Liście szepczą imiona, a ścieżki lubią zawracać wędrowca w głąb."),
-    ("trzesawiska_mgiel", 70, 29, "Trzęsawiska Mgieł",
+    ("trzesawiska_mgiel", 70, 4, "Trzęsawiska Mgieł",
      "Bezkresne bagna spowite białą mgłą na południu krainy — próg ku Martwym "
      "Pustkowiom. Kto zboczy z grobli, ten karmi utopce."),
-    ("bagienna_knieja", 80, 17, "Bagienna Knieja",
+    ("bagienna_knieja", 80, -8, "Bagienna Knieja",
      "Zatopiony las na palach, gdzie drzewa rosną wprost z czarnej wody. Domena "
      "smolarzy i komarów; mgła nie podnosi się nawet w południe."),
-    ("step_wilkow", 87, -7, "Step Wilków",
+    ("step_wilkow", 87, -32, "Step Wilków",
      "Trawiasty kraniec kontynentu na wschodzie. Watahy wyją po zmroku, a sezonowi "
      "łowcy z Kresów ciągną tu po futra."),
 ]
@@ -51,50 +51,50 @@ POI_UPDATES = [
 #    (key, label, hex_q, hex_r, biome, tier, safe, map_icon, subtype, description)
 NEW_LOCATIONS = [
     # Zasiedlone (§4) — pasy §5: zachód/centrum/step/bagno.
-    ("ostep_graniczny", "Ostęp Graniczny", 74, 33, "rural", 1, 1, "town", "trade-post",
+    ("ostep_graniczny", "Ostęp Graniczny", 74, 8, "rural", 1, 1, "town", "trade-post",
      "Jedyne stałe okno wymiany elfy↔ludzie na zachodnim skraju boru. Kupcy z Kresów "
      "rozkładają tu kramy; dalej w las obcych już się nie wpuszcza. Handel prowadzi Bartel."),
-    ("oboz_drwali", "Obóz Drwali", 55, 18, "forest", 2, 1, "town", "lumber-camp",
+    ("oboz_drwali", "Obóz Drwali", 55, -7, "forest", 2, 1, "town", "lumber-camp",
      "Ludzki obóz na zachodnim skraju — starosta Hagen i rodziny, które trzeba "
      "wykarmić. Siekiery jedzą las, czasem ścinając stróżowe drzewo: dla elfów "
      "świętokradztwo, dla drwali chleb."),
-    ("smolarnia_na_palach", "Smolarnia na Palach", 73, 31, "swamp", 2, 1, "town", "tar-camp",
+    ("smolarnia_na_palach", "Smolarnia na Palach", 73, 6, "swamp", 2, 1, "town", "tar-camp",
      "Osada smolarzy wzniesiona na palach nad bagnem. Pędzą tu dziegieć czarnodrzewny — "
      "smród żywicy niesie się na mile. Filar ekonomii krainy obok futer i drewna."),
-    ("stanica_wilcza", "Stanica Wilcza", 85, -3, "plains", 2, 1, "town", "hunter-camp",
+    ("stanica_wilcza", "Stanica Wilcza", 85, -28, "plains", 2, 1, "town", "hunter-camp",
      "Sezonowa stanica łowców wilków z Kresów, wbita w step. Futra, wnyki i psy; "
      "Wolfram zna każdą watahę po głosie."),
-    ("szept_koron", "Szept Koron", 74, 13, "forest", 1, 1, "forest", "elven-hub",
+    ("szept_koron", "Szept Koron", 74, -12, "forest", 1, 1, "forest", "elven-hub",
      "Hub elfów w koronach starych drzew — ludzkie tłumaczenie niezapisanej elfickiej "
      "nazwy. Krąg Starszych stroi gasnące wardy, a Gościnne Drzewo jako jedyne przyjmuje "
      "obcych na nocleg. (Wnętrze osady — sub-lokacje — dobuduje kolejny etap.)"),
 
     # Zapomniane (§4) — rozsiane wg pasów.
-    ("milczace_drzewo_1", "Milczące Drzewo — Smolny Konar", 62, 14, "forest", 2, 0, "forest", "extinct-warden",
+    ("milczace_drzewo_1", "Milczące Drzewo — Smolny Konar", 62, -11, "forest", 2, 0, "forest", "extinct-warden",
      "Wygasłe stróżowe drzewo; pień czarny jak smoła, korona martwa. Elfy pamiętają "
      "jego pieśń — dziś milczy. Coś pod korzeniami czeka na tego, kto zapyta."),
-    ("milczace_drzewo_2", "Milczące Drzewo — Rozdarta Pieśń", 67, 22, "forest", 2, 0, "forest", "extinct-warden",
+    ("milczace_drzewo_2", "Milczące Drzewo — Rozdarta Pieśń", 67, -3, "forest", 2, 0, "forest", "extinct-warden",
      "Kolejny zgasły ward w głębi kniei. Kora spękana jak po ciosie; zwierzyna omija "
      "je łukiem. Mini-trop dla tych, co badają, czemu bór milknie."),
-    ("milczace_drzewo_3", "Milczące Drzewo — Siwy Strażnik", 58, 6, "forest", 3, 0, "forest", "extinct-warden",
+    ("milczace_drzewo_3", "Milczące Drzewo — Siwy Strażnik", 58, -19, "forest", 3, 0, "forest", "extinct-warden",
      "Najbardziej na północ wysunięte z martwych drzew. Zgasło niedawno — żywica jeszcze "
      "cieknie czarnymi łzami. Aerlin wysyła tu zwiadowców."),
-    ("stare_gniazdo", "Stare Gniazdo", 66, 10, "forest", 3, 0, "ruin", "abandoned-elf-nest",
+    ("stare_gniazdo", "Stare Gniazdo", 66, -15, "forest", 3, 0, "ruin", "abandoned-elf-nest",
      "Pierwsza osada elfów, dziś opuszczona w sercu Boru Zmarłych — porzucona, gdy "
      "drzewa wokół sczerniały. Puste pomosty w koronach, zarośnięte ścieżki. Loch questowy."),
-    ("utopiona_wies", "Utopiona Wieś", 76, 25, "swamp", 3, 0, "ruin", "drowned-village",
+    ("utopiona_wies", "Utopiona Wieś", 76, 0, "swamp", 3, 0, "ruin", "drowned-village",
      "Ludzka wieś pochłonięta przez trzęsawisko — dachy sterczą z czarnej wody. Nocą "
      "świecą w niej ślepia utopców. Farmowalny loch."),
-    ("polana_schizmy", "Polana Schizmy", 65, 16, "forest", 3, 0, "wilderness", "cursed-clearing",
+    ("polana_schizmy", "Polana Schizmy", 65, -9, "forest", 3, 0, "wilderness", "cursed-clearing",
      "Miejsce rozłamu, gdzie część elfów wybrała rozdzieranie pęknięć zamiast strojenia. "
      "Trawa rośnie tu czarna; elfy tam nie chodzą."),
-    ("kurhan_wilczego_krola", "Kurhan Wilczego Króla", 90, -2, "plains", 3, 0, "tomb", "barrow",
+    ("kurhan_wilczego_krola", "Kurhan Wilczego Króla", 90, -27, "plains", 3, 0, "tomb", "barrow",
      "Przedelficki kurhan na stepie. Wilki okrążają go nocami, lecz nigdy nie wchodzą "
      "do środka. Co leży pod kopcem — nikt żywy nie sprawdził."),
-    ("zarosniety_trakt", "Zarośnięty Trakt", 74, 37, "forest", 2, 0, "wilderness", "overgrown-road",
+    ("zarosniety_trakt", "Zarośnięty Trakt", 74, 12, "forest", 2, 0, "wilderness", "overgrown-road",
      "Stary imperialny gościniec biegnący na południe ku Pustkowiom, zjedzony przez las. "
      "Kamienie milowe tkwią w pniach. Czemu Imperium porzuciło tę drogę?"),
-    ("czarne_serce", "Czarne Serce", 65, 8, "forest", 5, 0, "ruin", "myth-site",
+    ("czarne_serce", "Czarne Serce", 65, -17, "forest", 5, 0, "ruin", "myth-site",
      "Najgłębiej w Borze Zmarłych rosło Pradrzewo — kotwica całej sieci wardów. Gdy "
      "zgasło, sczerniał cały okręg. Pod martwymi korzeniami zieje największe pęknięcie "
      "Rdzenia w krainie. Bór nie wpuszcza: ścieżki zawracają, strach narasta. "

@@ -42,12 +42,14 @@ ENCOUNTER_CHANCE = {
 REGION_OFFSETS = {
     "kresy":            (  0,   0),  # istniejące
     "siwe_granie":      (  0, -75),  # N  : q=0..49,   r=-99..-26
-    # E/W offsety = ±50 (nie ±55): sąsiednie krainy DOLEGAJĄ do Kresów bez luki
-    # (q49|q50 to sąsiedzi w axial). ±55 zostawiał 5-kolumnową czarną pustkę. Patrz CB-4.
-    "czarnobor":        ( 50,   0),  # E  : q=50..99,  r=-24..49  (dolega do Kresów q49)
-    "koronne_niziny":   (-50,   0),  # W  : q=-50..-1, r=-24..49  (dolega do Kresów q0)
-    "wybrzeze_lez":     (-50,  75),  # SW : q=-50..-1, r=51..124
-    "martwe_pustkowia": ( 50,  75),  # SE : q=50..99,  r=51..124
+    # E/W offsety: q=±50 (dolegają do Kresów, q49|q50 sąsiedzi w axial; ±55 dawał
+    # 5-kolumnową pustkę). r skompensowany o SHEAR flat-top: renderer daje
+    # screen-y = r + q/2, więc kraina o q≠0 dryfuje pionowo o q/2. Kompensacja
+    # r_offset = base − q_offset/2 ustawia ją NA RÓWNI z Kresami. Patrz CB-4.
+    "czarnobor":        ( 50, -25),  # E  : q=50..99,  screen na równi z Kresami
+    "koronne_niziny":   (-50,  25),  # W  : q=-50..-1, screen na równi z Kresami
+    "wybrzeze_lez":     (-50, 100),  # SW : q=-50..-1, pod Koronnymi Nizinami
+    "martwe_pustkowia": ( 50,  50),  # SE : q=50..99,  pod Czarnoborem
 }
 
 # ── KONFIGURACJA KRAIN ───────────────────────────────────────────────────────
