@@ -15,6 +15,27 @@ r_absolutny = (local_row - (local_col - local_col%2)//2) + r_offset
 
 Krainy **nie nakładają się** (test: `backend/tests/test_continent_no_overlap.py`).
 
+## Wzór bloków (JEDNO źródło prawdy) — #1542
+
+Kontynent to siatka **bloków** `(col, row)`; każda kraina zajmuje jeden blok.
+Offsety krain NIE są hardkodowane w wielu miejscach — liczy je jeden moduł
+`scripts/region_blocks.py` (`REGION_BLOCKS` + `block_offsets()`):
+
+```
+q_off = 50 · col
+r_off = 75 · row − 25 · col
+```
+
+Składnik `−25·col` kompensuje **shear** renderera flat-top (`screen_y ∝ r + q/2`):
+dla całego wiersza bloków `screen_y_shift = r_off + q_off/2 = 75·row` jest **stałe**,
+niezależne od kolumny — dlatego pas `row=0` (Koronne Niziny · Kresy · Czarnobór)
+leży **na równi z Kresami**. Bloki krain: KN `(-1,0)` · Kresy `(0,0)` · Czarnobór `(1,0)`
+· Siwe Granie `(0,-1)` · Wybrzeże Łez `(-1,1)` · Martwe Pustkowia `(1,1)`.
+
+Korzystają z tego: `scripts/generate_region_map.py` (buduje `REGION_OFFSETS`)
+oraz strażnik `backend/tests/test_1542_region_blocks.py` (pilnuje wzoru, kolizji
+i wyrównania pasa row=0). Zmiana układu = edycja `region_blocks.py` + tej tabeli.
+
 ## Bounding-boxy (absolutne axial)
 
 | Kraina | key | status | q_min | q_max | r_min | r_max | q_offset | r_offset |

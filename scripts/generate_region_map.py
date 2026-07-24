@@ -14,8 +14,9 @@ Kresy (region_kresy.json) generuje generate_kresy_map.py — nie duplikujemy tu.
 import argparse, json, math, random, heapq
 from pathlib import Path
 
+from region_blocks import REGION_OFFSETS, W, H  # #1542 — wzór bloków (JEDNO źródło)
+
 ROOT = Path(__file__).resolve().parent.parent
-W = H = 50  # lokalny rozmiar siatki per kraina
 
 # ── PALETA (zgodna z map.js / world_hexes) ──────────────────────────────────
 COLORS = {
@@ -38,19 +39,11 @@ ENCOUNTER_CHANCE = {
 # ── UKŁAD KONTYNENTU — absolutne offsety axial (q_off, r_off) ───────────────
 # Absolutny axial: q = local_col + q_off
 #                  r = (local_row - (local_col - local_col%2)//2) + r_off
-# Kresy (istniejące): q=0..49, r=-24..49
-REGION_OFFSETS = {
-    "kresy":            (  0,   0),  # istniejące
-    "siwe_granie":      (  0, -75),  # N  : q=0..49,   r=-99..-26
-    # E/W offsety: q=±50 (dolegają do Kresów, q49|q50 sąsiedzi w axial; ±55 dawał
-    # 5-kolumnową pustkę). r skompensowany o SHEAR flat-top: renderer daje
-    # screen-y = r + q/2, więc kraina o q≠0 dryfuje pionowo o q/2. Kompensacja
-    # r_offset = base − q_offset/2 ustawia ją NA RÓWNI z Kresami. Patrz CB-4.
-    "czarnobor":        ( 50, -25),  # E  : q=50..99,  screen na równi z Kresami
-    "koronne_niziny":   (-50,  25),  # W  : q=-50..-1, screen na równi z Kresami
-    "wybrzeze_lez":     (-50, 100),  # SW : q=-50..-1, pod Koronnymi Nizinami
-    "martwe_pustkowia": ( 50,  50),  # SE : q=50..99,  pod Czarnoborem
-}
+# Offsety NIE są już hardkodowane tutaj — pochodzą z jednego źródła prawdy
+# `scripts/region_blocks.py` (wzór q_off=50·col, r_off=75·row−25·col; #1542).
+# Wynik jest identyczny co dawny literał (Kresy 0/0, Czarnobór 50/−25 wg CB-4);
+# strażnik `test_1542_region_blocks.py` pilnuje, by generator i wzór się zgadzały.
+# REGION_OFFSETS importowane wyżej z region_blocks.
 
 # ── KONFIGURACJA KRAIN ───────────────────────────────────────────────────────
 REGION_CONFIG = {
