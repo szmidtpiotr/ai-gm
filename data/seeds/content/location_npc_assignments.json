@@ -61,7 +61,7 @@
     "npc_key": "soltys_cieszowice",
     "assignment_type": "resident",
     "notes": null,
-    "is_active": 1
+    "is_active": 0
   },
   {
     "id": 9,
@@ -69,7 +69,7 @@
     "npc_key": "znachorka_cieszowice",
     "assignment_type": "visitor",
     "notes": null,
-    "is_active": 1
+    "is_active": 0
   },
   {
     "id": 10,
@@ -77,7 +77,7 @@
     "npc_key": "karczmarz_cieszowice",
     "assignment_type": "resident",
     "notes": null,
-    "is_active": 1
+    "is_active": 0
   },
   {
     "id": 11,
@@ -85,7 +85,7 @@
     "npc_key": "kowal_cieszowice",
     "assignment_type": "resident",
     "notes": null,
-    "is_active": 1
+    "is_active": 0
   },
   {
     "id": 12,
@@ -456,8 +456,273 @@
     "is_active": 1
   },
   {
+    "id": 37542,
+    "location_key": "borowiec_2_shop",
+    "npc_key": "wolmarz_ziolowy_sznur",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37549,
+    "location_key": "borowiec_2_shrine",
+    "npc_key": "zegota_knotnik",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37550,
+    "location_key": "wolanka_szynk",
+    "npc_key": "radowit_szynkarz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37551,
+    "location_key": "borowiec_2_smithy",
+    "npc_key": "radogost_zuzlowy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37552,
+    "location_key": "borowiec_2_tavern",
+    "npc_key": "zegota_dymny_kufel",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37553,
+    "location_key": "kamionka_shop",
+    "npc_key": "zyroslaw_sadza",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37554,
+    "location_key": "kamionka_shrine",
+    "npc_key": "zegota_knot",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37555,
+    "location_key": "kamionka_smithy",
+    "npc_key": "dragomir_zuzel",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37559,
+    "location_key": "kamionka_tavern",
+    "npc_key": "witosz_chmielny",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37560,
+    "location_key": "rudnik_shop",
+    "npc_key": "witosz_sznur",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37561,
+    "location_key": "rudnik_shrine",
+    "npc_key": "zegota_knot_2",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37562,
+    "location_key": "rudnik_smithy",
+    "npc_key": "wolrad_czarna_iskra",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37563,
+    "location_key": "rudnik_tavern",
+    "npc_key": "witosz_dymny",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37564,
+    "location_key": "zlamany_rog_pokoje",
+    "npc_key": "witmar_zasuwka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37565,
+    "location_key": "trzech_krukow_stajnia",
+    "npc_key": "witosz_uzdziennik",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37566,
+    "location_key": "zlamany_rog_stajnia",
+    "npc_key": "wszebor_owsiany_hak",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37567,
+    "location_key": "karawanseraj_na_trakcie",
+    "npc_key": "raskir_szynkarz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37568,
+    "location_key": "czarne_swiatynia_ognia",
+    "npc_key": "vargun_zarokaplan",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37569,
+    "location_key": "krzyz_klasztor_szczytu",
+    "npc_key": "brat_odrun",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37570,
+    "location_key": "tundra_swiete_kamienie",
+    "npc_key": "rorik_kamiennowidz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37574,
     "location_key": "cieszowice",
     "npc_key": "wendel_cien",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37581,
+    "location_key": "szept_koron",
+    "npc_key": "nimriel_starsza",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37582,
+    "location_key": "szept_koron",
+    "npc_key": "cathel_zwiadowca",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37583,
+    "location_key": "szept_koron",
+    "npc_key": "aerlin_stroicielka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37584,
+    "location_key": "szept_koron",
+    "npc_key": "sylvar_lukmistrz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37585,
+    "location_key": "szept_krag_starszych",
+    "npc_key": "nimriel_starsza",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37586,
+    "location_key": "szept_krag_starszych",
+    "npc_key": "cathel_zwiadowca",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37587,
+    "location_key": "szept_piesniarnia",
+    "npc_key": "aerlin_stroicielka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37588,
+    "location_key": "szept_lukodzielnia",
+    "npc_key": "sylvar_lukmistrz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37589,
+    "location_key": "szept_targ_wymienny",
+    "npc_key": "cathel_zwiadowca",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37590,
+    "location_key": "ostep_graniczny",
+    "npc_key": "bartel_kupiec",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37591,
+    "location_key": "oboz_drwali",
+    "npc_key": "hagen_starosta",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37592,
+    "location_key": "stanica_wilcza",
+    "npc_key": "wolfram_lowca",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37593,
+    "location_key": "obozowisko_erethila",
+    "npc_key": "erethil_wygnaniec",
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1

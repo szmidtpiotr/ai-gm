@@ -5295,7 +5295,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "obozowisko_erethila"
   },
   {
    "q": 61,
