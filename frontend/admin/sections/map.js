@@ -6,6 +6,7 @@
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
 import { confirmDialog, openModal, closeModal } from '../shared/modal.js';
+import { terrainStyle } from '../shared/terrain_palette.js?v=1';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 // Monolit używał _worldLoaded jako cache zakładek mapy — zachowane 1:1 (lokalne dla modułu).
@@ -1785,6 +1786,10 @@ const _ROW_REGISTRY = {
       const { x:sx, y:sy } = _wbWs(x, y);
       const rz = _WB_SIZE * _wbZoom;
       const cfg = _wbHexTypes[hex.hex_type] || { map_color:'#4a6a4a', map_icon:'' };
+      // M-2a (#1542): kolor/ikona z palety RODZIN terenu; fallback = baza z DB.
+      const pal = terrainStyle(hex.hex_type);
+      const hexFill = pal ? pal.color : cfg.map_color;
+      const hexIcon = pal ? pal.icon : cfg.map_icon;
       const sel = _wbSelected && _wbSelected.q === hex.q && _wbSelected.r === hex.r;
       const hl = !sel && _wbPaintType && hex.hex_type === _wbPaintType;
       const hasLoc = _wbShowLocOverlay && !!_wbLocations[_wbKey(hex.q, hex.r)];
@@ -1792,13 +1797,13 @@ const _ROW_REGISTRY = {
       const strokeWidth = sel ? 2 : hasLoc ? 2.5 : hl ? 2 : 0.7;
       html += `<polygon class="whx" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wbHexCorners(sx, sy, rz - 1)}"
-        fill="${cfg.map_color}" stroke="${strokeColor}"
+        fill="${hexFill}" stroke="${strokeColor}"
         stroke-width="${strokeWidth}"
         style="cursor:${_wbPaintMode ? 'crosshair' : 'pointer'}"/>`;
       if (hasLoc) html += `<polygon points="${_wbHexCorners(sx, sy, rz - 1)}" fill="#4ade80" fill-opacity="0.18" stroke="none" style="pointer-events:none"/>`;
-      if (_wbZoom >= 0.45 && cfg.map_icon)
+      if (_wbZoom >= 0.45 && hexIcon)
         html += `<text x="${sx}" y="${sy - rz * 0.05}" text-anchor="middle"
-          font-size="${Math.max(9, 13 * _wbZoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
+          font-size="${Math.max(9, 13 * _wbZoom)}" style="pointer-events:none">${hexIcon}</text>`;
       if (_wbZoom >= 0.5 && hex.label)
         html += `<text x="${sx}" y="${sy + rz * 0.38}" text-anchor="middle"
           font-size="${Math.max(7, 9 * _wbZoom)}" fill="#c8c0a8" style="pointer-events:none">${_esc(hex.label.slice(0, 14))}</text>`;
@@ -2224,13 +2229,14 @@ const _ROW_REGISTRY = {
     const p = document.getElementById('wb-detail');
     if (!p) return;
     const cfg = _wbHexTypes[hex.hex_type] || {};
+    const _palDetail = terrainStyle(hex.hex_type);       // M-2a: spójna ikona rodziny
     const pool = (Array.isArray(hex.encounter_pool) ? hex.encounter_pool : []).join(',');
     const myTps = _wbTeleports.filter(t =>
       (t.from_q === hex.q && t.from_r === hex.r) || (t.to_q === hex.q && t.to_r === hex.r));
 
     p.innerHTML = `
       <div class="wb-dh">
-        <span>${cfg.map_icon || '⬡'} (${hex.q},${hex.r})</span>
+        <span>${(_palDetail ? _palDetail.icon : cfg.map_icon) || '⬡'} (${hex.q},${hex.r})</span>
         <button class="btn-icon danger" id="wbd-del">✕</button>
       </div>
       <div id="wbd-safe" style="font-size:0.68rem;margin:2px 0 6px 0;color:var(--t3)">🛏 Sprawdzam…</div>
