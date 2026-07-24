@@ -55,11 +55,19 @@ RACE_START: dict[str, dict] = {
             "wyrobisko_srebrnej_zyly",
         ),
     },
-    # #1474 — elf startuje docelowo w Czarnoborze (ukryta osada, „Szept Koron"),
-    # ale kraina nie ma jeszcze zaseedowanych heksów ani lokacji-hubu (#1489/CB-5).
-    # Do tego czasu ŚWIADOMIE bez wpisu: elf startuje jak człowiek (Kresy), zamiast
-    # kotwiczyć się w pustym regionie i wywracać tworzenie kampanii. Wpis dopisać
-    # w sesji CB-8, gdy hub Czarnoboru istnieje w `game_locations` + `world_hexes`.
+    # CB-8 (#1474 §9) — hub Czarnoboru istnieje (Szept Koron w `game_locations`
+    # na heksie 74,-12; 2500 heksów regionu w `world_hexes`), więc elf ma kotwicę.
+    # `default` = Gościnne Drzewo (onboarding w koronach drzew, sub huba Szept
+    # Koron — dziedziczy heks rodzica); `variant` = Ostęp Graniczny (osada wymiany
+    # na zachodzie, własny heks 74,8). Lore §9: `docs/world/regions/czarnobor.md`.
+    "elf": {
+        "region": "czarnobor",
+        "default": "szept_goscinne_drzewo",
+        "variants": (
+            "szept_goscinne_drzewo",
+            "ostep_graniczny",
+        ),
+    },
 }
 
 #: Podpowiedź do promptu planu kampanii — lore §9: pierwsze haki to spór rodów
@@ -80,6 +88,26 @@ RACE_PLAN_HINT: dict[str, str] = {
         "  - Balrik Siwotarczy (Starszy Rodów, głos zakazów) płaci za coś "
         "przeciwnego — żeby sprawa Hutmana została zamknięta i zapomniana.\n"
         "  Bohater ma wybrać stronę albo grać na dwa fronty — to napęd Aktu 1.\n"
+    ),
+    # CB-8 (#1474 §9) — elf leśny startuje w Czarnoborze, hub „Szept Koron".
+    # Haki: Aerlin („kolejne drzewo zgasło") + spór Cathel vs Nimriel
+    # (dwie strony werbują gracza do swojej wizji krainy).
+    "elf": (
+        "KRAINA STARTOWA (obowiązkowa — bohater jest elfem leśnym):\n"
+        "  Czarnobór — mroczny, żywy las elfów; osady w koronach drzew, wardy "
+        "trzymające ciemność za granicą, ludzie tolerowani tylko na skraju.\n"
+        "  Pierwsza lokacja planu (key_locations[0]) MUSI być jedną z:\n"
+        "    - „Szept Koron: Gościnne Drzewo\" (osada w koronach — domyślna, zalecana)\n"
+        "    - „Ostęp Graniczny\" (osada wymiany na zachodniej granicy)\n"
+        "  Reszta boru (Bór Zmarłych, Trzęsawiska, Step Wilków) NIE jest startem.\n"
+        "PIERWSZE HAKI (użyj obu w Akcie 1):\n"
+        "  - Aerlin (mistrzyni strojenia, opiekunka wardów) alarmuje: „kolejne "
+        "drzewo zgasło\" — ward pęka, ciemność wchodzi głębiej; prosi bohatera, "
+        "by zbadał, czemu pieśń milknie.\n"
+        "  - Cathel (przywódca zwiadowców, twarz OTWARCIA) i Nimriel (Starsza "
+        "Kręgu, twarz ZAMKNIĘCIA) werbują bohatera do przeciwnych wizji: Cathel "
+        "chce wyjść poza wardy i szukać źródła zła, Nimriel chce zamknąć się i "
+        "wzmocnić granice. Bohater wybiera stronę albo lawiruje — napęd Aktu 1.\n"
     ),
 }
 

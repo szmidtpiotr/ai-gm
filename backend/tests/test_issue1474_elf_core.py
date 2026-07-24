@@ -133,13 +133,25 @@ def test_elf_open_for_everyone_when_czarnobor_goes_live():
 
 # ─── Start kampanii ──────────────────────────────────────────────────────────
 
-def test_elf_has_no_start_anchor_yet():
-    """Czarnobór nie ma zaseedowanych heksów (#1489) — elf startuje jak człowiek.
+def test_elf_start_anchor_is_czarnobor():
+    """CB-8 (#1474 §9) — hub Czarnoboru istnieje, więc elf ma kotwicę startową.
 
-    Gdy CB-8 doda hub krainy, ten test zmienia się w asercję o whiteliście startowej.
+    Odwrócenie `test_elf_has_no_start_anchor_yet`: whitelist startowa =
+    Gościnne Drzewo (Szept Koron, default) + Ostęp Graniczny (wariant).
     """
-    assert "elf" not in rss.RACE_START
-    assert "elf" not in rss.RACE_PLAN_HINT
+    spec = rss.RACE_START["elf"]
+    assert spec["region"] == "czarnobor"
+    assert spec["default"] == "szept_goscinne_drzewo"
+    assert set(spec["variants"]) == {"szept_goscinne_drzewo", "ostep_graniczny"}
+
+
+def test_elf_plan_hint_carries_lore_hooks():
+    """Plan-hint elfa niesie haki §9: Aerlin + spór Cathel/Nimriel."""
+    hint = rss.RACE_PLAN_HINT["elf"]
+    assert "Czarnobór" in hint
+    assert "Gościnne Drzewo" in hint
+    assert "Aerlin" in hint
+    assert "Cathel" in hint and "Nimriel" in hint
 
 
 # ─── Strefa startowa walki ───────────────────────────────────────────────────

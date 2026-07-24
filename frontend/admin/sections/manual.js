@@ -560,6 +560,13 @@ w Kuźni wygrywa z kotwicą rasy, więc szablon może celowo postawić bohatera 
 w kreatorze po wybraniu tej rasy (backend też ją odrzuca). W kreatorze nazwy archetypów
 zmieniają się wraz z rasą: „Łotrzyk" czyta się u elfa jako <b>Zwiadowca</b>, „Uczony" jako
 <b>Uczony-Stroiciel</b> — klucze w bazie zostają te same.</p>
+<p>Kampania elfa startuje w <b>Czarnoborze</b> (CB-8): domyślnie w osadzie w koronach drzew
+<b>„Gościnne Drzewo"</b> (hub Szept Koron). Plan kampanii może zamiast tego wskazać
+<b>Ostęp Graniczny</b> (osada wymiany na zachodniej granicy) — nazwa spoza tej dwójki cofa
+start do Gościnnego Drzewa. Pierwsze haki fabuły to alarm <b>Aerlin</b> („kolejne drzewo
+zgasło") i spór <b>Cathel</b> (otwarcie boru) kontra <b>Nimriel</b> (zamknięcie granic),
+którzy werbują bohatera do przeciwnych wizji. Człowiek startuje jak dotąd; jawny
+<i>start-hex</i> w Kuźni nadal wygrywa z kotwicą rasy.</p>
 <p>Czary elfa to osobna pula <b>szkoły Stroiciela</b> (kontrola, ochrona, iluzje), zamknięta
 polem <code>race_lock = elf</code> w <b>Zawartość → Czary</b>. Elf nie nauczy się czarów
 ludzkich ani krasnoludzkich i odwrotnie — tak samo jak przy Rdzeń-magii.</p>
