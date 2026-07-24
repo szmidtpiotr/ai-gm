@@ -10016,7 +10016,7 @@
   {
    "q": 50,
    "r": 13,
-   "hex_type": "forest",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -10417,7 +10417,7 @@
   {
    "q": 50,
    "r": 14,
-   "hex_type": "forest",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -10818,7 +10818,7 @@
   {
    "q": 50,
    "r": 15,
-   "hex_type": "forest",
+   "hex_type": "road",
    "label": "ku Kresom",
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -11218,7 +11218,7 @@
   {
    "q": 50,
    "r": 16,
-   "hex_type": "forest",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -11619,7 +11619,7 @@
   {
    "q": 50,
    "r": 17,
-   "hex_type": "forest",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -12020,7 +12020,7 @@
   {
    "q": 50,
    "r": 18,
-   "hex_type": "forest",
+   "hex_type": "road",
    "label": "ku Kresom",
    "atmosphere": null,
    "encounter_chance": 0.25
