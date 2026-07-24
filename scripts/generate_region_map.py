@@ -42,10 +42,12 @@ ENCOUNTER_CHANCE = {
 REGION_OFFSETS = {
     "kresy":            (  0,   0),  # istniejące
     "siwe_granie":      (  0, -75),  # N  : q=0..49,   r=-99..-26
-    "czarnobor":        ( 55,   0),  # E  : q=55..104, r=-24..49
-    "koronne_niziny":   (-55,   0),  # W  : q=-55..-6, r=-24..49
-    "wybrzeze_lez":     (-55,  75),  # SW : q=-55..-6, r=51..124
-    "martwe_pustkowia": ( 55,  75),  # SE : q=55..104, r=51..124
+    # E/W offsety = ±50 (nie ±55): sąsiednie krainy DOLEGAJĄ do Kresów bez luki
+    # (q49|q50 to sąsiedzi w axial). ±55 zostawiał 5-kolumnową czarną pustkę. Patrz CB-4.
+    "czarnobor":        ( 50,   0),  # E  : q=50..99,  r=-24..49  (dolega do Kresów q49)
+    "koronne_niziny":   (-50,   0),  # W  : q=-50..-1, r=-24..49  (dolega do Kresów q0)
+    "wybrzeze_lez":     (-50,  75),  # SW : q=-50..-1, r=51..124
+    "martwe_pustkowia": ( 50,  75),  # SE : q=50..99,  r=51..124
 }
 
 # ── KONFIGURACJA KRAIN ───────────────────────────────────────────────────────
