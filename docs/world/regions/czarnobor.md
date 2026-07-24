@@ -1,7 +1,9 @@
 # CZARNOBÓR — rozdział krainy (baza wiedzy świata)
 
 > **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20; imiona elfów i Czarne Serce domknięte).
-> Rozwija LORE_v1_KANON.md (sekcja 3C). Kraina rasy: **elf leśny** (#1474 — mechanika NIEwdrożona; seedowanie krainy i wdrożenie rasy pójdą w przybliżeniu równolegle, gdy przyjdzie etap wykonawczy; teraz TYLKO planowanie).
+> Rozwija LORE_v1_KANON.md (sekcja 3C). Kraina rasy: **elf leśny** (#1474 — mechanika WDROŻONA 2026-07-21; kraina zaseedowana CB-1…CB-8; kotwica startowa elfa czynna — patrz §9).
+>
+> **Stan wdrożenia (CB-9, 2026-07-24):** kraina domknięta i grywalna na DEV. 2500 heksów w `world_hexes` (`region='czarnobor'`, `map_level=0`), 21 lokacji makro + suby Szeptu Koron, 8 NPC-ikon, 9 wrogów regionu, 13 plotek, loch Utopiona Wieś, smaczki (próchno/dziegieć) czynne. Snapshot: `data/regions/region_czarnobor.json` (round-trip 1:1 zweryfikowany na kopii DB).
 
 ---
 
@@ -56,14 +58,14 @@ Pasy: **zachód** = zwykły las + trakt z Kresów + Ostęp Graniczny/drwale; **p
 
 **Nowe typy terenu (kafle FLUX .170):** `czarny_las` (smoliste pnie), `trzesawisko` (mgła nad wodą), `step` (trawy po horyzont).
 
-**Budżet** (plik seedu: 2500 hexów, 94% forest): forest ~1300 · step ~350 · czarny_las ~250 · trzesawisko ~200 · swamp ~200 · polany heath ~150 · oczka wodne i strumienie. Uwaga wykonawcza: DB nie zawiera hexów Czarnoboru — pierwszy seed pójdzie z przerobionego pliku, nie z DB.
+**Budżet — WDROŻONY** (2500 hexów w DB, snapshot `region_czarnobor.json`): forest 1185 · step 351 · swamp 256 · czarny_las 243 · trzesawisko 201 · heath 147 (polany) · road 101 (trakt z Kresów) · water 15 · village 1. Zgodne z założeniem „94% las" (forest+czarny_las+trzesawisko+swamp ≈ 75% + step/heath jako polany/kraniec). Trakt spójny od granicy z Kresami do Ostępu Granicznego; Szept Koron celowo poza siecią dróg (ścieżka kończy się na skraju kniei).
 
 ## 6. Smaczki mechaniczne **[ZATWIERDZONE]** — niemagiczne, istniejące silniki
 
 | Przedmiot | Działanie | Silnik |
 |---|---|---|
-| **Próchno świetlne** | Zimne światło z próchna czarnodrzewu. Pochodnia nocą w borze PODBIJA szansę spotkań (światło przyciąga) — próchno nie. Wybór: widzę lepiej vs jestem widoczny. | light-flag #1397 + encounter modifier |
-| **Dziegieć czarnodrzewny** | Smarowidło maskujące zapach: bonus do skradania / mniejsza szansa spotkań z bestiami na hexach leśnych, 1 dzień. | kondycje/consumables |
+| **Próchno świetlne** (`prochno_swietlne`) | Zimne światło (`light_kind='cold'`). Pochodnia (`open_flame`) nocą w borze PODBIJA szansę spotkań ×1.5 — próchno nie (×1.0). Wybór: widzę lepiej vs jestem widoczny. Mnożnik działa TYLKO w nocnym marszu; w dzień oba = ×1.0. | `bor_survival_service.light_encounter_mult` → `hex_travel_service` (wartości startowe) |
+| **Dziegieć czarnodrzewny** (`dziegiec_czarnodrzewny`) | Smarowidło maskujące zapach (`effect_category='scent_mask'`): bonus do skradania + mniejsza szansa spotkań z bestiami na hexach LEŚNYCH przez 1 dzień gry. Buff DZIENNY w `session_flags`, nie kondycja rundowa. | `bor_survival_service` scent_mask |
 
 Ekonomia regionu: **dziegieć + futra + drewno** (lustro soli i srebra Grań). Przy implementacji: wpis do **Księgi Zasad** i **wizytówki** (dział Świat) — jak sól.
 
@@ -98,8 +100,10 @@ Nazwy miejsc elfich: elfy mają własne (niezapisywane) nazwy; ludzkie nazwy na 
 
 ## 9. Start elfa (po wdrożeniu #1474)
 
-Whitelist startowa krainy: default **Gościnne Drzewo** (Szept Koron); wariant: Ostęp Graniczny. Haki startowe: Aerlin — „kolejne drzewo zgasło, zbadaj"; Cathel vs Nimriel — dwie strony werbują gracza do swojej wizji. Do tego czasu Czarnobór działa jako zwykła kraina dla wszystkich ras (elf startuje po swojej fali wdrożeniowej).
+Whitelist startowa krainy: default **Gościnne Drzewo** (`szept_goscinne_drzewo`, Szept Koron, hex 74,-12); wariant: **Ostęp Graniczny** (`ostep_graniczny`, hex 74,8). Haki startowe: Aerlin — „kolejne drzewo zgasło, zbadaj"; Cathel vs Nimriel — dwie strony werbują gracza do swojej wizji. Czarnobór działa też jako zwykła kraina dla wszystkich ras (elf ma dodatkowo kotwicę startową).
+
+**WDROŻONE (CB-8):** `RACE_START["elf"]` + `RACE_PLAN_HINT["elf"]` w `race_start_service.py` (region `czarnobor`, default `szept_goscinne_drzewo`). Nowa kampania elfa startuje w Gościnnym Drzewie. Elf leśny nie gra Wojownikiem (blokada archetypu) — Zwiadowca/Uczony-Stroiciel.
 
 ---
 
-*Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa: `data/regions/region_czarnobor.json` (surowy plik generatora — do przerobienia w fali seedowania; DB pusta).*
+*Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa: `data/regions/region_czarnobor.json` (snapshot DB, round-trip 1:1 zweryfikowany w CB-9; `location_key` przetrwa reseed). Wrogowie regionu: `cien_boru`, `dzik_borowy`, `mroczny_elf_lowca`, `topielec_mielizny`, `blotnik`, `harpia_stepowa`, `mara_czarnodrzewna`, `wilk_stepowy_herszt`, `utopiony_wojt` (boss). Loch: `utopiona_wies` (kafelkowy, utopce). Czarne Serce = hex-lokacja atmosferyczna bez wejścia (lore §7).*
