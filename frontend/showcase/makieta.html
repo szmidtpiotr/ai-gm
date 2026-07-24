@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa 2.0 — makiety (#1543)</title>
+<style>
+  :root { --bg:#12140f; --panel:#1b1e17; --ink:#e8e4d6; --dim:#8f9482; --line:#2c3125; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; padding:24px 20px 80px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--dim); margin:0 0 22px; max-width:960px; }
+  .variant { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+             padding:16px 16px 20px; margin:0 0 22px; }
+  .variant h2 { font-size:17px; margin:0 0 2px; }
+  .pitch { color:var(--dim); font-size:13.5px; margin:0 0 14px; }
+  .pitch b { color:#c9d3b0; font-weight:600; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .cell { flex:1 1 460px; min-width:340px; }
+  .cell .cap { font-size:12.5px; color:var(--dim); margin:0 0 6px; letter-spacing:.02em; }
+  canvas { width:100%; height:auto; display:block; border-radius:8px; background:#0c0d09;
+           border:1px solid var(--line); }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px;
+         background:#2c3125; color:#b9c39a; margin-left:6px; vertical-align:1px; }
+  .good { color:#8fd18a; } .bad { color:#e0a07a; } .warn { color:#e6cf7e; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--dim); font-size:12px; margin-top:10px; }
+  .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; vertical-align:-2px; margin-right:4px; }
+  .foot { color:var(--dim); font-size:12.5px; max-width:960px; }
+  code { background:#000; padding:1px 5px; border-radius:4px; color:#c9d3b0; }
+</style>
+</head>
+<body>
+<h1>Mapa 2.0 — 3 makiety kierunku artystycznego <span class="tag">#1543 · M-30</span></h1>
+<p class="sub">Ten sam prawdziwy fragment mapy (<b>Czarnobór</b> — pas traktu 75, i <b>Kresy</b> — serce krainy),
+narysowany na trzy sposoby. Dane hexów bez zmian. Wybierz kierunek — potem pod niego buduję renderer PixiJS.</p>
+
+<div class="variant">
+  <h2>Wariant A — pełne kafle FLUX <span class="tag good">wygląd: gra</span></h2>
+  <p class="pitch">Każdy hex = jego tekstura terenu. <b class="good">+</b> najbogatszy obraz, w 100% wg danych.
+     <b class="bad">−</b> bez LOD 20 000 hexów zabije telefon; lasy potrafią się powtarzać.</p>
+  <div class="row">
+    <div class="cell"><p class="cap">Czarnobór — trakt 75</p><canvas id="a_cz"></canvas></div>
+    <div class="cell"><p class="cap">Kresy — serce krainy</p><canvas id="a_kr"></canvas></div>
+  </div>
+</div>
+
+<div class="variant">
+  <h2>Wariant B — hybryda LOD <span class="tag good">rekomendacja</span></h2>
+  <p class="pitch">Z <b>oddalenia</b> = kolor rodziny terenu (tanie, 20k hexów = wielokąty, 60fps).
+     Z <b>bliska</b> = kafel + ikony (teksturuje się tylko ~200 widocznych hexów).
+     <b class="good">Jedyny wariant, który spełnia wszystkie kryteria wydajności i zostaje sterowany danymi.</b></p>
+  <div class="row">
+    <div class="cell"><p class="cap">↕ ODDALENIE — Czarnobór (kolor rodzin)</p><canvas id="b_cz_far"></canvas></div>
+    <div class="cell"><p class="cap">↕ ODDALENIE — Kresy (kolor rodzin)</p><canvas id="b_kr_far"></canvas></div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <div class="cell"><p class="cap">🔍 ZBLIŻENIE — Czarnobór (kafle + ikony)</p><canvas id="b_cz_near"></canvas></div>
+    <div class="cell"><p class="cap">🔍 ZBLIŻENIE — Kresy (kafle + ikony)</p><canvas id="b_kr_near"></canvas></div>
+  </div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="variant">
+  <h2>Wariant C — raster pre-render + siatka hexów <span class="tag warn">piękny, ale martwy</span></h2>
+  <p class="pitch">Namalowana krainy (jak grafiki wizytówki) + siatka hexów na wierzchu.
+     <b class="good">+</b> najładniejszy, „prawdziwa mapa fantasy". <b class="bad">−</b> statyczny: edycja hexa nie zmienia obrazu,
+     mgła = maska-hack, <b class="bad">każda nowo zseedowana kraina wymaga osobnego malowania</b>.</p>
+  <div class="row">
+    <div class="cell"><p class="cap">Czarnobór — raster wizytówki + siatka</p><canvas id="c_cz"></canvas></div>
+    <div class="cell"><p class="cap">Kresy — raster wizytówki + siatka</p><canvas id="c_kr"></canvas></div>
+  </div>
+</div>
+
+<p class="foot"><b>Mój wniosek:</b> silnik = <b class="good">B (LOD hybryda)</b> dla admina i ŻAR (mobile).
+   A to po prostu B bez dalekiego LOD. C zostaje jako opcjonalny <i>dekoracyjny podkład</i> pod siatką tylko na mapie
+   gracza — nie jako główny renderer. Wydajność-cel: 60fps@7,5k hex, 30fps@20k, płynnie na telefonie →
+   osiągalne tylko z LOD + sprite-atlas (<code>PixiJS</code>).</p>
+
+<script type="module">
+import { terrainStyle } from '/admin/shared/terrain_palette.js';
+
+const SQRT3 = Math.sqrt(3);
+// terrain types that have a real tile file in /images/terrain/
+const TILE_TYPES = ['czarny_las','las_iglasty','lodowiec','siarka','step','trzesawisko',
+  'forest','swamp','heath','road','water','plains','river','snow','sea','hills','coast','mountain','tundra'];
+const TILE_FALLBACK = { brod:'river', lake:'water' };      // reuse a close tile
+const ICON_ONLY = { village:'🏠', town:'🏘', city:'🏰', ruins:'🏚', bridge:'🌉' };
+
+function hexToPixel(q, r, s) { return { x: s*1.5*q, y: s*SQRT3*(r + q/2) }; }
+function hexPath(ctx, x, y, s) {
+  ctx.beginPath();
+  for (let i=0;i<6;i++){ const a=Math.PI/3*i; const px=x+s*Math.cos(a), py=y+s*Math.sin(a);
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py);} ctx.closePath();
+}
+
+function fit(cells, cw, ch, pad) {
+  // choose hex size so the whole fragment fits the canvas
+  let best=null;
+  for (const s of [64,56,48,40,34,30,26,22,19,16,14,12,10]) {
+    let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+    for (const [q,r] of cells){ const {x,y}=hexToPixel(q,r,s);
+      minX=Math.min(minX,x-s);maxX=Math.max(maxX,x+s);
+      minY=Math.min(minY,y-s*SQRT3/2);maxY=Math.max(maxY,y+s*SQRT3/2); }
+    if (maxX-minX<=cw-2*pad && maxY-minY<=ch-2*pad){ best={s,minX,minY,maxX,maxY}; break; }
+  }
+  if(!best){ const s=10; let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+    for (const [q,r] of cells){ const {x,y}=hexToPixel(q,r,s);
+      minX=Math.min(minX,x-s);maxX=Math.max(maxX,x+s);minY=Math.min(minY,y-s);maxY=Math.max(maxY,y+s);}
+    best={s,minX,minY,maxX,maxY}; }
+  best.ox = pad - best.minX + (cw-2*pad-(best.maxX-best.minX))/2;
+  best.oy = pad - best.minY + (ch-2*pad-(best.maxY-best.minY))/2;
+  return best;
+}
+
+function setup(canvas, cw, ch){
+  const dpr=2; canvas.width=cw*dpr; canvas.height=ch*dpr;
+  canvas.style.aspectRatio=cw+'/'+ch;
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); return ctx;
+}
+
+function draw(canvas, cells, mode, tiles){
+  const cw=560, ch=430, pad=12;
+  const ctx=setup(canvas,cw,ch);
+  ctx.fillStyle='#0c0d09'; ctx.fillRect(0,0,cw,ch);
+  const f=fit(cells,cw,ch,pad);
+  for (const [q,r,t] of cells){
+    const {x:px,y:py}=hexToPixel(q,r,f.s); const x=px+f.ox, y=py+f.oy, s=f.s;
+    const style=terrainStyle(t) || {color:'#4a6a4a', icon:''};
+    if (mode==='color'){
+      ctx.save(); hexPath(ctx,x,y,s); ctx.fillStyle=style.color; ctx.fill();
+      ctx.lineWidth=0.6; ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke(); ctx.restore();
+    } else { // tiles
+      const key = TILE_TYPES.includes(t) ? t : TILE_FALLBACK[t];
+      const img = key && tiles[key];
+      ctx.save(); hexPath(ctx,x,y,s); ctx.clip();
+      if (img){ const d=2*s; ctx.drawImage(img, x-s, y-s, d, d); }
+      else { ctx.fillStyle=style.color; ctx.fillRect(x-s,y-s,2*s,2*s); }
+      ctx.restore();
+      ctx.save(); hexPath(ctx,x,y,s); ctx.lineWidth=0.5; ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.stroke(); ctx.restore();
+      if (ICON_ONLY[t] && s>=16){ ctx.font=(s*0.9)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(ICON_ONLY[t], x, y); }
+    }
+  }
+}
+
+function drawRaster(canvas, cells, rasterImg){
+  const cw=560, ch=430, pad=12;
+  const ctx=setup(canvas,cw,ch);
+  ctx.fillStyle='#0c0d09'; ctx.fillRect(0,0,cw,ch);
+  // cover-fit the raster
+  const ir=rasterImg.width/rasterImg.height, cr=cw/ch;
+  let dw,dh; if(ir>cr){ dh=ch; dw=ch*ir; } else { dw=cw; dh=cw/ir; }
+  ctx.drawImage(rasterImg,(cw-dw)/2,(ch-dh)/2,dw,dh);
+  ctx.fillStyle='rgba(8,10,6,.18)'; ctx.fillRect(0,0,cw,ch);
+  const f=fit(cells,cw,ch,pad);
+  // fog outer ring (mask hack demo) + grid overlay
+  let rmin=1e9,rmax=-1e9,qmin=1e9,qmax=-1e9;
+  for(const [q,r] of cells){qmin=Math.min(qmin,q);qmax=Math.max(qmax,q);rmin=Math.min(rmin,r);rmax=Math.max(rmax,r);}
+  for (const [q,r,t] of cells){
+    const {x:px,y:py}=hexToPixel(q,r,f.s); const x=px+f.ox, y=py+f.oy, s=f.s;
+    const edge = q<=qmin+1||q>=qmax-1||r<=rmin+1||r>=rmax-1;
+    ctx.save(); hexPath(ctx,x,y,s);
+    if(edge){ ctx.fillStyle='rgba(6,8,5,.62)'; ctx.fill(); }   // FOW mask
+    ctx.lineWidth=0.7; ctx.strokeStyle='rgba(230,224,200,.22)'; ctx.stroke(); ctx.restore();
+  }
+}
+
+function loadImg(src){ return new Promise(res=>{ const i=new Image();
+  i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; }); }
+
+(async ()=>{
+  const data = await (await fetch('/makieta_data.json')).json();
+  // load tiles
+  const tiles={};
+  await Promise.all(TILE_TYPES.map(async t=>{ tiles[t]=await loadImg('/images/terrain/'+t+'.png?v=1'); }));
+  const rasters={};
+  for (const key of ['czarnobor','kresy']) rasters[key]=await loadImg(data[key].raster);
+
+  const cz=data.czarnobor.hexes, kr=data.kresy.hexes;
+  // A
+  draw(document.getElementById('a_cz'), cz, 'tiles', tiles);
+  draw(document.getElementById('a_kr'), kr, 'tiles', tiles);
+  // B
+  draw(document.getElementById('b_cz_far'), cz, 'color', tiles);
+  draw(document.getElementById('b_kr_far'), kr, 'color', tiles);
+  draw(document.getElementById('b_cz_near'), cz, 'tiles', tiles);
+  draw(document.getElementById('b_kr_near'), kr, 'tiles', tiles);
+  // C
+  if(rasters.czarnobor) drawRaster(document.getElementById('c_cz'), cz, rasters.czarnobor);
+  if(rasters.kresy) drawRaster(document.getElementById('c_kr'), kr, rasters.kresy);
+
+  // legend (terrain families)
+  const seen=new Set([...cz,...kr].map(h=>h[2]));
+  const fams={}; for(const t of seen){ const st=terrainStyle(t); if(st) (fams[st.family] ||= st.color); }
+  document.getElementById('legend').innerHTML =
+    Object.entries(fams).map(([f,c])=>`<span><i style="background:${c}"></i>${f}</span>`).join('');
+
+  window.__makietaReady = true;
+})();
+</script>
+</body>
+</html>
