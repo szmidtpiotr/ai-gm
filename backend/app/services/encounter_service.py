@@ -885,6 +885,11 @@ _HEX_TYPE_TO_TERRAIN = {
     "lodowiec": "mountain",
     "siarka": "mountain",
     "las_iglasty": "forest",
+    # CB-1 #Czarnobór — mapowanie na najbliższy tag ze słownika `terrain_tags` wrogów.
+    # czarny_las = las (nawiedzony), trzęsawisko = bagno, step = równiny (wilki/zbóje).
+    "czarny_las": "forest",
+    "trzesawisko": "swamp",
+    "step": "plains",
 }
 
 

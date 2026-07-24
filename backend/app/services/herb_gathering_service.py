@@ -42,6 +42,9 @@ TERRAIN_DC = {
     "sea": 16, "ruins": 16,
     # SG-1 #1481 — lód i siarka to jałowizna; bór iglasty uboższy w runo niż las liściasty.
     "lodowiec": 16, "siarka": 16, "las_iglasty": 12,
+    # CB-1 #Czarnobór — martwy bór skąpy w runo (Medium 12); trzęsawisko wilgotne
+    # i bujne jak bagno (Easy 8). Step nie wpisany — DEFAULT_DC 12 (Medium, jak równiny).
+    "czarny_las": 12, "trzesawisko": 8,
 }
 DEFAULT_DC = 12  # Medium — równiny/wzgórza/wrzosowiska/drogi itd.
 

@@ -4181,6 +4181,29 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('las_iglasty', 'Las iglasty', 2.0, 0.22, '#1f4536', '🌲', 1, 'biome', 0.15, 0.20)
     """, "vSG1-siwe-granie-hex-types")
 
+    # CB-1 (umbrella Czarnobór) — nowe typy terenu Czarnoboru
+    # (docs/world/regions/czarnobor.md §5). WARTOŚCI STARTOWE (Numbers Policy —
+    # strojone po playtestach, NIE kanon; edytowalne w admin → Mapa → Konfiguracja terenu):
+    #   czarny_las   travel 3.0h = wysoki (jak mountains) — nawiedzony, plączący bór
+    #                spowalnia marsz; encounter 0.32 > forest 0.30 (gęstszy strach),
+    #                poniżej bagna. Bór Zmarłych: smoliste, wygasłe stróżowe drzewa.
+    #   trzesawisko  travel 3.5h = wysoki (= lodowiec, poniżej swamp 4.0 — nie bije
+    #                twardego maksa przechodniego z testu SG-1); encounter 0.40 (jak
+    #                swamp) — mgła nad czarną wodą, utopce, grząski teren.
+    #   step         travel 1.0h = niski (jak plains) — trawy po horyzont, szybki marsz;
+    #                encounter 0.12 (niski) — otwarty step, mało zasadzek (wilki/łowcy).
+    # spawn_weight = 0: te typy NIE są generowane proceduralnie; wchodzą do świata
+    # dopiero seedem krainy z pliku (CB-3), nie z tej migracji. INSERT OR IGNORE = idempotentne.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
+             is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('czarny_las',  'Czarny las',  3.0, 0.32, '#101d15', '🌲', 1, 'biome', 0.10),
+        ('trzesawisko', 'Trzęsawisko', 3.5, 0.40, '#2c3b3b', '🌫️', 1, 'biome', 0.05),
+        ('step',        'Step',        1.0, 0.12, '#9caf3e', '🌾', 1, 'biome', 0.10)
+    """, "vCB1-czarnobor-hex-types")
+
     # SG-9 #1481/#1193 — wydarzenia regionalne przypisane do krainy.
     # Bez `region_scope` roll_event losował z całej puli szablonów, więc „Głębokie
     # Bicie" (stukanie w żyle Rdzenia pod Graniami) mogło wypaść w Kresach. Pusty
@@ -4231,6 +4254,11 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ("siarka",      '["wynaturzona_bestia", "ghoul", "unknown_attacker"]'),
         ("las_iglasty", '["wolf", "goblin", "bandit"]'),
         ("tundra",      '["wolf", "bandit"]'),
+        # CB-1 — Czarnobór. Bór Zmarłych = dzicz + groza (wilk/goblin/nieznany napastnik);
+        # trzęsawisko = jak bagno (szczur/nieznany); step = wilki i zbóje (Step Wilków).
+        ("czarny_las",  '["wolf", "goblin", "unknown_attacker"]'),
+        ("trzesawisko", '["giant_rat", "unknown_attacker"]'),
+        ("step",        '["wolf", "bandit"]'),
     ):
         _exec(
             "UPDATE hex_type_config SET default_encounter_pool = '%s' "

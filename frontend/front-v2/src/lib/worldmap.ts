@@ -89,6 +89,10 @@ const TERRAIN_ICONS: Record<string, Icon> = {
   lodowiec: Snowflake,
   siarka: Fire,
   las_iglasty: Tree,
+  // CB-1 #Czarnobór — czarny_las (bór), trzesawisko (bagno), step (trawy).
+  czarny_las: Tree,
+  trzesawisko: Waves,
+  step: Plant,
 };
 
 export function terrainIcon(hexType: string | null | undefined): Icon {
@@ -123,6 +127,11 @@ const TERRAIN_HOURS: Record<string, number> = {
   lodowiec: 9,
   siarka: 6,
   las_iglasty: 5,
+  // CB-1 #Czarnobór — szacunek panelu proporcjonalny do travel_hours (hex_type_config):
+  // czarny_las 3.0h → wysoki 7; trzesawisko 3.5h → 8; step 1.0h → niski 4 (jak plains).
+  czarny_las: 7,
+  trzesawisko: 8,
+  step: 4,
 };
 
 const TERRAIN_DIFFICULTY: Record<string, string> = {
@@ -146,6 +155,10 @@ const TERRAIN_DIFFICULTY: Record<string, string> = {
   lodowiec: "bardzo trudny",
   siarka: "trudny",
   las_iglasty: "umiarkowany",
+  // CB-1 #Czarnobór
+  czarny_las: "trudny",
+  trzesawisko: "bardzo trudny",
+  step: "łatwy",
 };
 
 // Ryzyko spotkania — high=czerwone ostrzeżenie w panelu.
@@ -163,6 +176,9 @@ const HIGH_RISK = new Set([
   // jak góry. `las_iglasty` (0.22) celowo POZA listą — §5 chce łagodniejszej puli.
   "siarka",
   "lodowiec",
+  // CB-1 #Czarnobór — Bór Zmarłych i trzęsawisko = wysokie ryzyko (encounter 0.32/0.40).
+  "czarny_las",
+  "trzesawisko",
 ]);
 const LOW_RISK = new Set([
   "road",
@@ -172,6 +188,8 @@ const LOW_RISK = new Set([
   "town",
   "village",
   "castle",
+  // CB-1 #Czarnobór — step otwarty, encounter 0.12: niskie ryzyko (§5 wprost).
+  "step",
 ]);
 
 export interface TravelEstimate {

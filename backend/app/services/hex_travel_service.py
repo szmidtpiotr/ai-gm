@@ -297,6 +297,10 @@ _WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
     "las_iglasty": ["wolf", "goblin", "bandit"],
     "lodowiec": ["wolf", "unknown_attacker"],
     "siarka": ["unknown_attacker", "giant_rat"],
+    # CB-1 #Czarnobór — Bór Zmarłych, trzęsawisko, step (docs/.../czarnobor.md §5).
+    "czarny_las": ["wolf", "goblin", "unknown_attacker"],
+    "trzesawisko": ["giant_rat", "unknown_attacker"],
+    "step": ["wolf", "bandit"],
 }
 _WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
 
