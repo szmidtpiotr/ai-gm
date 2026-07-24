@@ -9412,7 +9412,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 75,
@@ -9420,7 +9420,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 76,
@@ -9428,7 +9428,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 77,
@@ -9804,7 +9804,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 74,
@@ -9812,7 +9812,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 75,
@@ -9820,7 +9820,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 76,
@@ -9828,7 +9828,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 77,
@@ -10196,7 +10196,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 73,
@@ -10204,7 +10204,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 74,
@@ -10212,7 +10212,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
+   "encounter_chance": 0.0,
    "location_key": "szept_koron"
   },
   {
@@ -10221,7 +10221,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 76,
@@ -10229,7 +10229,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 77,
@@ -10598,7 +10598,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 73,
@@ -10606,7 +10606,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 74,
@@ -10614,7 +10614,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 75,
@@ -10622,7 +10622,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 76,
@@ -10998,7 +10998,7 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 73,
@@ -11006,7 +11006,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 74,
@@ -11014,7 +11014,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": 75,

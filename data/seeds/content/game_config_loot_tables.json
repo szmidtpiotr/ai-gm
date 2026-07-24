@@ -99,6 +99,17 @@
     "gold_max": 20
   },
   {
+    "key": "loot_blotnik",
+    "label": "Łupy: Błotnik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 1,
+    "gold_max": 10
+  },
+  {
     "key": "loot_borik_zelazny_zapis",
     "label": "Łupy: Borik Żelazny Zapis",
     "description": "",
@@ -165,6 +176,17 @@
     "gold_max": 15
   },
   {
+    "key": "loot_cien_boru",
+    "label": "Łupy: Cień Boru",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 0,
+    "gold_max": 3
+  },
+  {
     "key": "loot_czarny_hask",
     "label": "Łupy: Czarny Hask",
     "description": "",
@@ -174,6 +196,17 @@
     "updated_at": "2026-07-08 11:23:10",
     "gold_min": 15,
     "gold_max": 40
+  },
+  {
+    "key": "loot_dzik_borowy",
+    "label": "Łupy: Dzik Borowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 0,
+    "gold_max": 4
   },
   {
     "key": "loot_dziki_pies",
@@ -297,6 +330,17 @@
     "gold_max": 14
   },
   {
+    "key": "loot_harpia_stepowa",
+    "label": "Łupy: Harpia Stepowa",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 2,
+    "gold_max": 14
+  },
+  {
     "key": "loot_herszt_wyrostkow",
     "label": "Łupy: Wicek Młynarczyk",
     "description": "",
@@ -394,6 +438,17 @@
     "updated_at": "2026-07-12 09:42:23",
     "gold_min": 15,
     "gold_max": 40
+  },
+  {
+    "key": "loot_krolec_plechy",
+    "label": "Łupy: Królec Plechy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-22 06:21:46",
+    "updated_at": "2026-07-22 06:21:46",
+    "gold_min": 5,
+    "gold_max": 15
   },
   {
     "key": "loot_kultowy_tropiciel",
@@ -506,6 +561,17 @@
     "gold_max": 20
   },
   {
+    "key": "loot_mara_czarnodrzewna",
+    "label": "Łupy: Mara Czarnodrzewna",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 2,
+    "gold_max": 12
+  },
+  {
     "key": "loot_marek_voss_final",
     "label": "Łupy: Marek Voss i wierni popiołu",
     "description": "",
@@ -526,6 +592,17 @@
     "updated_at": "2026-07-10 10:28:54",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_mroczny_elf_lowca",
+    "label": "Łupy: Mroczny Elf Łowca",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 3,
+    "gold_max": 16
   },
   {
     "key": "loot_mrozny_wilkolak",
@@ -935,6 +1012,17 @@
     "gold_max": 100
   },
   {
+    "key": "loot_szczur_spichrzowy",
+    "label": "Łupy: Szczur Spichrzowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-22 06:21:46",
+    "updated_at": "2026-07-22 06:21:46",
+    "gold_min": 5,
+    "gold_max": 15
+  },
+  {
     "key": "loot_szczury_grobowe",
     "label": "Łupy: Szczury Grobowe",
     "description": "",
@@ -1012,6 +1100,17 @@
     "gold_max": 0
   },
   {
+    "key": "loot_topielec_mielizny",
+    "label": "Łupy: Topielec z Mielizny",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 0,
+    "gold_max": 8
+  },
+  {
     "key": "loot_trash_common",
     "label": "Łupy: Drobiazgi (consolation)",
     "description": "T6 (#1352): gwarantowany drop minimalny po zwycięstwie.",
@@ -1078,6 +1177,17 @@
     "gold_max": 10
   },
   {
+    "key": "loot_utopiony_wojt",
+    "label": "Łupy: Utopiony Wójt",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 15,
+    "gold_max": 55
+  },
+  {
     "key": "loot_widmo_lodowe",
     "label": "Łupy: Widmo Lodowe",
     "description": "",
@@ -1098,6 +1208,17 @@
     "updated_at": "2026-07-13 16:12:43",
     "gold_min": 1,
     "gold_max": 6
+  },
+  {
+    "key": "loot_wilk_stepowy_herszt",
+    "label": "Łupy: Wilk Stepowy Herszt",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-24 14:12:30",
+    "updated_at": "2026-07-24 14:12:30",
+    "gold_min": 4,
+    "gold_max": 22
   },
   {
     "key": "loot_wit_srogi",
