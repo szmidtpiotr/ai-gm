@@ -3941,7 +3941,8 @@
    "hex_type": "step",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "stanica_wilcza"
   },
   {
    "q": 91,
@@ -4349,7 +4350,8 @@
    "hex_type": "step",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "kurhan_wilczego_krola"
   },
   {
    "q": 96,
@@ -7277,7 +7279,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "milczace_drzewo_3"
   },
   {
    "q": 64,
@@ -8133,7 +8136,8 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "czarne_serce"
   },
   {
    "q": 71,
@@ -8942,7 +8946,8 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "stare_gniazdo"
   },
   {
    "q": 72,
@@ -10206,7 +10211,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "szept_koron"
   },
   {
    "q": 80,
@@ -10510,7 +10516,8 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "milczace_drzewo_1"
   },
   {
    "q": 68,
@@ -11334,7 +11341,8 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "polana_schizmy"
   },
   {
    "q": 71,
@@ -12055,7 +12063,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "oboz_drwali"
   },
   {
    "q": 61,
@@ -12904,7 +12913,7 @@
    "label": "Knieja Czarnych Drzew",
    "atmosphere": null,
    "encounter_chance": 0.55,
-   "location_key": "knieja_czarnych"
+   "location_key": "las_czarnych_drzew"
   },
   {
    "q": 67,
@@ -13752,7 +13761,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "milczace_drzewo_2"
   },
   {
    "q": 73,
@@ -15024,7 +15034,8 @@
    "hex_type": "swamp",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.3
+   "encounter_chance": 0.3,
+   "location_key": "utopiona_wies"
   },
   {
    "q": 82,
@@ -16481,7 +16492,7 @@
    "label": "Trzęsawiska Mgieł",
    "atmosphere": "Mgła pożera wędrowców. Utopce wołają głosami umarłych znajomych.",
    "encounter_chance": 0.55,
-   "location_key": "trzesawiska_mgl"
+   "location_key": "trzesawiska_mgiel"
   },
   {
    "q": 76,
@@ -17161,7 +17172,8 @@
    "hex_type": "trzesawisko",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "smolarnia_na_palach"
   },
   {
    "q": 79,
@@ -18754,7 +18766,8 @@
    "hex_type": "forest",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "zarosniety_trakt"
   },
   {
    "q": 80,
