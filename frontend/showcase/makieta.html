@@ -72,10 +72,23 @@ narysowany na trzy sposoby. Dane hexów bez zmian. Wybierz kierunek — potem po
   </div>
 </div>
 
-<p class="foot"><b>Mój wniosek:</b> silnik = <b class="good">B (LOD hybryda)</b> dla admina i ŻAR (mobile).
-   A to po prostu B bez dalekiego LOD. C zostaje jako opcjonalny <i>dekoracyjny podkład</i> pod siatką tylko na mapie
-   gracza — nie jako główny renderer. Wydajność-cel: 60fps@7,5k hex, 30fps@20k, płynnie na telefonie →
-   osiągalne tylko z LOD + sprite-atlas (<code>PixiJS</code>).</p>
+<div class="variant" style="border-color:#4a5a2e">
+  <h2>Wariant D — tło biomów (skupiska hexów) <span class="tag good">pomysł Piotra · najlepszy</span></h2>
+  <p class="pitch">Nie malujemy hexa po hexie. Spójne <b>skupisko</b> tego samego terenu (flood-fill z danych)
+     dostaje <b>jeden duży obraz biomu</b>, przycięty do granic hexów plamy. Szew biom↔biom pada na krawędź hexa.
+     <b class="good">Piękno C + sterowanie danymi B: edycja/mgła dalej per-hex, obrazy z małej puli per rodzina.</b>
+     Drogi = wstążka na wierzchu, osady = ikony.</p>
+  <div class="row">
+    <div class="cell"><p class="cap">Czarnobór — plamy biomów + trakt</p><canvas id="d_cz"></canvas></div>
+    <div class="cell"><p class="cap">Kresy — plamy biomów + drogi</p><canvas id="d_kr"></canvas></div>
+  </div>
+</div>
+
+<p class="foot"><b>Mój wniosek:</b> silnik = <b class="good">B (LOD hybryda)</b>, ale renderowany jak <b class="good">D (tło biomów)</b> —
+   to nie konkurenci, to ta sama architektura: LOD + plamy biomów zamiast płaskiego koloru/kafla per hex.
+   D bije B na czytelności (koniec „miazgi" jednakowych hexów) i C na żywotności (edycja/mgła dalej per-hex).
+   A = D bez LOD. Czysty C tylko jako opcjonalny <i>dekoracyjny podkład</i> na mapie gracza.
+   Wydajność-cel: 60fps@7,5k hex, 30fps@20k, płynnie na telefonie → LOD + sprite-atlas + plamy (<code>PixiJS</code>).</p>
 
 <script type="module">
 import { terrainStyle } from '/admin/shared/terrain_palette.js';
@@ -166,6 +179,73 @@ function drawRaster(canvas, cells, rasterImg){
   }
 }
 
+// ── Wariant D: tło biomów (skupiska hexów) ───────────────────────────────────
+const BACKDROP_FAMS = ['lasy','bagna','stepy','gory','woda'];
+const HEX_DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+
+function famOf(t){ const st=terrainStyle(t); return st?st.family:null; }
+
+function blobs(cells){
+  // connected components of same backdrop-family hexes
+  const grid=new Map(); for(const [q,r,t] of cells) grid.set(q+','+r,{q,r,t,fam:famOf(t)});
+  const seen=new Set(), out=[];
+  for(const [k,c] of grid){
+    if(seen.has(k) || !BACKDROP_FAMS.includes(c.fam)) continue;
+    const stack=[c], blob=[]; seen.add(k);
+    while(stack.length){ const cur=stack.pop(); blob.push(cur);
+      for(const [dq,dr] of HEX_DIRS){ const nk=(cur.q+dq)+','+(cur.r+dr); const n=grid.get(nk);
+        if(n && !seen.has(nk) && n.fam===c.fam){ seen.add(nk); stack.push(n); } } }
+    out.push({fam:c.fam, cells:blob});
+  }
+  return out;
+}
+
+function drawBiome(canvas, cells, biomeImgs, tiles){
+  const cw=560, ch=430, pad=12;
+  const ctx=setup(canvas,cw,ch);
+  ctx.fillStyle='#0c0d09'; ctx.fillRect(0,0,cw,ch);
+  const f=fit(cells,cw,ch,pad);
+  const P=(q,r)=>{ const {x,y}=hexToPixel(q,r,f.s); return {x:x+f.ox, y:y+f.oy}; };
+  // 1) biome blobs: one big image per cluster, clipped to hex union
+  for(const b of blobs(cells)){
+    const imgs=biomeImgs[b.fam]||[];
+    let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+    ctx.save(); ctx.beginPath();
+    let qk=1e9,rk=1e9;
+    for(const c of b.cells){ const {x,y}=P(c.q,c.r); const s=f.s;
+      for(let i=0;i<6;i++){ const a=Math.PI/3*i; const px=x+s*Math.cos(a), py=y+s*Math.sin(a);
+        i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath();
+      minX=Math.min(minX,x-s);maxX=Math.max(maxX,x+s);minY=Math.min(minY,y-s);maxY=Math.max(maxY,y+s);
+      qk=Math.min(qk,c.q); rk=Math.min(rk,c.r); }
+    ctx.clip();
+    const img = imgs.length ? imgs[(Math.abs(qk*31+rk*17))%imgs.length] : null;
+    if(img){ const bw=maxX-minX, bh=maxY-minY;
+      const sc=Math.max(bw/img.width, bh/img.height)*1.02;
+      const dw=img.width*sc, dh=img.height*sc;
+      ctx.drawImage(img, minX+(bw-dw)/2, minY+(bh-dh)/2, dw, dh);
+    } else { const st=terrainStyle(b.cells[0].t); ctx.fillStyle=st?st.color:'#4a6a4a';
+      ctx.fillRect(minX,minY,maxX-minX,maxY-minY); }
+    ctx.restore();
+  }
+  // 2) hex grid (subtle) + fog outer ring (still per-hex, world stays alive)
+  let qmin=1e9,qmax=-1e9,rmin=1e9,rmax=-1e9;
+  for(const [q,r] of cells){qmin=Math.min(qmin,q);qmax=Math.max(qmax,q);rmin=Math.min(rmin,r);rmax=Math.max(rmax,r);}
+  for(const [q,r] of cells){ const {x,y}=P(q,r); ctx.save(); hexPath(ctx,x,y,f.s);
+    ctx.lineWidth=0.5; ctx.strokeStyle='rgba(230,224,200,.13)'; ctx.stroke(); ctx.restore(); }
+  // 3) road ribbon on top (crosses biomes)
+  ctx.save(); ctx.strokeStyle='rgba(176,134,58,.92)'; ctx.lineWidth=Math.max(2,f.s*0.5);
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const roadSet=new Set(cells.filter(c=>['road','bridge','brod'].includes(c[2])).map(c=>c[0]+','+c[1]));
+  for(const key of roadSet){ const [q,r]=key.split(',').map(Number); const a=P(q,r);
+    for(const [dq,dr] of HEX_DIRS){ if(roadSet.has((q+dq)+','+(r+dr))){ const b=P(q+dq,r+dr);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo((a.x+b.x)/2,(a.y+b.y)/2); ctx.stroke(); } } }
+  ctx.restore();
+  // 4) settlement icons
+  for(const [q,r,t] of cells){ if(ICON_ONLY[t] && f.s>=14){ const {x,y}=P(q,r);
+    ctx.font=(f.s*1.1)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(t==='bridge'?'':ICON_ONLY[t], x, y); } }
+}
+
 function loadImg(src){ return new Promise(res=>{ const i=new Image();
   i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; }); }
 
@@ -176,6 +256,12 @@ function loadImg(src){ return new Promise(res=>{ const i=new Image();
   await Promise.all(TILE_TYPES.map(async t=>{ tiles[t]=await loadImg('/images/terrain/'+t+'.png?v=1'); }));
   const rasters={};
   for (const key of ['czarnobor','kresy']) rasters[key]=await loadImg(data[key].raster);
+  // biome backdrops (Wariant D): up to 2 variants per family
+  const biomeImgs={};
+  await Promise.all(['lasy','bagna','stepy','gory','woda'].map(async fam=>{
+    const list=[]; for(const v of [1,2]){ const im=await loadImg('/images/biomes/'+fam+'_v'+v+'.png?v=1'); if(im) list.push(im); }
+    biomeImgs[fam]=list;
+  }));
 
   const cz=data.czarnobor.hexes, kr=data.kresy.hexes;
   // A
@@ -189,6 +275,9 @@ function loadImg(src){ return new Promise(res=>{ const i=new Image();
   // C
   if(rasters.czarnobor) drawRaster(document.getElementById('c_cz'), cz, rasters.czarnobor);
   if(rasters.kresy) drawRaster(document.getElementById('c_kr'), kr, rasters.kresy);
+  // D
+  drawBiome(document.getElementById('d_cz'), cz, biomeImgs, tiles);
+  drawBiome(document.getElementById('d_kr'), kr, biomeImgs, tiles);
 
   // legend (terrain families)
   const seen=new Set([...cz,...kr].map(h=>h[2]));
