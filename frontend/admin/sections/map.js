@@ -1776,9 +1776,181 @@ const _ROW_REGISTRY = {
 
   function _wbWs(wx, wy) { return { x: wx * _wbZoom + _wbPan.x, y: wy * _wbZoom + _wbPan.y }; }
 
+  // ── Mapa 2.0 (#1543 M-2c) — renderer PixiJS „tło biomów" (Wariant D) ──────────
+  // Warstwa WIZUALNA za flagą. SVG zostaje na wierzchu jako przezroczysta siatka
+  // trafień (paint/select/touch działają bez zmian). Domyślny silnik = SVG.
+  let _wbEngine = 'svg';
+  let _wbPIXI = null, _wbPixiApp = null, _wbPixiRoot = null;
+  let _wbPixiBase = null, _wbPixiBlobs = null, _wbPixiOver = null, _wbPixiSel = null;
+  let _wbBiomeTex = {}, _wbPixiReady = false, _wbPixiBooting = false;
+  let _wbPixiSig = '', _wbPixiSceneRAF = null;
+  const _WB_BACKDROP_FAMS = ['lasy', 'bagna', 'stepy', 'gory', 'woda'];
+  const _WB_SETTLE_ICON = { village: '🏠', town: '🏘', city: '🏰', ruins: '🏚' };
+
+  function _wbCol(hex) { return parseInt((hex || '#4a6a4a').slice(1), 16); }
+  function _wbHexPathG(g, x, y, s) {
+    for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i, px = x + s * Math.cos(a), py = y + s * Math.sin(a);
+      i ? g.lineTo(px, py) : g.moveTo(px, py); } g.closePath();
+  }
+  function _wbHexSig() {  // cheap content hash → rebuild scene only when data changes
+    let s = 0; const keys = Object.keys(_wbHexes);
+    for (const k of keys) { const h = _wbHexes[k]; s = (s * 31 + k.length + (h.hex_type ? h.hex_type.charCodeAt(0) : 0)) | 0; }
+    return keys.length + '|' + s + '|' + (_wbActiveRegion || '');
+  }
+  // family flood-fill → contiguous same-family blobs (one backdrop image each)
+  function _wbBlobs(hexList) {
+    const fam = t => { const st = terrainStyle(t); return st ? st.family : null; };
+    const grid = new Map(); for (const h of hexList) grid.set(_wbKey(h.q, h.r), { q: h.q, r: h.r, t: h.hex_type, fam: fam(h.hex_type) });
+    const seen = new Set(), out = [];
+    for (const [k, c] of grid) {
+      if (seen.has(k) || !_WB_BACKDROP_FAMS.includes(c.fam)) continue;
+      const stack = [c], cells = []; seen.add(k);
+      while (stack.length) { const cur = stack.pop(); cells.push(cur);
+        for (const [dq, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]]) {
+          const nk = _wbKey(cur.q + dq, cur.r + dr), n = grid.get(nk);
+          if (n && !seen.has(nk) && n.fam === c.fam) { seen.add(nk); stack.push(n); } } }
+      out.push({ fam: c.fam, cells });
+    }
+    return out;
+  }
+
+  async function _wbPixiInit() {
+    if (_wbPixiApp || _wbPixiBooting) return;
+    _wbPixiBooting = true;
+    try {
+      const wrap = document.querySelector('#wtab-builder .wb-canvas-wrap');
+      const canvas = document.getElementById('wb-pixi');
+      if (!wrap || !canvas) { _wbPixiBooting = false; return; }
+      const PIXI = await import('/vendor/pixi.min.mjs');
+      _wbPIXI = PIXI;
+      const app = new PIXI.Application();
+      await app.init({ canvas, resizeTo: wrap, background: '#080608',
+        antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 });
+      _wbPixiApp = app;
+      _wbPixiRoot = new PIXI.Container(); app.stage.addChild(_wbPixiRoot);
+      _wbPixiBase = new PIXI.Container(); _wbPixiBlobs = new PIXI.Container();
+      _wbPixiOver = new PIXI.Container(); _wbPixiSel = new PIXI.Graphics();
+      _wbPixiRoot.addChild(_wbPixiBase, _wbPixiBlobs, _wbPixiOver, _wbPixiSel);
+      for (const f of _WB_BACKDROP_FAMS) { _wbBiomeTex[f] = [];
+        for (const v of [1, 2]) { try { _wbBiomeTex[f].push(await PIXI.Assets.load(`/images/biomes/${f}_v${v}.png`)); } catch (e) {} } }
+      _wbPixiReady = true; _wbPixiSig = '';
+      _wbRenderPixi();
+      // Pixi v8 + hard reload: the first paint can stay black until the canvas is
+      // re-composited. A display none→block cycle (same as the engine toggle, which
+      // always works) forces it. Do it once the GL context + layout have settled.
+      setTimeout(() => {
+        if (_wbEngine !== 'pixi') return;
+        const cv = document.getElementById('wb-pixi');
+        const w = document.querySelector('#wtab-builder .wb-canvas-wrap');
+        if (cv) { cv.style.display = 'none'; void cv.offsetHeight; cv.style.display = 'block'; }
+        if (w && _wbPixiApp) _wbPixiApp.renderer.resize(w.clientWidth, w.clientHeight);
+        _wbPixiSig = ''; _wbRenderPixi();
+        if (_wbPixiApp) _wbPixiApp.render();
+      }, 150);
+    } catch (e) {
+      console.error('[wb-pixi] init failed', e);
+      showToast('Nie udało się uruchomić silnika PixiJS — wracam do SVG', 'error');
+      _wbEngine = 'svg'; _wbSyncEngineUi();
+    }
+    _wbPixiBooting = false;
+  }
+
+  function _wbApplyCamera() {
+    if (!_wbPixiRoot) return;
+    _wbPixiRoot.scale.set(_wbZoom);
+    _wbPixiRoot.position.set(_wbPan.x, _wbPan.y);
+    _wbPixiSel.clear();
+    if (_wbSelected) { const { x, y } = _wbHexToPixel(_wbSelected.q, _wbSelected.r);
+      _wbHexPathG(_wbPixiSel, x, y, _WB_SIZE); _wbPixiSel.stroke({ width: 2.5 / _wbZoom, color: 0xf0c040 }); }
+  }
+
+  function _wbPixiBuildScene() {
+    if (!_wbPixiReady) return;
+    const PIXI = _wbPIXI, S = _WB_SIZE;
+    _wbPixiBase.removeChildren(); _wbPixiBlobs.removeChildren(); _wbPixiOver.removeChildren();
+    const hexes = Object.values(_wbHexes); if (!hexes.length) return;
+    // base: family colour fill per hex → no holes under roads/settlements
+    const base = new PIXI.Graphics();
+    for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r); const st = terrainStyle(h.hex_type);
+      _wbHexPathG(base, x, y, S); base.fill(_wbCol(st ? st.color : '#4a6a4a')); }
+    _wbPixiBase.addChild(base);
+    // biome blobs: one WORLD-ANCHORED image per cluster, masked to hex union
+    for (const b of _wbBlobs(hexes)) {
+      const texs = _wbBiomeTex[b.fam] || []; if (!texs.length) continue;
+      const mask = new PIXI.Graphics(); let anchor = b.cells[0];
+      for (const c of b.cells) { if (c.r * 10000 + c.q < anchor.r * 10000 + anchor.q) anchor = c;
+        const { x, y } = _wbHexToPixel(c.q, c.r); _wbHexPathG(mask, x, y, S); }
+      mask.fill(0xffffff);
+      const tex = texs[Math.abs((anchor.q >> 3) * 31 + (anchor.r >> 3) * 17) % texs.length];
+      const sp = new PIXI.Sprite(tex);
+      const span = 28 * 1.5 * S, sc = span / tex.width; sp.scale.set(sc);
+      const ap = _wbHexToPixel(anchor.q, anchor.r); sp.position.set(ap.x - 3 * S, ap.y - 3 * S);
+      sp.mask = mask; _wbPixiBlobs.addChild(mask, sp);
+    }
+    // grid + roads + settlement icons
+    const grid = new PIXI.Graphics();
+    for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r); _wbHexPathG(grid, x, y, S); }
+    grid.stroke({ width: 1, color: 0xe6e0c8, alpha: 0.10 });
+    _wbPixiOver.addChild(grid);
+    const road = new PIXI.Graphics();
+    const rs = new Set(hexes.filter(h => ['road', 'bridge', 'brod'].includes(h.hex_type)).map(h => _wbKey(h.q, h.r)));
+    for (const key of rs) { const [q, r] = key.split(',').map(Number); const a = _wbHexToPixel(q, r);
+      for (const [dq, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]])
+        if (rs.has(_wbKey(q + dq, r + dr))) { const bb = _wbHexToPixel(q + dq, r + dr);
+          road.moveTo(a.x, a.y); road.lineTo((a.x + bb.x) / 2, (a.y + bb.y) / 2); } }
+    road.stroke({ width: S * 0.5, color: 0xb0863a, alpha: 0.92, cap: 'round', join: 'round' });
+    _wbPixiOver.addChild(road);
+    for (const h of hexes) { const ic = _WB_SETTLE_ICON[h.hex_type]; if (!ic) continue;
+      const { x, y } = _wbHexToPixel(h.q, h.r);
+      const t = new PIXI.Text({ text: ic, style: { fontSize: S, fill: 0xffffff } });
+      t.anchor.set(0.5); t.position.set(x, y); _wbPixiOver.addChild(t); }
+  }
+
+  function _wbRenderPixi() {
+    if (!_wbPixiReady) { _wbPixiInit(); return; }
+    _wbApplyCamera();                         // cheap, every call → smooth pan/zoom
+    const sig = _wbHexSig();                   // rebuild scene only when data changed
+    if (sig !== _wbPixiSig && !_wbPixiSceneRAF) {
+      _wbPixiSceneRAF = requestAnimationFrame(() => {
+        _wbPixiSceneRAF = null;
+        _wbPixiBuildScene();
+        _wbPixiSig = _wbHexSig();   // record what we ACTUALLY built (data may have
+                                    // changed since scheduling → next render reschedules)
+      });
+    }
+    const zl = document.getElementById('wb-zoom-label');
+    if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
+  }
+
+  function _wbSyncEngineUi() {
+    const canvas = document.getElementById('wb-pixi');
+    const svg = document.getElementById('wb-svg');
+    const btn = document.getElementById('wb-engine-toggle');
+    const pixi = _wbEngine === 'pixi';
+    if (canvas) canvas.style.display = pixi ? 'block' : 'none';
+    if (svg) svg.style.background = pixi ? 'transparent' : '#080608';
+    if (btn) { btn.textContent = pixi ? '🗺 Silnik: PixiJS (biomy)' : '🗺 Silnik: SVG';
+      btn.style.background = pixi ? '#1e3a24' : '#1e2a3a';
+      btn.style.borderColor = pixi ? '#2f6b3d' : '#2f4a6b';
+      btn.style.color = pixi ? '#8de89f' : '#8fb8e8'; }
+  }
+
+  function wbToggleEngine() {
+    _wbEngine = _wbEngine === 'pixi' ? 'svg' : 'pixi';
+    try { localStorage.setItem('wbMapEngine', _wbEngine); } catch (e) {}
+    _wbSyncEngineUi();
+    if (_wbEngine === 'pixi') _wbPixiInit();
+    _wbRender();
+  }
+
   function _wbRender() {
     const svg = document.getElementById('wb-svg');
     if (!svg) return;
+    // pixi = SVG is invisible hit-mesh on top of the PixiJS biome layer:
+    // transparent fills, no icons/labels/ghosts (Pixi draws those). Only the
+    // selection / paint / location strokes stay visible over the biomes.
+    const pixi = _wbEngine === 'pixi';
+    if (pixi) _wbRenderPixi();
     let html = '';
 
     for (const hex of Object.values(_wbHexes)) {
@@ -1788,28 +1960,31 @@ const _ROW_REGISTRY = {
       const cfg = _wbHexTypes[hex.hex_type] || { map_color:'#4a6a4a', map_icon:'' };
       // M-2a (#1542): kolor/ikona z palety RODZIN terenu; fallback = baza z DB.
       const pal = terrainStyle(hex.hex_type);
-      const hexFill = pal ? pal.color : cfg.map_color;
       const hexIcon = pal ? pal.icon : cfg.map_icon;
       const sel = _wbSelected && _wbSelected.q === hex.q && _wbSelected.r === hex.r;
       const hl = !sel && _wbPaintType && hex.hex_type === _wbPaintType;
       const hasLoc = _wbShowLocOverlay && !!_wbLocations[_wbKey(hex.q, hex.r)];
-      const strokeColor = sel ? '#f0c040' : hasLoc ? '#4ade80' : hl ? '#38bdf8' : '#222';
-      const strokeWidth = sel ? 2 : hasLoc ? 2.5 : hl ? 2 : 0.7;
+      // over the Pixi backdrop the paint-type highlight only shows in Maluj mode
+      // (else the default 'forest' type floods the whole map with blue outlines).
+      const showHl = hl && (!pixi || _wbPaintMode);
+      const hexFill = pixi ? 'transparent' : (pal ? pal.color : cfg.map_color);
+      const strokeColor = sel ? '#f0c040' : hasLoc ? '#4ade80' : showHl ? '#38bdf8' : (pixi ? 'transparent' : '#222');
+      const strokeWidth = sel ? 2 : hasLoc ? 2.5 : showHl ? 2 : (pixi ? 0 : 0.7);
       html += `<polygon class="whx" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wbHexCorners(sx, sy, rz - 1)}"
         fill="${hexFill}" stroke="${strokeColor}"
         stroke-width="${strokeWidth}"
         style="cursor:${_wbPaintMode ? 'crosshair' : 'pointer'}"/>`;
       if (hasLoc) html += `<polygon points="${_wbHexCorners(sx, sy, rz - 1)}" fill="#4ade80" fill-opacity="0.18" stroke="none" style="pointer-events:none"/>`;
-      if (_wbZoom >= 0.45 && hexIcon)
+      if (!pixi && _wbZoom >= 0.45 && hexIcon)
         html += `<text x="${sx}" y="${sy - rz * 0.05}" text-anchor="middle"
           font-size="${Math.max(9, 13 * _wbZoom)}" style="pointer-events:none">${hexIcon}</text>`;
-      if (_wbZoom >= 0.5 && hex.label)
+      if (!pixi && _wbZoom >= 0.5 && hex.label)
         html += `<text x="${sx}" y="${sy + rz * 0.38}" text-anchor="middle"
           font-size="${Math.max(7, 9 * _wbZoom)}" fill="#c8c0a8" style="pointer-events:none">${_esc(hex.label.slice(0, 14))}</text>`;
     }
 
-    if (_wbZoom >= 0.3) {
+    if (!pixi && _wbZoom >= 0.3) {
       const placed = new Set(Object.keys(_wbHexes));
       const ghosts = new Set();
       for (const h of Object.values(_wbHexes))
@@ -2579,6 +2754,12 @@ const _ROW_REGISTRY = {
     }
     _wbUpdateUndoBtn();
 
+    // Mapa 2.0 (#1543 M-2c): SVG jest domyślny przy każdym wejściu. PixiJS „tło
+    // biomów" = świadomy opt-in przyciskiem (silnik eksperymentalny). Nie
+    // przywracamy pixi automatycznie — stary renderer zawsze bezpiecznym startem.
+    _wbEngine = 'svg';
+    _wbSyncEngineUi();
+
     // ResizeObserver for re-render on container resize
     if (typeof ResizeObserver !== 'undefined' && !svg._wbRO) {
       const ro = new ResizeObserver(() => _wbRender());
@@ -3155,11 +3336,13 @@ function _sectionHtml() {
               <div class="wb-hint" id="wb-hint">Maluj: wybierz typ + przeciągnij<br>Kliknij hex → edytuj<br>Ctrl+Z → cofnij<br>Alt+drag → przesuń · Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
+              <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Przełącz silnik mapy: SVG (stary) ↔ PixiJS tło biomów (Mapa 2.0). Edycja działa w obu." style="margin:0 8px 6px;font-size:0.68rem;padding:5px 8px;background:#1e2a3a;border:1px solid #2f4a6b;border-radius:5px;color:#8fb8e8;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: SVG</button>
             </div>
             <div style="display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden">
               <div id="wb-region-bar"></div>
-              <div class="wb-canvas-wrap" style="flex:1">
-                <svg id="wb-svg" style="background:#080608"></svg>
+              <div class="wb-canvas-wrap" style="flex:1;position:relative">
+                <canvas id="wb-pixi" style="position:absolute;inset:0;width:100%;height:100%;display:none"></canvas>
+                <svg id="wb-svg" style="position:absolute;inset:0;background:#080608"></svg>
               </div>
             </div>
             <div class="wb-detail" id="wb-detail">
@@ -3183,7 +3366,7 @@ export async function init(panel) {
   Object.assign(window, {
     filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal,
     saveKnowledgeBubble,
-    wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
+    wbCenter, wbToggleEngine, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
     openLocDetailModal, wbFilterRegion, wbToggleRegionStatus,
