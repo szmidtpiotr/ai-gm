@@ -1783,7 +1783,7 @@ const _ROW_REGISTRY = {
   let _wbPIXI = null, _wbPixiApp = null, _wbPixiRoot = null;
   let _wbPixiBase = null, _wbPixiBlobs = null, _wbPixiOver = null, _wbPixiSel = null;
   let _wbBiomeTex = {}, _wbPixiReady = false, _wbPixiBooting = false;
-  let _wbPixiSig = '', _wbPixiSceneRAF = null;
+  let _wbPixiSig = '', _wbPixiSceneRAF = null, _wbPixiKickT = null;
   const _WB_BACKDROP_FAMS = ['lasy', 'bagna', 'stepy', 'gory', 'woda'];
   const _WB_SETTLE_ICON = { village: '🏠', town: '🏘', city: '🏰', ruins: '🏚' };
 
@@ -1855,6 +1855,17 @@ const _ROW_REGISTRY = {
     _wbPixiBooting = false;
   }
 
+  // Headless/hard-reload WebGL quirk: a scene rebuild can leave the canvas black
+  // until it is re-composited. A display none→block cycle forces it. Debounced so
+  // it fires once AFTER a burst of rebuilds (region switch, paint drag) — no
+  // per-frame flicker.
+  function _wbPixiKick() {
+    if (_wbEngine !== 'pixi' || !_wbPixiApp) return;
+    const cv = document.getElementById('wb-pixi');
+    if (cv) { cv.style.display = 'none'; void cv.offsetHeight; cv.style.display = 'block'; }
+    _wbApplyCamera(); _wbPixiApp.render();
+  }
+
   function _wbApplyCamera() {
     if (!_wbPixiRoot) return;
     _wbPixiRoot.scale.set(_wbZoom);
@@ -1869,36 +1880,51 @@ const _ROW_REGISTRY = {
     const PIXI = _wbPIXI, S = _WB_SIZE;
     _wbPixiBase.removeChildren(); _wbPixiBlobs.removeChildren(); _wbPixiOver.removeChildren();
     const hexes = Object.values(_wbHexes); if (!hexes.length) return;
+    // world bounds (shared origin for every family → seamless tiling phase)
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    minX -= S; minY -= S; maxX += S; maxY += S;
+    const W = maxX - minX, H = maxY - minY;
     // base: family colour fill per hex → no holes under roads/settlements
     const base = new PIXI.Graphics();
     for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r); const st = terrainStyle(h.hex_type);
       _wbHexPathG(base, x, y, S); base.fill(_wbCol(st ? st.color : '#4a6a4a')); }
     _wbPixiBase.addChild(base);
-    // biome blobs: one WORLD-ANCHORED image per cluster, masked to hex union
-    for (const b of _wbBlobs(hexes)) {
-      const texs = _wbBiomeTex[b.fam] || []; if (!texs.length) continue;
-      const mask = new PIXI.Graphics(); let anchor = b.cells[0];
-      for (const c of b.cells) { if (c.r * 10000 + c.q < anchor.r * 10000 + anchor.q) anchor = c;
-        const { x, y } = _wbHexToPixel(c.q, c.r); _wbHexPathG(mask, x, y, S); }
+    // ── biomy: JEDEN ciągły obraz per RODZINA (nie per plama!) ────────────────
+    // TilingSprite pokrywa cały świat, przycięty maską = unia WSZYSTKICH hexów tej
+    // rodziny. Wszystkie rodziny mają tę samą geometrię/fazę → sąsiednie skupiska
+    // są CIĄGŁE, koniec prążków i czarnych dziur z kotwiczenia per-plama.
+    const byFam = {};
+    for (const h of hexes) { const st = terrainStyle(h.hex_type); const f = st && st.family;
+      if (_WB_BACKDROP_FAMS.includes(f)) (byFam[f] || (byFam[f] = [])).push(h); }
+    const period = 22 * 1.5 * S;                    // jeden „kafel" obrazu ≈ 22 hexów
+    for (const fam of _WB_BACKDROP_FAMS) {
+      const list = byFam[fam]; if (!list) continue;
+      const texs = _wbBiomeTex[fam] || []; if (!texs.length) continue;
+      const tex = texs[0];
+      const mask = new PIXI.Graphics();
+      for (const h of list) { const { x, y } = _wbHexToPixel(h.q, h.r); _wbHexPathG(mask, x, y, S); }
       mask.fill(0xffffff);
-      const tex = texs[Math.abs((anchor.q >> 3) * 31 + (anchor.r >> 3) * 17) % texs.length];
-      const sp = new PIXI.Sprite(tex);
-      const span = 28 * 1.5 * S, sc = span / tex.width; sp.scale.set(sc);
-      const ap = _wbHexToPixel(anchor.q, anchor.r); sp.position.set(ap.x - 3 * S, ap.y - 3 * S);
-      sp.mask = mask; _wbPixiBlobs.addChild(mask, sp);
+      const ts = new PIXI.TilingSprite({ texture: tex, width: W, height: H });
+      ts.position.set(minX, minY);
+      ts.tileScale.set(period / tex.width);
+      ts.mask = mask;
+      _wbPixiBlobs.addChild(mask, ts);
     }
-    // grid + roads + settlement icons
+    // subtelna siatka
     const grid = new PIXI.Graphics();
     for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r); _wbHexPathG(grid, x, y, S); }
-    grid.stroke({ width: 1, color: 0xe6e0c8, alpha: 0.10 });
+    grid.stroke({ width: 1, color: 0xe6e0c8, alpha: 0.06 });
     _wbPixiOver.addChild(grid);
+    // drogi — cieńsza, spokojniejsza wstążka (była za gruba/jaskrawa = „sieć")
     const road = new PIXI.Graphics();
     const rs = new Set(hexes.filter(h => ['road', 'bridge', 'brod'].includes(h.hex_type)).map(h => _wbKey(h.q, h.r)));
     for (const key of rs) { const [q, r] = key.split(',').map(Number); const a = _wbHexToPixel(q, r);
       for (const [dq, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]])
         if (rs.has(_wbKey(q + dq, r + dr))) { const bb = _wbHexToPixel(q + dq, r + dr);
           road.moveTo(a.x, a.y); road.lineTo((a.x + bb.x) / 2, (a.y + bb.y) / 2); } }
-    road.stroke({ width: S * 0.5, color: 0xb0863a, alpha: 0.92, cap: 'round', join: 'round' });
+    road.stroke({ width: S * 0.24, color: 0x9c7a3e, alpha: 0.62, cap: 'round', join: 'round' });
     _wbPixiOver.addChild(road);
     for (const h of hexes) { const ic = _WB_SETTLE_ICON[h.hex_type]; if (!ic) continue;
       const { x, y } = _wbHexToPixel(h.q, h.r);
@@ -1916,6 +1942,7 @@ const _ROW_REGISTRY = {
         _wbPixiBuildScene();
         _wbPixiSig = _wbHexSig();   // record what we ACTUALLY built (data may have
                                     // changed since scheduling → next render reschedules)
+        clearTimeout(_wbPixiKickT); _wbPixiKickT = setTimeout(_wbPixiKick, 180);
       });
     }
     const zl = document.getElementById('wb-zoom-label');
