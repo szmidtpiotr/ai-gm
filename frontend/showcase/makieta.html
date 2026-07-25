@@ -84,6 +84,17 @@ narysowany na trzy sposoby. Dane hexów bez zmian. Wybierz kierunek — potem po
   </div>
 </div>
 
+<div class="variant" style="border-color:#6a5a2e">
+  <h2>Dowód: ręczna zmiana 1 hexa <span class="tag good">NIE regeneruje podkładu</span></h2>
+  <p class="pitch">Ten sam fragment Czarnoboru. Po prawej zmieniłem <b>jeden hex</b> lasu → bagno (żółta obwódka).
+     Obraz biomu jest <b>zakotwiczony w świecie</b> — zmienia się tylko <b>maska plamy</b> (jeden hex dołącza do bagien,
+     znika z lasu). <b class="good">Zero generowania FLUX, zero pre-renderu całości — reszta podkładu stoi w miejscu.</b></p>
+  <div class="row">
+    <div class="cell"><p class="cap">PRZED — hex = las</p><canvas id="p_before"></canvas></div>
+    <div class="cell"><p class="cap">PO — ten hex = bagno (tylko granica plamy się przeliczyła)</p><canvas id="p_after"></canvas></div>
+  </div>
+</div>
+
 <p class="foot"><b>Mój wniosek:</b> silnik = <b class="good">B (LOD hybryda)</b>, ale renderowany jak <b class="good">D (tło biomów)</b> —
    to nie konkurenci, to ta sama architektura: LOD + plamy biomów zamiast płaskiego koloru/kafla per hex.
    D bije B na czytelności (koniec „miazgi" jednakowych hexów) i C na żywotności (edycja/mgła dalej per-hex).
@@ -200,31 +211,37 @@ function blobs(cells){
   return out;
 }
 
-function drawBiome(canvas, cells, biomeImgs, tiles){
+const IMG_SPAN_HEXES = 28;   // how many hexes one biome image spans (world-space)
+function drawBiome(canvas, cells, biomeImgs, tiles, opts){
+  opts = opts || {};
   const cw=560, ch=430, pad=12;
   const ctx=setup(canvas,cw,ch);
   ctx.fillStyle='#0c0d09'; ctx.fillRect(0,0,cw,ch);
   const f=fit(cells,cw,ch,pad);
   const P=(q,r)=>{ const {x,y}=hexToPixel(q,r,f.s); return {x:x+f.ox, y:y+f.oy}; };
-  // 1) biome blobs: one big image per cluster, clipped to hex union
+  // 1) biome blobs: one big image per cluster, WORLD-ANCHORED (stable on edits),
+  //    clipped to the hex union. Anchor = blob's lowest (r,q) cell → editing an
+  //    interior hex never moves the image, only the clip mask changes.
   for(const b of blobs(cells)){
     const imgs=biomeImgs[b.fam]||[];
-    let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
     ctx.save(); ctx.beginPath();
-    let qk=1e9,rk=1e9;
-    for(const c of b.cells){ const {x,y}=P(c.q,c.r); const s=f.s;
+    let anchor=b.cells[0];
+    for(const c of b.cells){
+      if(c.r*10000+c.q < anchor.r*10000+anchor.q) anchor=c;
+      const {x,y}=P(c.q,c.r); const s=f.s;
       for(let i=0;i<6;i++){ const a=Math.PI/3*i; const px=x+s*Math.cos(a), py=y+s*Math.sin(a);
         i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath();
-      minX=Math.min(minX,x-s);maxX=Math.max(maxX,x+s);minY=Math.min(minY,y-s);maxY=Math.max(maxY,y+s);
-      qk=Math.min(qk,c.q); rk=Math.min(rk,c.r); }
+    }
     ctx.clip();
-    const img = imgs.length ? imgs[(Math.abs(qk*31+rk*17))%imgs.length] : null;
-    if(img){ const bw=maxX-minX, bh=maxY-minY;
-      const sc=Math.max(bw/img.width, bh/img.height)*1.02;
-      const dw=img.width*sc, dh=img.height*sc;
-      ctx.drawImage(img, minX+(bw-dw)/2, minY+(bh-dh)/2, dw, dh);
+    // image picked by a coarse WORLD hash of the anchor (stable, not blob-shape)
+    const img = imgs.length ? imgs[Math.abs((anchor.q>>3)*31 + (anchor.r>>3)*17) % imgs.length] : null;
+    if(img){
+      const span = IMG_SPAN_HEXES*1.5*f.s;      // fixed world px the image covers
+      const sc = span/img.width, dw=img.width*sc, dh=img.height*sc;
+      const ap=P(anchor.q, anchor.r);
+      ctx.drawImage(img, ap.x - 3*f.s, ap.y - 3*f.s, dw, dh);   // world-anchored
     } else { const st=terrainStyle(b.cells[0].t); ctx.fillStyle=st?st.color:'#4a6a4a';
-      ctx.fillRect(minX,minY,maxX-minX,maxY-minY); }
+      ctx.fillRect(-9,-9,cw+18,ch+18); }
     ctx.restore();
   }
   // 2) hex grid (subtle) + fog outer ring (still per-hex, world stays alive)
@@ -244,6 +261,11 @@ function drawBiome(canvas, cells, biomeImgs, tiles){
   for(const [q,r,t] of cells){ if(ICON_ONLY[t] && f.s>=14){ const {x,y}=P(q,r);
     ctx.font=(f.s*1.1)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(t==='bridge'?'':ICON_ONLY[t], x, y); } }
+  // 5) optional highlight of an edited hex (proof: only this hex's mask changed)
+  if(opts.highlight){ const {x,y}=P(opts.highlight[0], opts.highlight[1]);
+    ctx.save(); hexPath(ctx,x,y,f.s);
+    ctx.lineWidth=2.4; ctx.strokeStyle='#ffd24a'; ctx.shadowColor='#ffd24a'; ctx.shadowBlur=8; ctx.stroke();
+    ctx.restore(); }
 }
 
 function loadImg(src){ return new Promise(res=>{ const i=new Image();
@@ -278,6 +300,23 @@ function loadImg(src){ return new Promise(res=>{ const i=new Image();
   // D
   drawBiome(document.getElementById('d_cz'), cz, biomeImgs, tiles);
   drawBiome(document.getElementById('d_kr'), kr, biomeImgs, tiles);
+
+  // Proof: flip ONE interior forest hex → swamp, render before/after.
+  // Pick a forest hex that has a swamp/trzesawisko neighbour and is NOT its
+  // blob's anchor corner (so the backdrop provably stays put).
+  const cset=new Set(cz.map(c=>c[0]+','+c[1]));
+  const typeAt=new Map(cz.map(c=>[c[0]+','+c[1], c[2]]));
+  const isSwamp=t=>t==='swamp'||t==='trzesawisko';
+  let pick=null;
+  for(const [q,r,t] of cz){ if(t!=='forest') continue;
+    let touchesSwamp=false;
+    for(const [dq,dr] of [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]])
+      if(isSwamp(typeAt.get((q+dq)+','+(r+dr)))) touchesSwamp=true;
+    if(touchesSwamp){ pick=[q,r]; break; } }
+  const before = cz;
+  const after = cz.map(c=> (pick && c[0]===pick[0] && c[1]===pick[1]) ? [c[0],c[1],'swamp'] : c);
+  drawBiome(document.getElementById('p_before'), before, biomeImgs, tiles, {highlight:pick});
+  drawBiome(document.getElementById('p_after'),  after,  biomeImgs, tiles, {highlight:pick});
 
   // legend (terrain families)
   const seen=new Set([...cz,...kr].map(h=>h[2]));
