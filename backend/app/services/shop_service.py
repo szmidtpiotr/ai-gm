@@ -699,8 +699,9 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         if _shopper_race == "dwarf":
             eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT))), 4)
         elif _shopper_race == "pietnowani":
-            # #1475: piętno społeczne — obcy podnoszą cenę Piętnowanemu (+10%).
-            eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * (1.0 + PIETNOWANI_SHOP_MARKUP))), 4)
+            # #1475 / MP-8: piętno społeczne — obcy podnoszą cenę (+10%), ale we
+            # własnej enklawie (Solny Próg) swoi NIE dokładają narzutu.
+            eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * _pietnowani_markup(conn, character_id, location_key))), 4)
         ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         # #1127: night economy — reflect open state + black-market pricing in the UI.
         night_state = _shop_open_state(conn, npc, character_id)
@@ -812,7 +813,7 @@ def combined_buy_multiplier(
     if _buyer_race == "dwarf":
         raw *= (1.0 - DWARF_SHOP_DISCOUNT)
     elif _buyer_race == "pietnowani":
-        raw *= (1.0 + PIETNOWANI_SHOP_MARKUP)  # #1475: piętno społeczne — obcy podnoszą cenę
+        raw *= _pietnowani_markup(conn, character_id)  # #1475/MP-8: piętno tylko poza enklawą
     rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
     if rep_mult != 1.0:
         raw *= rep_mult
@@ -835,6 +836,34 @@ def _current_location_key_for_character(conn: sqlite3.Connection, character_id: 
         return get_current_location_key(conn, int(cid)) or None
     except Exception:
         return None
+
+
+#: MP-8 (#1475/#1494 §8) — enklawa Piętnowanych = Solny Próg (hub + wszystkie
+#: suby: gospoda, dom starszych, cicha sala, targ, magazyny). We własnej enklawie
+#: piętno społeczne NIE działa (swoi nie boją się Piętna); poza nią (Obóz Gorączki,
+#: Misja Światła, reszta świata) obcy dokładają narzut.
+PIETNOWANI_ENCLAVE_PREFIX = "solny_prog"
+
+
+def _pietnowani_in_home_enclave(
+    conn: sqlite3.Connection, character_id: int, location_key: str | None = None
+) -> bool:
+    """True, gdy Piętnowany handluje we własnej enklawie (Solny Próg) — wtedy
+    piętno społeczne nie podnosi ceny. Nieznana lokacja → traktuj jak teren obcy
+    (zachowuje domyślny narzut rasy, tak jak przed MP-8)."""
+    loc = location_key or _current_location_key_for_character(conn, character_id)
+    return bool(loc) and str(loc).startswith(PIETNOWANI_ENCLAVE_PREFIX)
+
+
+def _pietnowani_markup(
+    conn: sqlite3.Connection, character_id: int, location_key: str | None = None
+) -> float:
+    """MP-8 (#1475): mnożnik piętna społecznego dla Piętnowanego. Poza enklawą
+    1.0 + PIETNOWANI_SHOP_MARKUP (obcy boją się Piętna → +10%); u swoich w Solnym
+    Progu 1.0 (bez narzutu). Wołany tylko gdy rasa == 'pietnowani'."""
+    if _pietnowani_in_home_enclave(conn, character_id, location_key):
+        return 1.0
+    return 1.0 + PIETNOWANI_SHOP_MARKUP
 
 
 def _npc_serves_location(conn: sqlite3.Connection, npc: sqlite3.Row, location_key: str | None) -> bool:

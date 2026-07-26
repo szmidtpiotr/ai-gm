@@ -129,14 +129,20 @@ def test_pietnowani_start_anchor_is_solny_prog():
     spec = rss.RACE_START["pietnowani"]
     assert spec["region"] == "martwe_pustkowia"
     assert spec["default"] == "solny_prog_gospoda"
-    assert set(spec["variants"]) == {"solny_prog_gospoda", "solny_prog_dom_starszych"}
+    # MP-8 (#1494 §8): wariant Obóz Gorączki dołączony do whitelisty startowej.
+    assert set(spec["variants"]) == {
+        "solny_prog_gospoda",
+        "solny_prog_dom_starszych",
+        "oboz_goraczki",
+    }
 
 
 def test_pietnowani_plan_hint_carries_lore_hooks():
-    """Plan-hint niesie haki: Raszid (enklawa) vs Verena (Misja Światła)."""
+    """Plan-hint niesie haki §8: Lejla vs Raszid (otwarcie/ukrycie) + Verena węszy."""
     hint = rss.RACE_PLAN_HINT["pietnowani"]
     assert "Martwe Pustkowia" in hint
     assert "Solny Próg" in hint
+    assert "Lejla" in hint
     assert "Raszid" in hint
     assert "Verena" in hint
 

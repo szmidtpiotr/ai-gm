@@ -95,17 +95,21 @@ RACE_START: dict[str, dict] = {
             "ostep_graniczny",
         ),
     },
-    # #1475 — Piętnowani startują na Martwych Pustkowiach (kraina `live`, hub
-    # „Solny Próg" w `game_locations` na heksie 64,37; 2500 heksów regionu).
-    # `default` = Gospoda dla Obcych (sub huba — onboarding, dziedziczy heks
-    # rodzica); `variant` = Dom Starszych (rada enklawy). Reszta pustkowi (sól,
-    # ruiny, martwa ziemia) NIE jest startem. Lore: `docs/world/regions/martwe_pustkowia.md`.
+    # #1475 / MP-8 (#1494 §8) — Piętnowani startują na Martwych Pustkowiach
+    # (kraina `live`, hub „Solny Próg" w `game_locations` na heksie 64,37;
+    # 2500 heksów regionu). `default` = Gospoda dla Obcych (sub huba —
+    # onboarding, dziedziczy heks rodzica). Warianty planu: Dom Starszych (rada
+    # enklawy, wewnątrz huba) oraz „Obóz Gorączki" (boomtown obcych na własnym
+    # heksie 68,41 — twardszy start WŚRÓD obcych, którzy boją się Piętna).
+    # Otwarte pustkowia (sól, ruiny, martwa ziemia) NIE są startem.
+    # Lore: `docs/world/regions/martwe_pustkowia.md` §8.
     "pietnowani": {
         "region": "martwe_pustkowia",
         "default": "solny_prog_gospoda",
         "variants": (
             "solny_prog_gospoda",
             "solny_prog_dom_starszych",
+            "oboz_goraczki",
         ),
     },
 }
@@ -149,10 +153,10 @@ RACE_PLAN_HINT: dict[str, str] = {
         "chce wyjść poza wardy i szukać źródła zła, Nimriel chce zamknąć się i "
         "wzmocnić granice. Bohater wybiera stronę albo lawiruje — napęd Aktu 1.\n"
     ),
-    # #1475 — Piętnowany startuje na Martwych Pustkowiach, hub „Solny Próg"
-    # (enklawa Piętnowanych na skraju pustkowi). Haki: Raszid (Starszy enklawy,
-    # chroni swoich) vs Siostra Verena (Misja Światła, nieufna wobec Piętna) —
-    # napięcie „swoi kontra obcy, którzy się ciebie boją", wprost z cechy Piętna.
+    # #1475 / MP-8 (#1494 §8) — Piętnowany startuje na Martwych Pustkowiach, hub
+    # „Solny Próg" (enklawa Piętnowanych). Haki wg §8: Lejla (Przewodniczka, twarz
+    # OTWARCIA — handel z obcymi) vs Raszid (Starszy enklawy, twarz UKRYCIA — chroń
+    # swoich); w tle Siostra Verena (Misja Światła) węszy w enklawie za Piętnem.
     "pietnowani": (
         "KRAINA STARTOWA (obowiązkowa — bohater jest Piętnowanym):\n"
         "  Martwe Pustkowia — spopielała kraina przy płytkim Rdzeniu; sól jako "
@@ -162,14 +166,19 @@ RACE_PLAN_HINT: dict[str, str] = {
         "  Pierwsza lokacja planu (key_locations[0]) MUSI być jedną z:\n"
         "    - „Solny Próg: Gospoda dla Obcych\" (enklawa Piętnowanych — domyślna, zalecana)\n"
         "    - „Solny Próg: Dom Starszych\" (rada enklawy)\n"
+        "    - „Obóz Gorączki\" (boomtown obcych — twardszy start wśród nieufnych)\n"
         "  Otwarte pustkowia (Pola Szkła, Krypta, Twierdza Bezimiennego) NIE są startem.\n"
-        "PIERWSZE HAKI (użyj obu jako przeciwstawnych ofert w Akcie 1):\n"
-        "  - Raszid, Starszy enklawy — chroni Piętnowanych i handel solą; prosi "
-        "bohatera o przysługę, która wzmocni pozycję enklawy wobec przybyszów.\n"
-        "  - Siostra Verena, inkwizytorka-obserwatorka Misji Światła — patrzy na "
-        "Piętno z podejrzliwością; oferuje bohaterowi „oczyszczenie imienia\" w "
-        "zamian za robotę, która może uderzyć we własnych. Bohater wybiera "
-        "lojalność wobec swoich albo akceptację obcych — napęd Aktu 1.\n"
+        "PIERWSZE HAKI (użyj OBU jako przeciwstawnych ofert w Akcie 1 — oś "
+        "otwarcie kontra ukrycie):\n"
+        "  - Lejla, Przewodniczka enklawy (twarz OTWARCIA) — chce wyprowadzać "
+        "solne karawany do obcych i handlować z Obozem Gorączki; werbuje bohatera "
+        "do wyprawy poza Solny Próg mimo ryzyka Piętna.\n"
+        "  - Raszid, Starszy enklawy (twarz UKRYCIA) — chroni Piętnowanych i chce "
+        "trzymać enklawę zamkniętą; płaci za coś przeciwnego, by swoi nie musieli "
+        "kłaniać się obcym. Bohater wybiera stronę albo lawiruje — napęd Aktu 1.\n"
+        "  - W TLE: Siostra Verena, inkwizytorka-obserwatorka Misji Światła, WĘSZY "
+        "w enklawie — patrzy na Piętno z podejrzliwością i szuka pretekstu; jej "
+        "obecność zaostrza spór Lejla↔Raszid.\n"
     ),
 }
 
