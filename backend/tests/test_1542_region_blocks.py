@@ -44,26 +44,27 @@ EXPECTED_OFFSETS = {
     "koronne_niziny":   (-50,  25),
     "kresy":            (  0,   0),
     "czarnobor":        ( 50, -25),
-    "siwe_granie":      (  0, -75),
-    "wybrzeze_lez":     (-50, 100),
-    "martwe_pustkowia": ( 50,  50),
+    "siwe_granie":      (  0, -50),
+    "wybrzeze_lez":     (-50,  75),
+    "martwe_pustkowia": ( 50,  25),
 }
 
-# Krainy `coming`, których pliki JSON są STARSZE niż wzór CB-4 (offset ±55/75,
-# sprzed kompensacji shear). Zostaną naprawione przy regeneracji w fali krain —
-# tu tylko udokumentowane, żeby strażnik nie mylił znanego długu z nową regresją.
-_STALE_COMING_OFFSETS = {"martwe_pustkowia", "wybrzeze_lez"}
+# Krainy `coming`, których pliki JSON są STARSZE niż aktualny wzór (offset sprzed
+# kompensacji shear / sprzed kroku 50·row). Zostaną naprawione przy regeneracji w
+# fali krain — tu tylko udokumentowane, żeby strażnik nie mylił znanego długu z regresją.
+# martwe_pustkowia — NAPRAWIONE (MP-3+, offset kanoniczny (50,25), wsiane do DB #1494).
+_STALE_COMING_OFFSETS = {"wybrzeze_lez"}
 
 
 # ── 1. WZÓR (czysta matematyka, bez danych) ──────────────────────────────────
 
 def test_block_offsets_formula():
-    """block_offsets = (50·col, 75·row − 25·col)."""
+    """block_offsets = (50·col, 50·row − 25·col)."""
     assert block_offsets(0, 0) == (0, 0)
     assert block_offsets(1, 0) == (50, -25)
     assert block_offsets(-1, 0) == (-50, 25)
-    assert block_offsets(0, -1) == (0, -75)
-    assert block_offsets(2, 3) == (100, 175)
+    assert block_offsets(0, -1) == (0, -50)
+    assert block_offsets(2, 3) == (100, 100)
 
 
 def test_region_offsets_match_layout_doc():
@@ -82,11 +83,14 @@ def test_all_regions_present():
 
 # ── 2. SHEAR — pas row=0 na równi z Kresami ──────────────────────────────────
 
-def test_screen_shift_equals_75_row():
-    """screen_y_shift jest niezależne od kolumny: = 75·row (kompensacja shear)."""
+def test_screen_shift_equals_50_row():
+    """screen_y_shift jest niezależne od kolumny: = 50·row (kompensacja shear).
+
+    Krok 50·row (= wysokość bloku na ekranie) sprawia, że rzędy N-S stykają się.
+    """
     for key, (col, row) in REGION_BLOCKS.items():
         q_off, r_off = block_offsets(col, row)
-        assert screen_y_shift(q_off, r_off) == pytest.approx(75 * row), (
+        assert screen_y_shift(q_off, r_off) == pytest.approx(50 * row), (
             f"{key}: shear nieskompensowany (col={col})"
         )
 
