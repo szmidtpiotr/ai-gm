@@ -29,7 +29,7 @@ Pilot: czarnobor ↔ martwe_pustkowia. Gdy zadziała — te same rodziny/zakazy
 stosują się do każdej innej pary krain (uruchom z innym --a/--b).
 """
 from __future__ import annotations
-import argparse, json, subprocess, sys
+import argparse, json, subprocess, sys, math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -183,6 +183,112 @@ def apply_changes(changes, container, db):
         print("BŁĄD zapisu:", res.stderr, file=sys.stderr); sys.exit(1)
 
 
+# ── FEATHERING: organiczne, faliste wcięcia na granicy (#1545, prośba Piotra) ─
+# Region-ownership (siatka) zostaje prosty; falujemy TYLKO typ terenu w pasie
+# przygranicznym, tak by palce lasu/bagna schodziły w heath sąsiada i odwrotnie —
+# granica przestaje być prostą poziomą linią.
+REPAINT_FAM = {"FOREST", "WETLAND", "OPEN"}  # co wolno przemalować (nie woda/waste/struct)
+
+def _hash01(a: int, b: int, seed: int) -> float:
+    """Deterministyczny hash (a,b,seed) → [0,1). Bez random (odtwarzalne, resume-safe)."""
+    x = (a * 73856093) ^ (b * 19349663) ^ (seed * 83492791)
+    x &= 0xFFFFFFFF
+    x = ((x ^ (x >> 13)) * 1274126177) & 0xFFFFFFFF
+    x ^= (x >> 16)
+    return x / 0xFFFFFFFF
+
+def _vnoise1(t: float, seed: int) -> float:
+    """Gładki szum 1D (value noise, smoothstep) w [-1,1]."""
+    i = math.floor(t); f = t - i
+    a = _hash01(i, 0, seed); b = _hash01(i + 1, 0, seed)
+    u = f * f * (3 - 2 * f)
+    return 2.0 * (a + (b - a) * u) - 1.0
+
+def _edge_lines(G: dict, other: dict, south: bool):
+    """Dla każdej kolumny q: r krawędzi stykającej się z drugą krainą."""
+    from collections import defaultdict
+    cols = defaultdict(list)
+    for (q, r) in G:
+        cols[q].append(r)
+    edge = {}
+    for q, rs in cols.items():
+        edge[q] = max(rs) if south else min(rs)
+    return edge
+
+def feather(A: dict, B: dict, region_a: str, region_b: str, *,
+            seed=2026, band=5, amp1=3.0, period1=7.0, amp2=1.2, period2=2.7,
+            island_p=0.06):
+    """Zwróć zmiany [(region,q,r,old,new)] falujące styk A(płn)↔B(płd).
+
+    A = kraina północna (mniejsze r), B = południowa. Dla każdej kolumny liczymy
+    linię styku i falę wave(q); hex po stronie A z r<wave dostaje teren A (las/
+    bagno), z r>=wave → teren B (heath); symetrycznie po stronie B. Dodatkowo
+    rzadkie „wyspy" (island_p) tworzą oderwane płaty = fraktalna krawędź."""
+    a_edge = _edge_lines(A, B, south=True)    # dolna krawędź A
+    b_edge = _edge_lines(B, A, south=False)   # górna krawędź B
+    cols = set(a_edge) & set(b_edge)
+    seam = {q: (a_edge[q] + b_edge[q]) / 2.0 for q in cols}
+
+    def a_terrain(q, r):
+        return "swamp" if _hash01(q, r, seed + 3) < 0.5 else "forest"
+
+    def want_a_side(q, r):
+        s = seam[q]
+        wave = s + amp1 * _vnoise1(q / period1, seed) + amp2 * _vnoise1(q / period2, seed + 7)
+        wa = r < wave
+        if _hash01(q, r, seed + 99) < island_p:   # wyspa: odwróć
+            wa = not wa
+        return wa
+
+    changes = []
+    for grid, region, is_A in ((A, region_a, True), (B, region_b, False)):
+        edge = a_edge if is_A else b_edge
+        for (q, r), h in grid.items():
+            if q not in cols:
+                continue
+            depth = (edge[q] - r) if is_A else (r - edge[q])   # 0 = na krawędzi
+            if depth < 0 or depth >= band:
+                continue
+            cur = h["hex_type"]; curfam = fam(cur)
+            if protected(h) or curfam not in REPAINT_FAM:
+                continue
+            # Falujemy TYLKO na styku rodzin (heath ↔ las/bagno). Hex już będący po
+            # „swojej" stronie zostaje — nie mieszamy lasu z bagnem bez potrzeby,
+            # żeby nie przepisywać zatwierdzonego terenu Czarnoboru w kółko.
+            if want_a_side(q, r):
+                if curfam in ("FOREST", "WETLAND"):
+                    continue                      # już las/bagno — zostaw
+                new = a_terrain(q, r)             # heath → palec lasu/bagna
+            else:
+                if curfam == "OPEN":
+                    continue                      # już heath — zostaw
+                new = "heath"                     # las/bagno → palec wrzosu
+            if new != cur:
+                changes.append((region, q, r, cur, new))
+                h["hex_type"] = new
+    return changes
+
+
+def render_border(A: dict, B: dict, region_a: str, region_b: str,
+                  out_path: str, context=12, scale=14):
+    """Zapisz PNG pasa przygranicznego (obie krainy) kolorami hex_type."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from reseed_region_terrain import save_png  # renderer gry (flat-top axial)
+    a_edge = _edge_lines(A, B, south=True)
+    b_edge = _edge_lines(B, A, south=False)
+    cols = set(a_edge) & set(b_edge)
+    win = {}
+    for (q, r), h in A.items():
+        if q in cols and 0 <= a_edge[q] - r <= context:
+            win[(q, r)] = h
+    for (q, r), h in B.items():
+        if q in cols and 0 <= r - b_edge[q] <= context:
+            win[(q, r)] = h
+    save_png(win, f"{region_a} / {region_b}", "styk terenu (pas graniczny)",
+             Path(out_path), S=scale)
+    return len(win)
+
+
 def self_test():
     """Syntetyczny styk: pas gór (A) styka się z pasem jeziora (B). Reconcile
     ma wstawić pogórze/wrzos tak, że znika twardy skok MOUNTAIN↔WATER."""
@@ -202,7 +308,13 @@ def self_test():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--a"); ap.add_argument("--b")
-    ap.add_argument("--apply", action="store_true", help="wstaw mostki do DB (backup najpierw)")
+    ap.add_argument("--apply", action="store_true", help="zapisz do DB (backup najpierw)")
+    ap.add_argument("--feather", action="store_true",
+                    help="organiczne faliste wcięcia terenu na granicy (interdigitacja)")
+    ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--band", type=int, default=5, help="głębokość pasa feather (hexy/stronę)")
+    ap.add_argument("--amp", type=float, default=3.0, help="amplituda fali (rzędy)")
+    ap.add_argument("--png", default=None, help="prefix ścieżki: zapisz PNG przed/po feather")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--container", default="ai-gm-dev-backend-1")
     ap.add_argument("--db", default="/data/ai_gm.db")
@@ -215,6 +327,38 @@ def main():
 
     A = load_region(a.a, a.container, a.db)
     B = load_region(a.b, a.container, a.db)
+
+    if a.feather:
+        # A musi być krainą północną (mniejsze r). Zamień jeśli trzeba.
+        ra = sum(h["r"] for h in A.values()) / max(len(A), 1)
+        rb = sum(h["r"] for h in B.values()) / max(len(B), 1)
+        (An, Bn, an, bn) = (A, B, a.a, a.b) if ra <= rb else (B, A, a.b, a.a)
+        if a.png:
+            n = render_border(An, Bn, an, bn, f"{a.png}_before.png")
+            print(f"🖼  PNG przed: {a.png}_before.png ({n} hexów pasa)")
+        fch = feather(An, Bn, an, bn, seed=a.seed, band=a.band, amp1=a.amp)
+        # feather mógł wstawić las obok waste/wody sąsiada — domknij reconcile.
+        rch = reconcile(An, Bn, an, bn)
+        changes = fch + rch
+        from collections import Counter
+        print(f"═══ FEATHER {an}(płn) ↔ {bn}(płd)  seed={a.seed} band={a.band} amp={a.amp} ═══")
+        print(f"zmiany terenu: {len(fch)} (feather) + {len(rch)} (reconcile domykający) = {len(changes)}")
+        per = Counter((c[0], c[3] + '→' + c[4]) for c in changes)
+        for (reg, tr), n in per.most_common(20):
+            print(f"  {reg:16} {tr:22} ×{n}")
+        _, harsh_after = analyze(An, Bn)
+        print(f"twarde skoki po feather+reconcile: {len(harsh_after)}")
+        if a.png:
+            n = render_border(An, Bn, an, bn, f"{a.png}_after.png")
+            print(f"🖼  PNG po: {a.png}_after.png ({n} hexów pasa)")
+        if a.apply:
+            print("\n📦 backup DB…"); subprocess.run(["./scripts/backup.sh"], cwd=str(ROOT))
+            apply_changes(changes, a.container, a.db)
+            print(f"✅ zastosowano {len(changes)} zmian. Snapshot obu krain + commit.")
+        else:
+            print("\n(dry-run — nic nie zapisano. Dodaj --apply.)")
+        return
+
     pairs, harsh = analyze(A, B)
     total = sum(pairs.values())
     print(f"═══ Granica {a.a} ↔ {a.b} ═══")

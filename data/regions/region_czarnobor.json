@@ -12553,7 +12553,8 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "temp_camp_77779950_1784907078"
   },
   {
    "q": 67,
@@ -12569,7 +12570,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "location_key": "zloty_las"
   },
   {
    "q": 69,
@@ -13607,7 +13609,7 @@
   {
    "q": 98,
    "r": -4,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -15153,7 +15155,7 @@
   {
    "q": 91,
    "r": 0,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17259,7 +17261,7 @@
   {
    "q": 84,
    "r": 6,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17267,7 +17269,7 @@
   {
    "q": 85,
    "r": 6,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17275,7 +17277,7 @@
   {
    "q": 86,
    "r": 6,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17283,7 +17285,7 @@
   {
    "q": 87,
    "r": 6,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17563,7 +17565,7 @@
   {
    "q": 84,
    "r": 7,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17571,7 +17573,7 @@
   {
    "q": 85,
    "r": 7,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17836,7 +17838,7 @@
   {
    "q": 82,
    "r": 8,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -17844,7 +17846,7 @@
   {
    "q": 83,
    "r": 8,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -18492,7 +18494,7 @@
   {
    "q": 68,
    "r": 11,
-   "hex_type": "trzesawisko",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -18893,7 +18895,7 @@
   {
    "q": 64,
    "r": 13,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19285,7 +19287,7 @@
   {
    "q": 67,
    "r": 15,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19501,7 +19503,7 @@
   {
    "q": 56,
    "r": 17,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19565,7 +19567,7 @@
   {
    "q": 64,
    "r": 17,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19573,7 +19575,7 @@
   {
    "q": 65,
    "r": 17,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19661,7 +19663,7 @@
   {
    "q": 60,
    "r": 18,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19677,7 +19679,7 @@
   {
    "q": 62,
    "r": 18,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
    "encounter_chance": 0.3
@@ -19685,7 +19687,7 @@
   {
    "q": 63,
    "r": 18,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.3
@@ -19773,7 +19775,7 @@
   {
    "q": 60,
    "r": 19,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19781,7 +19783,7 @@
   {
    "q": 61,
    "r": 19,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.3
@@ -19853,7 +19855,7 @@
   {
    "q": 58,
    "r": 20,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19861,7 +19863,7 @@
   {
    "q": 59,
    "r": 20,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19917,7 +19919,7 @@
   {
    "q": 56,
    "r": 21,
-   "hex_type": "forest",
+   "hex_type": "heath",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
    "encounter_chance": 0.25
@@ -19933,7 +19935,7 @@
   {
    "q": 50,
    "r": 22,
-   "hex_type": "swamp",
+   "hex_type": "heath",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.25
