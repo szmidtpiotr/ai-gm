@@ -397,6 +397,7 @@ export default function CreateCharacter() {
         {step === 2 && (
           <StepStats
             archetype={archetype}
+            race={race}
             statBases={statBases}
             bonus={bonus}
             raceMod={raceMod}
@@ -681,6 +682,7 @@ function PickCard({
 // ── Krok 3: Cechy ───────────────────────────────────────────────────────────
 function StepStats({
   archetype,
+  race,
   statBases,
   bonus,
   raceMod,
@@ -690,6 +692,7 @@ function StepStats({
   onReset,
 }: {
   archetype: Archetype;
+  race: Race;
   statBases: Record<StatKey, number>;
   bonus: Partial<Record<StatKey, number>>;
   raceMod: Partial<Record<StatKey, number>>;
@@ -699,7 +702,7 @@ function StepStats({
   onReset: () => void;
 }) {
   const hp = calcHp(archetype, eff.CON);
-  const mana = calcMana(archetype, eff.INT);
+  const mana = calcMana(archetype, eff.INT, 1, race);
   const init = statMod(eff.DEX);
   const fmtMod = (v: number) => `${v > 0 ? "+" : ""}${v}`;
   const bonusStr = Object.entries(bonus)

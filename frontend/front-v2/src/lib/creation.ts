@@ -155,11 +155,15 @@ export function calcHp(archetype: Archetype, con: number, level = 1): number {
   return Math.max(1, base + statMod(con) * level);
 }
 
-export function calcMana(archetype: Archetype, intv: number, level = 1): number {
+// #1475 — płaski bonus rasowy do many (tylko casterzy). Lustro backendu RACE_MANA_BONUS.
+export const RACE_MANA_BONUS: Partial<Record<Race, number>> = { pietnowani: 2 };
+
+export function calcMana(archetype: Archetype, intv: number, level = 1, race: Race = "human"): number {
+  const bonus = RACE_MANA_BONUS[race] ?? 0;
   // #1475 — gish: połowiczna pula many 4 + (INT_mod × level) / 2 (floor).
-  if (archetype === "wojownik_mag") return Math.max(1, 4 + Math.floor((statMod(intv) * level) / 2));
+  if (archetype === "wojownik_mag") return Math.max(1, 4 + Math.floor((statMod(intv) * level) / 2) + bonus);
   if (archetype !== "scholar") return 0;
-  return Math.max(1, 8 + statMod(intv) * level);
+  return Math.max(1, 8 + statMod(intv) * level + bonus);
 }
 
 /** Netto budżet umiejętności = suma podniesień MINUS suma obniżeń (Opcja A #747). */

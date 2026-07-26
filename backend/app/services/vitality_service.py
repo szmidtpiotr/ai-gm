@@ -42,6 +42,12 @@ ARCHETYPE_BASE_MANA: dict[str, int] = {
 #: Wojownik-Mag = połowiczny gish. Reszta = 0 many.
 CASTER_ARCHETYPES: frozenset[str] = frozenset({"scholar", "wojownik_mag"})
 
+#: #1475 — płaski bonus rasowy do max_many (tylko dla rzucających czary). Krew
+#: oswojona Piętnowanego niesie więcej mocy. Wartość STARTOWA — Sandbox-tunable.
+#: Bonus SIEDZI W FORMULE (calculate_mana), więc każda ścieżka przeliczająca manę,
+#: która poda rasę, dostaje go identycznie — zero path-dependence (#1466).
+RACE_MANA_BONUS: dict[str, int] = {"pietnowani": 2}
+
 
 def is_caster(archetype: str | None) -> bool:
     """Czy archetyp rzuca czary (ma pulę many). Jedno źródło prawdy dla walki."""
@@ -73,25 +79,31 @@ def calculate_hp(archetype: str, con: int, level: int = 1) -> int:
     return max(1, base + stat_modifier(con) * level)
 
 
-def calculate_mana(archetype: str, int_stat: int, level: int = 1) -> int:
+def calculate_mana(archetype: str, int_stat: int, level: int = 1, race: str = "human") -> int:
     """
     Mana per archetype (minimum 1 for casters, 0 for non-casters):
       Scholar (Uczony)       : 8 + INT_mod × level
       Wojownik-Mag (gish)    : 4 + (INT_mod × level) // 2   (#1475 — połowiczna pula)
       Warrior / Rogue / etc. : 0
+    Plus racial flat bonus for casters (RACE_MANA_BONUS): Piętnowany +2 (#1475).
 
     Args:
         archetype: "warrior" | "scholar" | "rogue" | "wojownik_mag" | "ranger"
         int_stat: INT stat value (e.g. 12)
         level: character level (1 at creation)
+        race: character race — adds RACE_MANA_BONUS for casters (path-independent).
     """
     arc = archetype.strip().lower()
     if arc == "scholar":
-        return max(1, ARCHETYPE_BASE_MANA["scholar"] + stat_modifier(int_stat) * level)
-    if arc == "wojownik_mag":
+        base = ARCHETYPE_BASE_MANA["scholar"] + stat_modifier(int_stat) * level
+    elif arc == "wojownik_mag":
         # #1475 — gish: baza 4 + połowa progresji INT (zaokrąglona w dół).
-        return max(1, ARCHETYPE_BASE_MANA["wojownik_mag"] + (stat_modifier(int_stat) * level) // 2)
-    return 0
+        base = ARCHETYPE_BASE_MANA["wojownik_mag"] + (stat_modifier(int_stat) * level) // 2
+    else:
+        return 0
+    # Bonus rasowy tylko dla rzucających czary (base jest tu zawsze pulą maga).
+    base += RACE_MANA_BONUS.get(str(race or "human").strip().lower(), 0)
+    return max(1, base)
 
 
 # ── #1466 — single source of truth for max_hp / max_mana ────────────────────
@@ -109,9 +121,9 @@ def recompute_max_hp(archetype: str, con: int, level: int) -> int:
     return calculate_hp(archetype, con, level)
 
 
-def recompute_max_mana(archetype: str, int_stat: int, level: int) -> int:
-    """Authoritative max_mana = 8 + INT_mod × level for scholars, else 0. See #1466."""
-    return calculate_mana(archetype, int_stat, level)
+def recompute_max_mana(archetype: str, int_stat: int, level: int, race: str = "human") -> int:
+    """Authoritative max_mana = formula per archetype + bonus rasowy. See #1466, #1475."""
+    return calculate_mana(archetype, int_stat, level, race)
 
 
 def apply_level_up(

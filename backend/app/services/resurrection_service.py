@@ -393,8 +393,10 @@ def _apply_xp_revert(
         stats = sheet.get("stats") or {}
         con = int(stats.get("CON") or stats.get("con") or 10)
         int_stat = int(stats.get("INT") or stats.get("int") or 10)
+        from app.services.race_start_service import character_race as _char_race
+        _rc = _char_race(conn, character_id) or "human"  # #1475 bonus many rasy (odporny na brak kolumny)
         sheet["max_hp"] = calculate_hp(arc, con, new_level)
-        sheet["max_mana"] = calculate_mana(arc, int_stat, new_level)
+        sheet["max_mana"] = calculate_mana(arc, int_stat, new_level, _rc)
     except Exception as e:
         logger.warning("recompute_max_hp_failed", error=str(e))
 
@@ -691,8 +693,10 @@ def apply_resurrection(
     _stats = sheet.get("stats") or {}
     _con = int(_stats.get("CON", 10) or 10)
     _int = int(_stats.get("INT", 10) or 10)
+    from app.services.race_start_service import character_race as _char_race
+    _revrace = _char_race(conn, character_id) or "human"  # #1475 (odporny na brak kolumny)
     sheet["max_hp"] = recompute_max_hp(_arch, _con, _lvl)
-    sheet["max_mana"] = recompute_max_mana(_arch, _int, _lvl)
+    sheet["max_mana"] = recompute_max_mana(_arch, _int, _lvl, _revrace)
     max_hp = int(sheet.get("max_hp") or 1)
     revive_hp = max(1, max_hp // 2)
     sheet["current_hp"] = revive_hp

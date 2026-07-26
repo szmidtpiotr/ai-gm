@@ -1100,7 +1100,7 @@ def _create_roll_initial_sheet(req) -> tuple[dict, str, str | None]:
         con_val = created_sheet["stats"].get("CON", 10)
         int_val = created_sheet["stats"].get("INT", 10)
         _hp = calculate_hp(archetype, con_val, int(created_sheet.get("level", 1)))
-        _mana = calculate_mana(archetype, int_val, int(created_sheet.get("level", 1)))
+        _mana = calculate_mana(archetype, int_val, int(created_sheet.get("level", 1)), race)  # #1475 bonus many rasy
         created_sheet["current_hp"] = _hp
         created_sheet["max_hp"] = _hp
         created_sheet["current_mana"] = _mana
@@ -1479,7 +1479,7 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
         int_val = created_sheet["stats"].get("INT", 10)
         level = int(created_sheet.get("level", 1))
         _hp = calculate_hp(archetype, con_val, level)
-        _mana = calculate_mana(archetype, int_val, level)
+        _mana = calculate_mana(archetype, int_val, level, race)  # #1475 bonus many rasy
         created_sheet["current_hp"] = _hp
         created_sheet["max_hp"] = _hp
         created_sheet["current_mana"] = _mana
@@ -2572,6 +2572,11 @@ def dwarf_repair(
 
 SPELL_LEARN_COST = 75
 SPELL_UPGRADE_COSTS = {2: 50, 3: 100}
+# #1475 — Wojownik-Mag (gish) rozwija czary WOLNIEJ niż Uczony. W designie ujęte
+# jako „1 pkt arkanów na 2 poziomy" (Uczony 1/poziom), ale realna waluta progresji
+# czarów to XP (arcane_points są martwe — patrz #652). Odwzorowanie tempa: gish płaci
+# 2× XP za naukę i ulepszenie czaru. Wartość STARTOWA — Sandbox-tunable.
+GISH_SPELL_XP_MULTIPLIER = 2
 
 
 class SpellSpendRequest(BaseModel):
@@ -2598,8 +2603,12 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: 
         if not row:
             raise HTTPException(status_code=404, detail="Character not found")
         sheet = parse_character_sheet(row["sheet_json"])
-        if (sheet.get("archetype") or "").lower() != "scholar":
+        from app.services.vitality_service import is_caster as _is_caster
+        _arch = (sheet.get("archetype") or "").lower()
+        if not _is_caster(_arch):
             raise HTTPException(status_code=400, detail="only_scholar")
+        # #1475 — gish płaci 2× XP (wolniejsze tempo rozwoju czarów niż Uczony).
+        learn_cost = SPELL_LEARN_COST * (GISH_SPELL_XP_MULTIPLIER if _arch == "wojownik_mag" else 1)
         # #1467 — learning a new spell counts toward the per-level cap (max 2
         # new skills/spells). learn_spell rejects duplicates, so this is always
         # a first acquisition here.
@@ -2609,9 +2618,9 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: 
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         xp = int(sheet.get("xp_available") or 0)
-        if xp < SPELL_LEARN_COST:
+        if xp < learn_cost:
             raise HTTPException(status_code=400, detail="insufficient_xp")
-        sheet["xp_available"] = xp - SPELL_LEARN_COST
+        sheet["xp_available"] = xp - learn_cost
         commit_new_skill(sheet, adv_new)
         conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
                      (json.dumps(sheet, ensure_ascii=False), character_id))
@@ -2623,11 +2632,11 @@ def spend_spell_learn(character_id: int, req: SpellSpendRequest, authorization: 
             "INSERT INTO character_xp_grants "
             "(character_id, campaign_id, amount, reason, source, granted_by_user_id) "
             "VALUES (?, ?, ?, ?, 'spell_learn', ?)",
-            (character_id, row["campaign_id"] or 0, -SPELL_LEARN_COST,
+            (character_id, row["campaign_id"] or 0, -learn_cost,
              f"Nauka zaklęcia: {req.spell_key}", uid),
         )
         conn.commit()
-        return {"ok": True, "spell_key": req.spell_key, "xp_spent": SPELL_LEARN_COST,
+        return {"ok": True, "spell_key": req.spell_key, "xp_spent": learn_cost,
                 "xp_available": sheet["xp_available"]}
     except HTTPException:
         conn.rollback()
@@ -2653,7 +2662,9 @@ def spend_spell_upgrade(character_id: int, req: SpellSpendRequest, authorization
         if not row:
             raise HTTPException(status_code=404, detail="Character not found")
         sheet = parse_character_sheet(row["sheet_json"])
-        if (sheet.get("archetype") or "").lower() != "scholar":
+        from app.services.vitality_service import is_caster as _is_caster
+        _arch = (sheet.get("archetype") or "").lower()
+        if not _is_caster(_arch):
             raise HTTPException(status_code=400, detail="only_scholar")
         spell_row = conn.execute(
             "SELECT rank FROM character_spells WHERE character_id = ? AND spell_key = ?",
@@ -2666,6 +2677,9 @@ def spend_spell_upgrade(character_id: int, req: SpellSpendRequest, authorization
         cost = SPELL_UPGRADE_COSTS.get(new_rank)
         if not cost:
             raise HTTPException(status_code=400, detail="spell_at_max_rank")
+        # #1475 — gish płaci 2× XP za ulepszenie (wolniejsze tempo niż Uczony).
+        if _arch == "wojownik_mag":
+            cost *= GISH_SPELL_XP_MULTIPLIER
         xp = int(sheet.get("xp_available") or 0)
         if xp < cost:
             raise HTTPException(status_code=400, detail="insufficient_xp")
@@ -2882,7 +2896,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         _r_stats = rebuilt["stats"]
         _r_level = int(rebuilt.get("level", 1) or 1)
         _hp = calculate_hp(archetype, int(_r_stats.get("CON", 10)), _r_level)
-        _mana = calculate_mana(archetype, int(_r_stats.get("INT", 10)), _r_level)
+        _mana = calculate_mana(archetype, int(_r_stats.get("INT", 10)), _r_level, race)  # #1475 bonus many rasy
         rebuilt["current_hp"] = _hp
         rebuilt["max_hp"] = _hp
         rebuilt["current_mana"] = _mana

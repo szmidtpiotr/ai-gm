@@ -604,8 +604,10 @@ def admin_cheat(
             int_stat = int(stats.get("INT", 10) or 10)
             old_max_hp = int(sheet.get("max_hp") or 0)
             old_max_mana = int(sheet.get("max_mana") or 0)
+            from app.services.race_start_service import character_race as _char_race
+            _cvrace = _char_race(conn, character_id) or "human"  # #1475 (odporny na brak kolumny)
             new_max_hp = calculate_hp(archetype, con, level)
-            new_max_mana = calculate_mana(archetype, int_stat, level)
+            new_max_mana = calculate_mana(archetype, int_stat, level, _cvrace)
             sheet["max_hp"] = new_max_hp
             sheet["max_mana"] = new_max_mana
             # current_hp/mana: keep proportional if not at full, or cap at new max

@@ -575,15 +575,20 @@ def spend_stat_point_up(
     # source of truth) instead of incremental delta math. Buying CON or INT
     # yields exactly base + mod×level — identical to every other path (rest,
     # resurrection, admin). Covers the #1436 "INT buy → no extra mana" gap too.
-    from app.services.vitality_service import recompute_max_hp, recompute_max_mana
+    from app.services.vitality_service import recompute_max_hp, recompute_max_mana, is_caster
     archetype = str(sheet.get("archetype") or "warrior").strip().lower()
     level = int(sheet.get("level") or 1)
     con_val = int(stats.get("CON", 10) or 10)
     int_val = int(stats.get("INT", 10) or 10)
+    # #1475 — rasa niesie bonus do many (Piętnowany +2); z DB (nie ma jej w arkuszu).
+    # character_race jest odporny na brak kolumny race (starsze fikstury) → "human".
+    from app.services.race_start_service import character_race as _char_race
+    _race = _char_race(conn, character_id) or "human"
     if sk.upper() == "CON":
         sheet["max_hp"] = recompute_max_hp(archetype, con_val, level)
-    if sk.upper() == "INT" and archetype == "scholar":
-        sheet["max_mana"] = recompute_max_mana(archetype, int_val, level)
+    # #1475 — gish (wojownik_mag) też jest casterem: INT-buy ma podnosić manę.
+    if sk.upper() == "INT" and is_caster(archetype):
+        sheet["max_mana"] = recompute_max_mana(archetype, int_val, level, _race)
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",

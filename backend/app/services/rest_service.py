@@ -247,8 +247,12 @@ def perform_long_rest(
         # #1466 — recompute max_hp/mana from the formula for the NEW level
         # (single source of truth, path-independent). Replaces the per-level
         # incremental apply_level_up loop, which drifted for CON/INT < 10.
+        # #1475 — rasa niesie bonus do many (Piętnowany +2); z DB (nie ma jej w arkuszu).
+        # character_race jest odporny na brak kolumny race (starsze fikstury) → "human".
+        from app.services.race_start_service import character_race as _char_race
+        _rrace = _char_race(conn, character_id) or "human"
         new_max_hp = recompute_max_hp(archetype, con, new_level)
-        new_max_mana = recompute_max_mana(archetype, int_stat, new_level)
+        new_max_mana = recompute_max_mana(archetype, int_stat, new_level, _rrace)
         sheet["level"] = new_level
         sheet["max_hp"] = new_max_hp
         sheet["max_mana"] = new_max_mana
