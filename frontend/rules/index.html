@@ -494,6 +494,12 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#rasy-luk">Elfi łuk</a></li>
           <li><a href="#rasy-strojenie">Magia strojenia</a></li>
           <li><a href="#rasy-zniknięcie">Zniknięcie w kniei</a></li>
+          <li><a href="#rasy-pietnowani">Piętnowani</a></li>
+          <li><a href="#rasy-pietnowani-droga">Droga Piętnowanego</a></li>
+          <li><a href="#rasy-wojownik-mag">Wojownik-Mag (gish)</a></li>
+          <li><a href="#rasy-krew-oswojona">Magia krwi oswojonej</a></li>
+          <li><a href="#rasy-pietno">Piętno społeczne</a></li>
+          <li><a href="#rasy-odpornosc-rdzenia">Odporność na Rdzeń</a></li>
         </ul>
       </li>
       <li class="chap">
@@ -2524,7 +2530,7 @@ document.addEventListener('DOMContentLoaded',function(){
     <section id="rasy">
       <p class="eyebrow">Kreacja postaci</p>
       <h1><span class="num">X</span>Rasy bohatera</h1>
-      <p class="subtitle">Człowiek, Krasnolud i Elf leśny — trzy sposoby bycia w tym świecie</p>
+      <p class="subtitle">Człowiek, Krasnolud, Elf leśny i Piętnowani — cztery sposoby bycia w tym świecie</p>
       <hr class="rule">
 
       <p>Rasę wybierasz w Kroku 0 kreatora postaci, przed wyborem archetypu. Rasa nadaje stałe modyfikatory statystyk i odblokowuje unikalne cechy — widoczne na karcie postaci w sekcji <em>Cechy rasowe</em>. Narrator zna rasę twojego bohatera i reaguje na nią w dialogach z NPC, opisach miejsc i narracji magicznej.</p>
@@ -2733,6 +2739,78 @@ document.addEventListener('DOMContentLoaded',function(){
         <h4>Cecha rasowa · Zniknięcie w kniei</h4>
         <p><strong>Raz na dobę</strong> w lesie lub na bagnie ucieczka z walki udaje się elfowi <strong>automatycznie</strong> — bez rzutu przeciwnego, niezależnie od tego, jak szybki jest przeciwnik.</p>
         <p>Poza dzikim terenem (miasto, gościniec, loch, góry) uciekasz normalnie, testem. Atut wraca następnego dnia gry.</p>
+      </div>
+
+      <h2 id="rasy-pietnowani">Piętnowani</h2>
+      <p>Potomkowie kolonistów porzuconych przez Imperium na <strong>Martwych Pustkowiach</strong> przy najpłytszym Rdzeniu świata. Pokolenia życia przy pęknięciach naznaczyły ich krew — popielata skóra, blade oczy, widoczne <em>piętno</em> — a Rdzeń płynie w ich żyłach <em>oswojony</em>, nie dziki. Nie są nieumarli ani obcy: to ludzie, których Rdzeń przemienił. Obcy się ich boją; oni nauczyli się z tym żyć.</p>
+      <p style="margin-top:-.4em"><a class="kronika-x" href="/showcase/swiat.html#lud-pietnowani">Historia i motywy ludu — Kronika Świata →</a></p>
+
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Piętnowany · modyfikatory statystyk</h4>
+        <p>Stosowane PO bonusach archetypu:</p>
+        <ul>
+          <li><strong>+2 INT</strong> — krew oswojona z Rdzeniem, umysł nawykły do magii</li>
+          <li><strong>+1 MĄD</strong> — czujność wychowana na pustkowiu</li>
+          <li><strong>−1 KON</strong> — popielate, kruche ciało</li>
+        </ul>
+        <p><em>Przykład:</em> Uczony-Piętnowany startuje z INT 14 zamiast 12 i WIS 11 zamiast 10, ale CON 9 zamiast 10.</p>
+      </div>
+
+      <h2 id="rasy-pietnowani-droga">Droga Piętnowanego</h2>
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Archetypy · dwie drogi magii</h4>
+        <p>Piętnowany gra <strong>tylko drogą magii</strong>: <strong>Uczonym</strong> (pełny mag) albo <strong>Wojownikiem-Magiem</strong>. Karty Wojownika i Łotrzyka nie pojawiają się w kreatorze po wybraniu tej rasy — krew oswojona z Rdzeniem to nie stal ani skrytobójstwo.</p>
+      </div>
+
+      <h2 id="rasy-wojownik-mag">Wojownik-Mag (gish)</h2>
+      <div class="entry">
+        <h4>Archetyp rasowy · Wojownik-Mag</h4>
+        <p>„Miecz w jednej ręce, popiół w drugiej." <strong>Jedyny lud z tym archetypem.</strong> Nie jest ani pełnym wojownikiem, ani pełnym magiem — czerpie z obu dróg, ale oddaje szczyt każdej. To wojownik z zaklęciem na krytyczny moment, nie artylerzysta.</p>
+        <p>Wartości startowe (strojne na Sandboxie):</p>
+        <ul>
+          <li><strong>HP baza 8</strong> — twardszy od Uczonego (6), lżejszy od Wojownika (10)</li>
+          <li><strong>Mana połowiczna</strong> — <em>4 + poł. progresji INT</em> (Uczony: 8 + pełna progresja INT)</li>
+          <li><strong>Czary tylko tier 1–2</strong>, rozwój <strong>do rangi R2</strong> (Uczony: tier 1–5, R3)</li>
+          <li><strong>Broń tylko jednoręczna</strong> — bez broni dwuręcznej i bez drugiej broni w lewej ręce (druga ręka zostaje wolna na zaklęcia; brak walki dwoma broniami)</li>
+          <li>Staty archetypu: <strong>+1 SIŁ · +1 INT · +1 KON</strong></li>
+        </ul>
+        <p><em>Naturalna bariera balansu:</em> jedna akcja na turę. Każda tura zaklęcia to tura bez miecza — dlatego gish nie zdominuje ani walki, ani magii.</p>
+      </div>
+
+      <h2 id="rasy-krew-oswojona">Magia krwi oswojonej</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Magia krwi oswojonej</h4>
+        <p>Piętnowany nie rzuca ludzkich arkanów, krasnoludzkiego Rdzenia ani elfiego strojenia. Uczy się <strong>szkoły krwi oswojonej</strong> — magii popiołu, soli i piętna. Kolumna „poziom" to poziom bohatera, od którego czar da się kupić:</p>
+        <table class="mechanic-table" style="margin:0.8em 0">
+          <thead><tr><th>Nazwa</th><th>Poziom bohatera</th><th>Efekt</th></tr></thead>
+          <tbody>
+            <tr><td>Popielny Pocisk</td><td>1</td><td>1k8 obrażeń — smuga rozżarzonego popiołu.</td></tr>
+            <tr><td>Solna Osłona</td><td>1</td><td>Pochłania następny cios wroga (czar obronny).</td></tr>
+            <tr><td>Krew Zrasta</td><td>3</td><td>Leczy 2k4 — krew zamyka ranę popiołem.</td></tr>
+            <tr><td>Pęta Żaru</td><td>3</td><td><strong>Unieruchomienie</strong> wroga, bez obrażeń.</td></tr>
+            <tr><td>Solna Włócznia</td><td>3</td><td>2k6 obrażeń + <strong>ogłuszenie</strong> (rzut obronny KON DC 12).</td></tr>
+            <tr><td>Chmura Popiołu</td><td>5</td><td><strong>Dezorientacja obszarowa</strong> — gryzący popiół zasłania pole.</td></tr>
+            <tr><td>Rozpalona Żyła</td><td>5</td><td>2k6 obrażeń + <strong>spowolnienie</strong> (rzut obronny KON DC 12).</td></tr>
+            <tr><td>Wał Krwi</td><td>7</td><td>Pochłania <strong>dwa</strong> kolejne ciosy — piętno twardnieje jak zbroja.</td></tr>
+            <tr><td>Stos Popiołu</td><td>9</td><td><strong>Obszarowo</strong> 3k8 + podpalenie. Szczyt szkoły.</td></tr>
+          </tbody>
+        </table>
+        <p><strong>Czary startowe:</strong> Popielny Pocisk, Solna Osłona, Krew Zrasta, Pęta Żaru.</p>
+        <p><strong>Wojownik-Mag</strong> włada tylko pierwszą piątką (tier 1–2) — ale ta piątka to komplet ról: uderz, zasłoń się, wylecz, zatrzymaj. <strong>Uczony</strong> sięga po wszystkie dziewięć.</p>
+        <p><strong>Miscast (krew oswojona):</strong> tak jak u człowieka tylko na <em>Nat 1</em> — ale kara jest <strong>najłagodniejsza ze wszystkich ras</strong>. Do 4. poziomu czar po prostu się rozprasza; wyżej tracisz 1k4, a od 8. poziomu 1k6 i ogłuszenie. Nigdy nie ma efektu kaskadowego. Narrator opisuje to jako <em>piętno, które rozgrzewa się, i popiół, który sypie z rękawa</em> — ciało bierze cios na siebie, bo przywykło przez pokolenia.</p>
+      </div>
+
+      <h2 id="rasy-pietno">Piętno społeczne</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Piętno społeczne</h4>
+        <p>Obcy boją się Piętna. W sklepach poza własną enklawą Piętnowany płaci <strong>+10%</strong> za kupowany towar (odwrotność krasnoludzkiego <a href="#rasy-kowalskie">kowalskiego oka</a>, które daje −15%). To mechaniczna przeciwwaga bonusów rasy: łagodniejszego miscastu i odporności.</p>
+        <p><em>Wśród swoich</em> — w enklawie Solnego Progu — piętno jest znakiem rodowym, nie skazą; tam narrator gra zaufanie zamiast lęku.</p>
+      </div>
+
+      <h2 id="rasy-odpornosc-rdzenia">Odporność na Rdzeń</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Odporność na Rdzeń</h4>
+        <p>Żyjąc wśród nieumarłych i istot Rdzenia od pokoleń, Piętnowany mniej cierpi od ich mocy: obrażenia <strong>nekrotyczne</strong> i <strong>Rdzenia</strong> są zmniejszone o <strong>2</strong> (nigdy poniżej 1 na trafienie). Zwykłej stali, ognia czy mrozu to nie dotyczy.</p>
       </div>
 
     </section>

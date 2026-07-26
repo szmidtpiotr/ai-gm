@@ -594,6 +594,31 @@ Bilans czarów bojowych: <b>człowiek 34 · krasnolud 12 · elf 11</b> (pule ca�
 Wyłączone jako duplikaty: <code>frost_bolt</code>, <code>lightning_arrow</code> (ściśle gorsze
 od Ognistego Pocisku i Lodowej Lancy, nikt ich nie znał). <code>acid_splash</code> dostał rolę
 antypancerną, <code>magic_bolt</code> przeszedł na T2 (2d6 za 2 many bił wszystko na T1).</p>
+<h4>Piętnowani (#1475)</h4>
+<p><b>Kim są:</b> potomkowie ludzi, którzy nie uciekli po Wielkim Pęknięciu — pokolenia życia
+przy płytkim Rdzeniu naznaczyły krew (popielata skóra, blade oczy, widoczne piętno). Rasa
+gra <b>tylko drogą magii</b>: <b>Uczony</b> (pełny mag) albo <b>Wojownik-Mag</b> — kart Wojownika
+i Łotrzyka nie ma w kreatorze po wybraniu tej rasy (backend też je odrzuca). Staty rasowe:
+<b>+2 INT · +1 MĄD · −1 KON</b>.</p>
+<p><b>Wojownik-Mag (gish) — nowy archetyp, ekskluzywny dla Piętnowanych.</b> „Miecz w jednej
+ręce, popiół w drugiej". Dźwignie balansowe (wartości startowe, Sandbox): HP baza <b>8</b>
+(między Wojownikiem 10 a Uczonym 6), mana <b>połowiczna</b> (4 + INT_mod×poziom/2 zamiast
+8 + INT_mod×poziom), czary <b>tylko tier 1–2</b> i rozwój <b>do R2</b> (Uczony: tier 1–5, R3),
+broń <b>tylko jednoręczna</b> (bez dwuręcznej i bez broni w off-hand — druga ręka wolna na
+zaklęcia, brak dual-wielda). Karta gisha pokazuje się <b>wyłącznie</b> Piętnowanym.</p>
+<p><b>Start i haki.</b> Kampania startuje na <b>Martwych Pustkowiach</b>, w enklawie
+<b>„Solny Próg"</b>: domyślnie w <b>„Gospodzie dla Obcych"</b>, wariant <b>„Dom Starszych"</b>.
+Pierwsze haki to <b>Raszid</b> (Starszy enklawy, chroni swoich) kontra <b>Siostra Verena</b>
+(inkwizytorka Misji Światła, nieufna wobec Piętna) — napięcie „swoi kontra obcy, którzy się
+ciebie boją".</p>
+<p><b>Cechy rasowe (przeciwwagi).</b> <b>Magia krwi oswojonej:</b> miscast łagodniejszy niż
+u innych ras (flaga <code>blood_miscast</code> dla narratora, flavor popiołu/piętna).
+<b>Piętno społeczne:</b> ceny w sklepach <b>+10%</b> (obcy się go boją — odwrotność
+krasnoludzkiego −15%). <b>Odporność:</b> obrażenia <code>necrotic</code>/<code>rdzen</code>
+zmniejszone o 2 (żyją wśród nieumarłych od pokoleń). Czary Piętnowanego to osobna pula
+<b>krwi oswojonej</b> (9 czarów, <code>race_lock = pietnowani</code> w <b>Zawartość → Czary</b>):
+Popielny Pocisk, Solna Osłona, Krew Zrasta, Pęta Żaru, Solna Włócznia (tier 1–2, dostępne
+gishowi), oraz Chmura Popiołu, Rozpalona Żyła, Wał Krwi, Stos Popiołu (tier 3–5, tylko Uczony).</p>
 <p><b>Bramka umiejętności klasa+rasa (#1522):</b> do tej pory kreator dawał każdemu archetypowi
 cały katalog 43 umiejętności — Zwiadowca bez many mógł wziąć <i>Tarczę Many</i>. Teraz trzy grupy
 są zamknięte: MAGICZNE (<code>arcana</code>, <code>arcane_ward</code>, <code>mana_shield</code>,
