@@ -1428,5 +1428,115 @@
     "updated_at": "2026-07-13 16:12:43",
     "gold_min": 1,
     "gold_max": 6
+  },
+  {
+    "key": "loot_bezimienna_straz",
+    "label": "Łupy: Bezimienna Straż",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 8,
+    "gold_max": 30
+  },
+  {
+    "key": "loot_komendant_aschfeld",
+    "label": "Łupy: Popielny Komendant",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 15,
+    "gold_max": 55
+  },
+  {
+    "key": "loot_kosciany_sep",
+    "label": "Łupy: Kościany Sęp",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 0,
+    "gold_max": 3
+  },
+  {
+    "key": "loot_krwawy_hrabia",
+    "label": "Łupy: Krwawy Hrabia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 40,
+    "gold_max": 120
+  },
+  {
+    "key": "loot_kultysta_pekniecia",
+    "label": "Łupy: Kultysta Pęknięcia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 3,
+    "gold_max": 16
+  },
+  {
+    "key": "loot_piaskowy_ghul",
+    "label": "Łupy: Piaskowy Ghul",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 0,
+    "gold_max": 4
+  },
+  {
+    "key": "loot_popielny_rycerz",
+    "label": "Łupy: Popielny Rycerz",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 6,
+    "gold_max": 26
+  },
+  {
+    "key": "loot_solny_umarlak",
+    "label": "Łupy: Solny Umarlak",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 0,
+    "gold_max": 8
+  },
+  {
+    "key": "loot_widmo_kolonisty",
+    "label": "Łupy: Widmo Kolonisty",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 2,
+    "gold_max": 12
+  },
+  {
+    "key": "loot_widmo_studni",
+    "label": "Łupy: Widmo Studni Głosów",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 4,
+    "gold_max": 20
   }
 ]
