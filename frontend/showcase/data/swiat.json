@@ -52,7 +52,7 @@
    "img": "assets/img/kraina-martwe-pustkowia.webp",
    "desc": "Serce metafizyki świata. Tu Rdzeń jest najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi. Świątynia Pradawnych — „wnętrze martwego boga” — to pęknięcie nad samym Rdzeniem. Główne pole dla lochów.",
    "anchor": "kraina-pustkowia",
-   "available": false,
+   "available": true,
    "key": "martwe_pustkowia"
   }
  ],
