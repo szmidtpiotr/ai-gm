@@ -260,6 +260,22 @@ def perform_long_rest(
     regen_mult = compute_regen_multiplier(sheet.get("conditions") or [], race=sheet.get("race"))
     hp_healed = int(round((new_max_hp - hp_before) * regen_mult))
     mana_healed = int(round((new_max_mana - mana_before) * regen_mult))
+
+    # MP-7 (#1494): bezwodne hexy (sol/martwa_ziemia) — pełny odpoczynek wymaga bukłaka.
+    # Woda tylko w enklawie (Solny Próg) i Misji. Z bukłakiem: zużyj go, pełne leczenie.
+    # Bez bukłaka: odpoczynek CZĘŚCIOWY (leczy o połowę mniej). Dokładamy warunek do
+    # istniejącej mechaniki — nie budujemy nowej ścieżki odpoczynku.
+    from app.services import wasteland_service
+    water = wasteland_service.rest_water_status(conn, character_id, campaign_id)
+    waterless_partial = False
+    if water["needs_waterskin"]:
+        if water["has_waterskin"]:
+            wasteland_service.consume_waterskin(conn, character_id)
+        else:
+            hp_healed = int(hp_healed * wasteland_service.WATERLESS_PARTIAL_MULT)
+            mana_healed = int(mana_healed * wasteland_service.WATERLESS_PARTIAL_MULT)
+            waterless_partial = True
+
     sheet["current_hp"] = min(new_max_hp, hp_before + max(0, hp_healed))
     sheet["current_mana"] = min(new_max_mana, mana_before + max(0, mana_healed))
     sheet["pending_xp"] = 0
@@ -305,6 +321,11 @@ def perform_long_rest(
             if _boost > 0:
                 _night_bonus = 0.10 if _night_march else 0.0
                 _effective = min(1.0, _boost + _night_bonus)
+                # MP-7 (#1494): kościany kompas drga przy pęknięciach — obniża szansę
+                # zasadzki nieumarłych na obozie (mnożnik na efektywną szansę spotkania).
+                _compass_mult = wasteland_service.camp_ambush_multiplier(conn, character_id)
+                if _compass_mult != 1.0:
+                    _effective = round(_effective * _compass_mult, 3)
                 _roll = random.random()
                 _triggered = _roll < _effective
                 _enemy_key = None
@@ -418,6 +439,11 @@ def perform_long_rest(
         result["camp_encounter"] = camp_encounter
     if disease_result.get("infected"):
         result["disease"] = disease_result
+    # MP-7 (#1494): sygnalizuj wynik warunku wody, żeby UI/narrator mógł to pokazać.
+    if water.get("needs_waterskin"):
+        result["water"] = water
+        result["waterless_partial"] = bool(waterless_partial)
+        result["waterskin_consumed"] = bool(water.get("has_waterskin"))
     return result
 
 

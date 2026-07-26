@@ -877,6 +877,20 @@ def resolve_skill_test(
         elf_terrain_bonus = 0
         elf_twilight_dc_relief = 0
 
+    # MP-7 (#1494): kościany kompas — igła z kości Pradawnych czyta pęknięcia Rdzenia,
+    # więc w ruinach widzisz więcej: +2 do percepcji, gdy niesiesz kompas i stoisz na
+    # heksie ruin. Wpina się w rzut jak bonus terenowy elfa. Defensywne.
+    compass_ruins_bonus = 0
+    try:
+        from app.services import wasteland_service as _waste
+        compass_ruins_bonus = _waste.ruins_perception_bonus(
+            conn, character_id, campaign_id, skill_key,
+        )
+        if compass_ruins_bonus:
+            mod_total += compass_ruins_bonus
+    except Exception:
+        compass_ruins_bonus = 0
+
     # Opponent side (rolled once — a forced reroll keeps the same threshold).
     opponent_total, opponent_roll = _resolve_opponent(conn, counter, campaign_id)
 
@@ -895,6 +909,7 @@ def resolve_skill_test(
         "nat20": derived["nat20"],
         "nat1": derived["nat1"],
         "success": derived["success"],
+        "compass_ruins_bonus": compass_ruins_bonus,  # MP-7 #1494: +2 percepcji w ruinach z kompasem
         "darkvision_bonus": darkvision_delta,  # #1461: +3 dwarf / −4 human w lochu (0 poza)
         "tod_perception_dc_bonus": tod_perception_dc_bonus,  # #1463: dusk +1 / night +2
         "tod_stealth_bonus": tod_stealth_bonus,              # #1463: night +2

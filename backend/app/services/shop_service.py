@@ -314,7 +314,16 @@ def _parse_shop_inventory(raw_json: str) -> list[dict[str, str]]:
         k = str(e.get("key") or "").strip()
         if not t or not k:
             continue
-        out.append({"type": t, "key": k})
+        entry: dict[str, Any] = {"type": t, "key": k}
+        # MP-7 (#1494): opcjonalny narzut per-sklep. Sól z Pustkowi u Helgi (Granie)
+        # jest droższa niż u źródła — bez tego pola cena = katalogowa (bez zmian).
+        try:
+            price_ov = e.get("price")
+            if isinstance(price_ov, (int, float)) and int(price_ov) > 0:
+                entry["price"] = int(price_ov)
+        except (TypeError, ValueError):
+            pass
+        out.append(entry)
     return out
 
 
@@ -698,7 +707,8 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
                 continue
             if not _item_passes_filters(cat, char_level, location_key):
                 continue
-            base = int(cat.get("value_gp") or 0)
+            # MP-7 (#1494): narzut per-sklep (shop_inventory_json entry.price) bije cenę katalogową.
+            base = int(e.get("price") or cat.get("value_gp") or 0)
             # #1193: wydarzenie regionalne (jarmark −20%, zaraza mikstury +50%) —
             # mnożnik per kategoria, składany multiplikatywnie z CHA/haggle/noc.
             ev_mult = _event_price_multiplier(conn, character_id, e["type"])
@@ -862,6 +872,15 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
             if not cat:
                 raise ValueError("price_or_catalog_missing")
             base_price = int(cat["value_gp"] or 0)
+            # MP-7 (#1494): jeśli sklep ustawił narzut per-wpis, on wygrywa nad ceną katalogową.
+            _price_ov = next(
+                (int(e["price"]) for e in entries
+                 if _norm_item_type(e["type"]) == req_type_norm
+                 and e["key"] == str(item_key).strip() and e.get("price")),
+                None,
+            )
+            if _price_ov:
+                base_price = _price_ov
             if base_price <= 0:
                 raise ValueError("price_or_catalog_missing")
         # AUDIT #1439 (P1): a direct POST /buy bypassed the availability filters the
