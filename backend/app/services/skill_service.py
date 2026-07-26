@@ -69,6 +69,24 @@ def _skill_stat(skill_key: str) -> str:
     return fb[0] if fb else "INT"
 
 
+# #1476 Morska krew — Wyspiarze żeglują charyzmą (gadka, spryt i nerw na pokładzie),
+# nie intelektem. `sailing` w katalogu jest INT-owe; wyspiarz ma INT −1, więc lud
+# marynarzy byłby mechanicznie NAJGORSZY w żeglowaniu. Dla tej rasy liczymy `sailing`
+# od CHA (precedens przemapowania stat→skill: medicine→WIS w G8 #1472). Wartość startowa.
+_RACE_SKILL_STAT_OVERRIDE: dict[tuple[str, str], str] = {
+    ("wyspiarze", "sailing"): "CHA",
+}
+
+
+def _skill_stat_for(skill_key: str, race: str | None = None) -> str:
+    """Rasowo-świadomy wariant ``_skill_stat``: dla wyjątków rasowych (Morska krew
+    #1476) zwraca przemapowaną statystykę, w każdym innym wypadku deleguje do
+    katalogowego ``_skill_stat`` (DB=prawda)."""
+    r = str(race or "").strip().lower()
+    ov = _RACE_SKILL_STAT_OVERRIDE.get((r, str(skill_key or "").strip().lower()))
+    return ov if ov else _skill_stat(skill_key)
+
+
 def _skill_label(skill_key: str) -> str:
     """Return display label for a skill. Always reads from DB, falls back to hardcoded map."""
     result = _query_skill_from_db(skill_key)
@@ -127,7 +145,17 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str, conn=None, character_i
     """
     stats = sheet.get("stats") or {}
     skills = sheet.get("skills") or {}
-    governing_stat = _skill_stat(skill_key)
+    # #1476 Morska krew — rasa może przemapować statystykę rządzącą (wyspiarz: sailing→CHA).
+    # Rasa siedzi w kolumnie `characters.race`; sheet_json bywa bez niej, więc gdy mamy
+    # połączenie i id — doczytujemy z DB. Brak danych → zachowanie katalogowe (jak dotąd).
+    _race = str((sheet or {}).get("race") or "").strip().lower()
+    if not _race and conn is not None and character_id is not None:
+        try:
+            from app.services.race_start_service import character_race
+            _race = str(character_race(conn, int(character_id)) or "").strip().lower()
+        except Exception:
+            _race = ""
+    governing_stat = _skill_stat_for(skill_key, _race)
     base_stat_val = int(stats.get(governing_stat, 10))
     base_skill_rank = int(skills.get(skill_key, 0))
     proficiency = proficiency_bonus(base_skill_rank)

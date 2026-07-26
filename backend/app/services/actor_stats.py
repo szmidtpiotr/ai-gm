@@ -110,6 +110,11 @@ RACIAL_STAT_MODS: dict[str, dict[str, int]] = {
     # Rdzeniu. Krew przywykła do magii (INT+2/WIS+1), ale popielate ciało jest
     # kruche (CON−1). Tożsamość: Uczony i Wojownik-Mag (gish). Wartości startowe.
     "pietnowani": {"INT": +2, "WIS": +1, "CON": -1},
+    # #1476: Wyspiarze — diaspora bez domu (ojczyzna odcięta Sztormem Wiecznym).
+    # Krzepcy cwaniacy portowi: potężnie zbudowani (STR+1) i wygadani (CHA+2), ale
+    # nieuczeni — książki to nie ich świat (INT−1). Tożsamość: Łotrzyk-Kombinator
+    # i Wojownik-Zabijaka. Wartości startowe (Sandbox-tunable).
+    "wyspiarze": {"STR": +1, "CHA": +2, "INT": -1},
     "human": {},
 }
 

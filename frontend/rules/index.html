@@ -500,6 +500,12 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#rasy-krew-oswojona">Magia krwi oswojonej</a></li>
           <li><a href="#rasy-pietno">Piętno społeczne</a></li>
           <li><a href="#rasy-odpornosc-rdzenia">Odporność na Rdzeń</a></li>
+          <li><a href="#rasy-wyspiarze">Wyspiarze</a></li>
+          <li><a href="#rasy-wyspiarze-droga">Droga Wyspiarza</a></li>
+          <li><a href="#rasy-zabijaka">Wojownik-Zabijaka</a></li>
+          <li><a href="#rasy-morska-krew">Morska krew</a></li>
+          <li><a href="#rasy-szlaki-przybleda">Znajomość szlaków i Przybłęda</a></li>
+          <li><a href="#rasy-wyspiarze-droga-dom">Droga i dom Wyspiarza</a></li>
         </ul>
       </li>
       <li class="chap">
@@ -2530,7 +2536,7 @@ document.addEventListener('DOMContentLoaded',function(){
     <section id="rasy">
       <p class="eyebrow">Kreacja postaci</p>
       <h1><span class="num">X</span>Rasy bohatera</h1>
-      <p class="subtitle">Człowiek, Krasnolud, Elf leśny i Piętnowani — cztery sposoby bycia w tym świecie</p>
+      <p class="subtitle">Człowiek, Krasnolud, Elf leśny, Piętnowani i Wyspiarze — pięć sposobów bycia w tym świecie</p>
       <hr class="rule">
 
       <p>Rasę wybierasz w Kroku 0 kreatora postaci, przed wyborem archetypu. Rasa nadaje stałe modyfikatory statystyk i odblokowuje unikalne cechy — widoczne na karcie postaci w sekcji <em>Cechy rasowe</em>. Narrator zna rasę twojego bohatera i reaguje na nią w dialogach z NPC, opisach miejsc i narracji magicznej.</p>
@@ -2811,6 +2817,63 @@ document.addEventListener('DOMContentLoaded',function(){
       <div class="entry">
         <h4>Cecha rasowa · Odporność na Rdzeń</h4>
         <p>Żyjąc wśród nieumarłych i istot Rdzenia od pokoleń, Piętnowany mniej cierpi od ich mocy: obrażenia <strong>nekrotyczne</strong> i <strong>Rdzenia</strong> są zmniejszone o <strong>2</strong> (nigdy poniżej 1 na trafienie). Zwykłej stali, ognia czy mrozu to nie dotyczy.</p>
+      </div>
+
+      <h2 id="rasy-wyspiarze">Wyspiarze</h2>
+      <p>Diaspora bez domu. Ich ojczyzna leży za <strong>Sztormem Wiecznym</strong> — dwa pokolenia temu sztormy na południu przestały ustępować i odcięły wyspy od świata; ostatnie statki przywiozły wyspiarzy na kontynent, żaden nie wrócił. Osiedli w dzielnicy portowej Czarnogrodu i na rodowej wysepce, a stamtąd rozeszli się <strong>wszędzie</strong> — jako najemnicy, marynarze i przemytnicy — bo jako jedyny lud nie mają dokąd wrócić. Krzepcy cwaniacy: potężnie zbudowani, ale wygrywają głową, gadką i łokciem. <em>„Walczą jak w porcie: głową, łokciem i stołkiem."</em></p>
+      <p style="margin-top:-.4em"><a class="kronika-x" href="/showcase/swiat.html#lud-wyspiarze">Historia i motywy ludu — Kronika Świata →</a></p>
+
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Wyspiarz · modyfikatory statystyk</h4>
+        <p>Stosowane PO bonusach archetypu (wartości startowe, strojne na Sandboxie):</p>
+        <ul>
+          <li><strong>+1 SIŁ</strong> — pokład, lina i skrzynia hartują ciało</li>
+          <li><strong>+2 CHA</strong> — port uczy gadać, targować i brać, co nie leży dobrze</li>
+          <li><strong>−1 INT</strong> — nie głupi, lecz nieuczeni; książki to nie ich świat</li>
+        </ul>
+        <p><em>Przykład:</em> Łotrzyk-Wyspiarz startuje z CHA 14 zamiast 12 i SIŁ 11 zamiast 10, ale INT 9 zamiast 10.</p>
+      </div>
+
+      <h2 id="rasy-wyspiarze-droga">Droga Wyspiarza</h2>
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Archetypy · dwie drogi portu</h4>
+        <p>Wyspiarz gra <strong>portem</strong>, nie księgą: <span class="gloss" tabindex="0"><strong>Łotrzykiem-Kombinatorem</strong><span class="tip"><span class="tip-h">Łotrzyk-Kombinator</span>Cwaniak portowy grający CHA: zastraszanie, perswazja, targowanie, hazard, przemyt. Odpowiednik elfiego Zwiadowcy, tyle że wygrywa gadką, nie dziczą.</span></span> albo <span class="gloss" tabindex="0"><strong>Wojownikiem-Zabijaką</strong><span class="tip"><span class="tip-h">Wojownik-Zabijaka</span>Wojownik, którego siła to kontrola pola walki i morale, nie czysty słupek obrażeń. Wypycha, zastrasza i gra brudno.</span></span>. Kart <strong>Uczonego</strong> i <strong>Wojownika-Maga</strong> nie ma w kreatorze po wybraniu tej rasy — lud marynarzy nie chodził do skryptoriów.</p>
+      </div>
+
+      <h2 id="rasy-zabijaka">Wojownik-Zabijaka</h2>
+      <div class="entry">
+        <h4>Archetyp rasowy · <span class="gloss" tabindex="0">Zabijaka<span class="tip"><span class="tip-h">Zabijaka</span>Wojownik-wyspiarz, którego krzepa służy do rządzenia polem walki, nie do maksymalnego zadawanego ciosu. Trzy zdolności bosmańskie zamiast surowej przewagi w liczbach.</span></span></h4>
+        <p>„Walczą jak w porcie: głową, łokciem i stołkiem." Zabijaka to wojownik, którego siła przekłada się na <strong>kontrolę pola i morale</strong>, a nie na czysty słupek obrażeń. Trzy zdolności (wartości startowe, strojne na Sandboxie):</p>
+        <ul>
+          <li><span class="gloss" tabindex="0"><strong>Groźba bosmana</strong><span class="tip"><span class="tip-h">Groźba bosmana</span>Akcja: test zastraszenia (CHA). Przy powodzeniu wróg dostaje kondycję strachu; słaby przeciwnik z HP poniżej 30% panikuje i ucieka.</span></span> — akcja, test zastraszenia CHA. Wróg dostaje kondycję strachu, a słaby przeciwnik z <strong>HP &lt; 30%</strong> panikuje i ucieka z walki.</li>
+          <li><span class="gloss" tabindex="0"><strong>Chwyt sztauera</strong><span class="tip"><span class="tip-h">Chwyt sztauera</span>Raz na walkę, test SIŁ: wypycha albo przyciąga wroga między strefami ZWARCIE ↔ DYSTANS. Sztauer to portowy tragarz, który przerzuca ładunek jednym ruchem.</span></span> — <strong>1/walka</strong>, test SIŁ. Wypycha albo przyciąga wroga między strefami <strong>ZWARCIE ↔ DYSTANS</strong>.</li>
+          <li><span class="gloss" tabindex="0"><strong>Brudny cios</strong><span class="tip"><span class="tip-h">Brudny cios</span>Raz na walkę: cios w zwarciu zadaje połowiczne obrażenia, ale oślepia wroga na rundę — „piach w oczy".</span></span> — <strong>1/walka</strong>, cios w zwarciu za <strong>połowiczne obrażenia</strong> plus <strong>oślepienie</strong> na rundę („piach w oczy").</li>
+        </ul>
+        <p><em>Naturalna bariera balansu:</em> zdolności bosmana rządzą polem walki, ale nie mnożą obrażeń — Zabijaka wygrywa ustawieniem starcia, nie liczbami.</p>
+      </div>
+
+      <h2 id="rasy-morska-krew">Morska krew</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · <span class="gloss" tabindex="0">Morska krew<span class="tip"><span class="tip-h">Morska krew</span>U wyspiarza umiejętność Żeglarstwo liczy się od CHA zamiast INT — lud marynarzy czyta morze charakterem, nie księgą. Precedens: medycyna liczona od MĄD.</span></span></h4>
+        <p>Wyspiarz wychował się na pokładzie i czyta morze instynktem. Umiejętność <strong>Żeglarstwo</strong> liczy mu się od <strong>CHA zamiast INT</strong> — bo ujemny modyfikator INT rasy psułby lud, dla którego statek to dom. To ta sama zasada, co u człowieka z <em>medycyną</em> liczoną od MĄD, nie INT.</p>
+      </div>
+
+      <h2 id="rasy-szlaki-przybleda">Znajomość szlaków i Przybłęda <span style="font-size:.55em;font-weight:400;color:var(--gold);letter-spacing:1px;vertical-align:middle">· WKRÓTCE</span></h2>
+      <div class="entry">
+        <h4>Cechy zależne od krainy · w budowie</h4>
+        <p>Dwie kolejne cechy wyspiarza dojdą razem z jego <strong>krainą rodową — Wybrzeżem Łez</strong>, które dopiero powstaje. <strong>Jeszcze nie działają</strong> — narrator ani sklepy ich na razie nie stosują:</p>
+        <ul>
+          <li><strong>Znajomość szlaków</strong> — tańsze rejsy i przeprawy morskie <em>(planowane)</em>.</li>
+          <li><strong>Przybłęda</strong> — gorsze ceny handlu poza portami; na lądzie wyspiarz bywa obcym <em>(planowane)</em>.</li>
+        </ul>
+        <p class="aside">Do wdrożenia Wybrzeża Łez obie są tylko zapowiedzią.</p>
+      </div>
+
+      <h2 id="rasy-wyspiarze-droga-dom">Droga i dom Wyspiarza</h2>
+      <div class="entry">
+        <h4>Start · lud bez kotwicy</h4>
+        <p>Wyspiarz nie ma kotwicy krainy. Krasnolud zaczyna w górach, elf w borze, Piętnowany na pustkowiu — wyspiarz zaczyna <strong>wszędzie</strong>, bo jest diasporą. Domyślnie startuje tam, gdzie człowiek (Kresy), a jako najemnik, marynarz czy przemytnik pasuje do <strong>każdej krainy</strong>. Kotwica w krainie rodowej — <strong>Wybrzeżu Łez</strong> — dojdzie, gdy ta kraina zostanie zaseedowana.</p>
+        <p><em>Imiona rasowe:</em> Taio, Nakea, Malua, Ravu.</p>
       </div>
 
     </section>

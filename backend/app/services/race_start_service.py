@@ -36,6 +36,11 @@ RACE_BLOCKED_ARCHETYPES: dict[str, tuple[str, ...]] = {
     # Wojownik-Mag (gish). Czysty Wojownik i Łotrzyk są zamknięte —
     # tożsamość rasy to krew oswojona z Rdzeniem, nie stal ani skrytobójstwo.
     "pietnowani": ("warrior", "rogue"),
+    # #1476 — Wyspiarze grają Łotrzykiem-Kombinatorem (CHA-cwaniak portowy) albo
+    # Wojownikiem-Zabijaką (kontrola pola + morale). Uczony zamknięty: INT −1 +
+    # kultura diaspory — morza się nie studiuje, nie ma go w księgach. Wojownik-Mag
+    # (gish) pozostaje ekskluzywny dla Piętnowanych.
+    "wyspiarze": ("scholar", "wojownik_mag"),
 }
 
 #: Powód pokazywany graczowi, gdy mimo wszystko spróbuje zapisać taką parę.
@@ -67,6 +72,14 @@ _BLOCK_REASON: dict[tuple[str, str], str] = {
     ("elf", "wojownik_mag"): (
         "Wojownik-Mag to droga Piętnowanych — magia elfa to strojenie, "
         "nie krew oswojona."
+    ),
+    ("wyspiarze", "scholar"): (
+        "Wyspiarze nie studiują ksiąg — ich droga to Łotrzyk-Kombinator "
+        "albo Wojownik-Zabijaka. Mądrość morza zbiera się na pokładzie, nie w bibliotece."
+    ),
+    ("wyspiarze", "wojownik_mag"): (
+        "Wojownik-Mag to droga Piętnowanych — krew wyspiarza pachnie solą, "
+        "nie Rdzeniem."
     ),
 }
 
@@ -179,6 +192,22 @@ RACE_PLAN_HINT: dict[str, str] = {
         "  - W TLE: Siostra Verena, inkwizytorka-obserwatorka Misji Światła, WĘSZY "
         "w enklawie — patrzy na Piętno z podejrzliwością i szuka pretekstu; jej "
         "obecność zaostrza spór Lejla↔Raszid.\n"
+    ),
+    # #1476 — Wyspiarze NIE mają kotwicy krainy (diaspora bez domu). Hint daje
+    # LLM-owi tożsamość rasy do narracji, ale NIE wymusza key_locations[0] — bohater
+    # może zacząć w dowolnej krainie kampanii; wszędzie jest przybłędą znad morza.
+    "wyspiarze": (
+        "RASA BOHATERA: Wyspiarz (diaspora znad Wybrzeża Łez).\n"
+        "  Ojczyste wyspy odcięte Sztormem Wiecznym dwa pokolenia temu — nikt nie "
+        "wrócił. Wyspiarze rozeszli się po świecie jako najemnicy, marynarze i "
+        "przemytnicy; są obecni WSZĘDZIE, u siebie tylko tam, gdzie pachnie solą "
+        "(porty, doki, nabrzeża). Krzepcy cwaniacy: potężnie zbudowani, ale "
+        "wygrywają głową, gadką i łokciem — „walczą jak w porcie: głową, łokciem "
+        "i stołkiem\".\n"
+        "  Na lądzie, z dala od portów, patrzą na nich jak na obcych przybłędów.\n"
+        "  NIE wymuszaj krainy startowej — wyspiarz nie ma dokąd wrócić; wpleć jego "
+        "morskie pochodzenie w dowolny start kampanii (obcy w mieście, były marynarz, "
+        "przemytnik szukający fuchy).\n"
     ),
 }
 

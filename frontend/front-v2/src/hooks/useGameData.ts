@@ -580,7 +580,7 @@ export function useAssignHero() {
 interface CreateCharacterVars {
   userId: number;
   name: string;
-  race: "human" | "dwarf" | "elf" | "pietnowani";  // #1474 elf, #1475 Piętnowani
+  race: "human" | "dwarf" | "elf" | "pietnowani" | "wyspiarze";  // #1474 elf, #1475 Piętnowani, #1476 Wyspiarze
   archetype: "warrior" | "scholar" | "rogue" | "wojownik_mag";  // #1475 gish
   backstory: string;
 }

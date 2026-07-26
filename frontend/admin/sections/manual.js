@@ -629,6 +629,29 @@ są zamknięte: MAGICZNE (<code>arcana</code>, <code>arcane_ward</code>, <code>m
 Reguła siedzi w <code>backend/app/services/skill_access_service.py</code> (jedno źródło: rzut
 startowy, zamiana w kreatorze, nauka za XP, katalog <code>/api/mechanics/skills?character_id=</code>).
 Istniejące postacie zachowują to, co już mają — bramka działa na nowe nabycia.</p>
+<h4>Wyspiarze (#1476)</h4>
+<p><b>Kim są:</b> diaspora bez domu — ich ojczyzna leży za <b>Sztormem Wiecznym</b>, który dwa
+pokolenia temu odciął wyspy; ostatnie statki przywiozły uchodźców, żaden nie wrócił. To
+<b>jedyny lud obecny we wszystkich krainach</b> (najemnicy, marynarze, przemytnicy), bo jako
+jedyny nie ma dokąd wrócić. Krzepcy cwaniacy: „walczą jak w porcie — głową, łokciem i stołkiem".
+Staty rasowe (wartości startowe): <b>+1 SIŁ · +2 CHA · −1 INT</b> (nie głupi — nieuczeni).</p>
+<p><b>Dwa archetypy, bez Uczonego i bez Wojownika-Maga.</b> <b>Łotrzyk-Kombinator</b> — CHA-owy
+cwaniak portowy (zastraszanie, perswazja, targowanie, hazard, przemyt). <b>Wojownik-Zabijaka</b>
+— siła jako <b>kontrola pola i morale</b>, nie czysty DPS; trzy zdolności (wartości startowe,
+Sandbox): <b>Groźba bosmana</b> (akcja, test zastraszenia CHA → wróg dostaje strach; słaby wróg
+z HP &lt; 30% panikuje i ucieka), <b>Chwyt sztauera</b> (1/walka, SIŁ — wypycha/przyciąga wroga
+między strefami ZWARCIE ↔ DYSTANS), <b>Brudny cios</b> (1/walka — cios w zwarciu za połowiczne
+obrażenia + oślepienie na rundę, „piach w oczy"). Karty Uczonego i gisha nie pokazują się po
+wybraniu tej rasy.</p>
+<p><b>Cecha rasowa wdrożona teraz — Morska krew:</b> umiejętność <b>Żeglarstwo</b>
+(<code>sailing</code>) liczona od <b>CHA zamiast INT</b> (bo −1 INT psułoby lud marynarzy;
+precedens: <code>medicine</code> → MĄD). <b>Start:</b> brak kotwicy krainy — wyspiarz to
+diaspora, zaczyna domyślnie jak człowiek (Kresy) i pasuje do każdej krainy. Kraina rodowa
+<b>Wybrzeże Łez</b> (#1504/#1505) dopiero powstaje.</p>
+<p><b>Cechy zależne od krainy — jeszcze NIE wdrożone</b> (dochodzą z Wybrzeżem Łez):
+<b>Znajomość szlaków</b> (tańsze rejsy) i <b>Przybłęda</b> (gorsze ceny poza portami). W grze
+na razie nieaktywne — nie stosuj ich jako działających. <b>Imiona rasowe:</b> Taio, Nakea,
+Malua, Ravu.</p>
 <p><b>Uwaga o starcie:</b> Czarnobór nie ma jeszcze zaseedowanej mapy, więc kampania elfa
 startuje na razie tam, gdzie kampania człowieka (Kresy). Kotwica startowa w krainie ojczystej
 dojdzie razem z wdrożeniem Czarnoboru (sesja CB-8). Sama rasa jest już zabramkowana statusem

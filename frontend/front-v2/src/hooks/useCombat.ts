@@ -88,6 +88,34 @@ export function useZoneChange(campaignId: number | undefined) {
   );
 }
 
+// ── #1476: Kit Wojownika-Zabijaki (rasa Wyspiarze) ───────────────────────────
+/** POST /combat/boatswain-threat — „Groźba bosmana" (CHA → strach; słaby wróg ucieka). */
+export function useBoatswainThreat(campaignId: number | undefined) {
+  return useCombatMutation<void>(campaignId, () =>
+    apiFetch<CombatActionResult>(`/campaigns/${campaignId}/combat/boatswain-threat`, {
+      method: "POST",
+    }),
+  );
+}
+
+/** POST /combat/stevedore-grip — „Chwyt sztauera" (1/walka, przesuwa wroga między strefami). */
+export function useStevedoreGrip(campaignId: number | undefined) {
+  return useCombatMutation<void>(campaignId, () =>
+    apiFetch<CombatActionResult>(`/campaigns/${campaignId}/combat/stevedore-grip`, {
+      method: "POST",
+    }),
+  );
+}
+
+/** POST /combat/dirty-blow — „Brudny cios" (1/walka, cios w zwarciu + oślepienie). */
+export function useDirtyBlow(campaignId: number | undefined) {
+  return useCombatMutation<void>(campaignId, () =>
+    apiFetch<CombatActionResult>(`/campaigns/${campaignId}/combat/dirty-blow`, {
+      method: "POST",
+    }),
+  );
+}
+
 /** POST /combat/flee — Uciekaj. */
 export function useFlee(campaignId: number | undefined) {
   return useCombatMutation<void>(campaignId, () =>

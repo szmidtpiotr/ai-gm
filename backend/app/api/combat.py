@@ -270,6 +270,54 @@ def post_wrestling(campaign_id: int, body: dict | None = None, authorization: st
         turn_lock.release(lock)
 
 
+# ─── #1476: Kit Wojownika-Zabijaki (rasa Wyspiarze) ──────────────────────────
+def _zabijaka_call(campaign_id: int, fn):
+    """Wspólne opakowanie 3 zdolności Zabijaki: lock tury + mapowanie błędów.
+    ValueError('not_zabijaka') → 403 (rasa/archetyp), reszta ValueError → 400."""
+    lock = turn_lock.acquire_or_409(campaign_id)  # #1430
+    try:
+        return fn()
+    except ValueError as e:
+        if str(e) == "not_zabijaka":
+            raise HTTPException(
+                status_code=403,
+                detail="Ta zdolność należy do Wojownika-Zabijaki (rasa Wyspiarze).",
+            ) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        turn_lock.release(lock)
+
+
+@router.post("/campaigns/{campaign_id}/combat/boatswain-threat")
+def post_boatswain_threat(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
+    """#1476 — „Groźba bosmana": test zastraszenia (CHA) → wróg dostaje strach; słaby wróg ucieka."""
+    assert_campaign_owner(campaign_id, authorization)
+    target_ref = str((body or {}).get("target_ref") or "").strip() or None
+    return _zabijaka_call(
+        campaign_id, lambda: combat.resolve_boatswain_threat(campaign_id, target_ref=target_ref)
+    )
+
+
+@router.post("/campaigns/{campaign_id}/combat/stevedore-grip")
+def post_stevedore_grip(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
+    """#1476 — „Chwyt sztauera" (1/walka, STR): wypchnięcie/przyciągnięcie wroga między strefami."""
+    assert_campaign_owner(campaign_id, authorization)
+    target_ref = str((body or {}).get("target_ref") or "").strip() or None
+    return _zabijaka_call(
+        campaign_id, lambda: combat.resolve_stevedore_grip(campaign_id, target_ref=target_ref)
+    )
+
+
+@router.post("/campaigns/{campaign_id}/combat/dirty-blow")
+def post_dirty_blow(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
+    """#1476 — „Brudny cios" (1/walka): połowiczny cios w zwarciu + oślepienie (piach w oczy)."""
+    assert_campaign_owner(campaign_id, authorization)
+    target_ref = str((body or {}).get("target_ref") or "").strip() or None
+    return _zabijaka_call(
+        campaign_id, lambda: combat.resolve_dirty_blow(campaign_id, target_ref=target_ref)
+    )
+
+
 @router.post("/campaigns/{campaign_id}/combat/declare-reaction")
 def post_declare_reaction(campaign_id: int, body: dict | None = None, authorization: str | None = Header(None)):
     """S15 — Player pre-declares a combat reaction (e.g. dodge) toggle. Does NOT consume the turn.

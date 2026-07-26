@@ -40,6 +40,11 @@ RACE_HOME_REGION: dict[str, str | None] = {
     # #1475 — Piętnowani są z Martwych Pustkowi (kraina `live`, w pełni zaseedowana
     # MP-1..MP-7), więc rasa jest publicznie grywalna. Hub startowy = Solny Próg.
     "pietnowani": "martwe_pustkowia",
+    # #1476 — Wyspiarze to diaspora bez ojczyzny (odcięta Sztormem Wiecznym);
+    # rozproszeni po WSZYSTKICH krainach jako najemnicy, marynarze, przemytnicy.
+    # Brak kotwicy krainy (None) → rasa dostępna zawsze, jak człowiek. Kraina
+    # rodowa „Wybrzeże Łez" (#1504/#1505) doda później start-anchor i cechy krainowe.
+    "wyspiarze": None,
 }
 
 #: Etykiety ras dla kreatora (kolejność = kolejność kart).
@@ -48,6 +53,7 @@ RACE_LABELS: dict[str, str] = {
     "dwarf": "Krasnolud",
     "elf": "Elf leśny",
     "pietnowani": "Piętnowany",
+    "wyspiarze": "Wyspiarz",
 }
 
 

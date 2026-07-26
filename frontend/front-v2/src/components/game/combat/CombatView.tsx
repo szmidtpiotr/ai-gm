@@ -32,6 +32,9 @@ import {
   useFlee,
   useEnemyTurn,
   useResolveReaction,
+  useBoatswainThreat,
+  useStevedoreGrip,
+  useDirtyBlow,
 } from "@/hooks/useCombat";
 import { useSpells, useSpellCatalog } from "@/hooks/useSheetData";
 import { canRaceLearnSpell } from "@/lib/spells";
@@ -152,6 +155,12 @@ export function CombatView({
   const attack = useResolveAttack(campaignId);
   const zoneChange = useZoneChange(campaignId);
   const flee = useFlee(campaignId);
+  // #1476 — kit Wojownika-Zabijaki (rasa Wyspiarze).
+  const boatswainThreat = useBoatswainThreat(campaignId);
+  const stevedoreGrip = useStevedoreGrip(campaignId);
+  const dirtyBlow = useDirtyBlow(campaignId);
+  const isZabijaka =
+    character?.race === "wyspiarze" && character?.sheet_json?.archetype === "warrior";
   const enemyTurn = useEnemyTurn(campaignId);
   const reactionMut = useResolveReaction(campaignId);
   // Mikstury w arkuszu czarów: zużywalne z plecaka (can_use), bez komponentów
@@ -550,6 +559,38 @@ export function CombatView({
     }
   }
 
+  // #1476 — wspólny driver zdolności Zabijaki: odpala mutację, wpisuje stan,
+  // tłumaczy blokady (poza zasięgiem / zdolność zużyta) i panikę wroga na toast.
+  async function runZabijaka(
+    mut: { mutateAsync: () => Promise<CombatActionResult> },
+    okMsg: string,
+  ) {
+    setSheet(null);
+    setBusy(true);
+    try {
+      const r = await mut.mutateAsync();
+      if (r.blocked) {
+        toast(
+          r.block_reason === "already_used"
+            ? "Tej zdolności użyłeś już w tej walce."
+            : "Cel jest poza zwarciem — najpierw się zbliż.",
+          "danger",
+        );
+        return;
+      }
+      if (r.combat_state) pushCombatState(r.combat_state);
+      toast(r.fled ? "Wróg spanikował i uciekł!" : okMsg, "info");
+    } catch {
+      toast("Nie udało się użyć zdolności.", "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const doThreat = () => runZabijaka(boatswainThreat, "Rzuciłeś groźbę bosmana.");
+  const doGrip = () => runZabijaka(stevedoreGrip, "Chwyt sztauera przesunął wroga.");
+  const doDirty = () => runZabijaka(dirtyBlow, "Brudny cios — piach w oczy!");
+
   async function doDeclare(rt: DefenseReaction) {
     setSheet(null);
     try {
@@ -820,6 +861,10 @@ export function CombatView({
           onMove={doMove}
           onDefense={() => setSheet("defense")}
           onFlee={doFlee}
+          isZabijaka={isZabijaka}
+          onThreat={doThreat}
+          onGrip={doGrip}
+          onDirty={doDirty}
         />
         <Composer onSend={onSend} disabled={sending} chips={[]} onChip={() => {}} />
       </div>

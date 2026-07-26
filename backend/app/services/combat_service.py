@@ -10036,6 +10036,323 @@ def resolve_wrestling(campaign_id: int, target_ref: str | None = None) -> dict[s
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# #1476 — Kit Wojownika-Zabijaki (rasa Wyspiarze). Siła wyspiarza w walce = KONTROLA
+# POLA i MORALE, nie czysty DPS. Trzy zdolności, wszystkie reużywają istniejące
+# silniki: kondycje (G3 #1465), strefy ZWARCIE/DYSTANS (T34) + kara #1508, trwałość
+# zastraszenia (#1054). Bramka: rasa=wyspiarze ∧ archetyp=warrior. Wszystkie liczby to
+# WARTOŚCI STARTOWE (Numbers Policy #826) — strojne na Sandboxie.
+# ═══════════════════════════════════════════════════════════════════════════
+
+#: Próg HP (ułamek max), poniżej którego słaby wróg spanikowany „Groźbą bosmana" ucieka.
+ZABIJAKA_FLEE_HP_FRACTION = 0.30
+#: Kondycja morale nakładana Groźbą bosmana (istniejąca kondycja strachu, T16/#1054).
+ZABIJAKA_THREAT_CONDITION = "frightened"
+#: Kondycja „Brudnego ciosu" — piach w oczy (istniejąca kondycja katalogu).
+ZABIJAKA_DIRTY_CONDITION = "blinded"
+#: Markery zużycia (1/walka) trzymane na combatancie gracza.
+_GRIP_USED_MARKER = "sztauer_used_combat"
+_DIRTY_USED_MARKER = "dirty_blow_used_combat"
+
+
+def _zabijaka_ok(conn: sqlite3.Connection, character_id: int, sheet: dict | None = None) -> bool:
+    """Czy bohater może użyć kitu Zabijaki: rasa=wyspiarze ∧ archetyp=warrior."""
+    race = str(_race_of(conn, int(character_id)) or "").strip().lower()
+    if race != "wyspiarze":
+        return False
+    arch = str((sheet or {}).get("archetype") or "").strip().lower()
+    if not arch:
+        try:
+            ch = conn.execute(
+                "SELECT sheet_json FROM characters WHERE id = ?", (int(character_id),)
+            ).fetchone()
+            _s = json.loads(ch["sheet_json"] or "{}") if ch and ch["sheet_json"] else {}
+            arch = str(_s.get("archetype") or "").strip().lower()
+        except Exception:
+            arch = ""
+    return arch == "warrior"
+
+
+def _zabijaka_pick_target(combatants: list[dict], ref_lo: str) -> dict | None:
+    """Rozwiąż cel wroga po referencji (key/name contains) albo pierwszy żywy wróg."""
+    if ref_lo:
+        for c in combatants:
+            if not isinstance(c, dict) or c.get("type") != "enemy":
+                continue
+            if int(c.get("hp_current", 0) or 0) <= 0:
+                continue
+            ek = str(c.get("enemy_key", "")).lower()
+            nm = str(c.get("name", "")).lower()
+            if ref_lo == ek or ref_lo == nm or ref_lo in ek or ref_lo in nm:
+                return c
+    return next((c for c in combatants if isinstance(c, dict)
+                 and c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0), None)
+
+
+def resolve_boatswain_threat(campaign_id: int, target_ref: str | None = None) -> dict[str, Any]:
+    """#1476 — „Groźba bosmana": akcja Zabijaki (CHA). Test zastraszenia w walce →
+    wróg dostaje kondycję strachu (``frightened``, −do ataku). Słaby wróg (HP <30% max)
+    na sukcesie PANIKUJE i ucieka z pola (znika z walki — bez śmierci, bez łupu).
+
+    Test przeciwny: gracz ``d20 + CHA_mod [+ rank zastraszenia + proficiency]`` vs obrona
+    mentalna wroga (WIS). Działa przez całe pole (morale, nie zwarcie). Konsumuje turę."""
+    ref_lo = str(target_ref or "").strip().lower()
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("boatswain threat only on player's turn")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        _ensure_zones(combatants)
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+
+        ch = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (int(row["character_id"]),)
+        ).fetchone()
+        sheet = json.loads(ch["sheet_json"] or "{}") if ch and ch["sheet_json"] else {}
+        if not _zabijaka_ok(conn, int(row["character_id"]), sheet):
+            raise ValueError("not_zabijaka")
+
+        target = _zabijaka_pick_target(combatants, ref_lo)
+        if target is None:
+            raise ValueError("no living enemy target")
+
+        try:
+            skill_rank = int((sheet.get("skills") or {}).get("intimidation", 0) or 0)
+        except (TypeError, ValueError):
+            skill_rank = 0
+        proficiency = proficiency_bonus(skill_rank)
+        player_mod = _combatant_stat_modifier(p, sheet=None, stat="CHA") + skill_rank + proficiency
+        enemy_mod = _combatant_stat_modifier(target, sheet=None, stat="WIS")
+        player_d20 = roll_d20()
+        enemy_d20 = roll_d20()
+        opponent_total = enemy_d20 + enemy_mod
+        from app.services.skill_service import _derive_outcome
+        derived = _derive_outcome(player_d20, player_mod, opponent_total)
+
+        target_key = str(target.get("enemy_key") or target.get("name") or target.get("id"))
+        target_name = str(target.get("name") or target.get("enemy_key") or "Wróg")
+        success = bool(derived["success"])
+
+        # Słaby wróg na sukcesie panikuje i ucieka — usuń go z walki (bez śmierci/łupu).
+        fled = False
+        if success:
+            hp_cur = int(target.get("hp_current", 0) or 0)
+            hp_max = int(target.get("hp_max", 0) or target.get("max_hp", 0) or 0)
+            if hp_max > 0 and hp_cur <= int(hp_max * ZABIJAKA_FLEE_HP_FRACTION):
+                fled = True
+                combatants[:] = [c for c in combatants if c is not target]
+
+        cid = int(row["id"])
+        tn = _next_combat_log_sequence(conn, cid)
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn,
+            actor="player", event_type="boatswain_threat",
+            roll_value=int(derived["player_total"]), damage=None,
+            hp_after=int(p.get("hp_current", 0) or 0),
+            target_id=str(target.get("id")), target_name=target_name,
+            hit=success,
+            narrative=json.dumps({
+                "outcome": derived["outcome"], "margin": derived["margin"],
+                "player_roll": player_d20, "player_total": derived["player_total"],
+                "enemy_roll": enemy_d20, "enemy_total": opponent_total, "stat": "CHA",
+                "fled": fled,
+            }, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+
+    applied = None
+    if success and not fled:
+        applied = apply_condition_to_combatant(campaign_id, target_key, ZABIJAKA_THREAT_CONDITION)
+    advance_turn(campaign_id)
+    return {
+        "ok": True, "outcome": derived["outcome"], "margin": derived["margin"],
+        "success": success, "player_roll": player_d20,
+        "player_total": derived["player_total"], "enemy_roll": enemy_d20,
+        "enemy_total": opponent_total, "stat": "CHA", "target": target_name,
+        "fled": fled, "condition": ZABIJAKA_THREAT_CONDITION if (success and not fled) else None,
+        "applied": applied, "combat_state": load_combat_snapshot(campaign_id),
+    }
+
+
+def resolve_stevedore_grip(campaign_id: int, target_ref: str | None = None) -> dict[str, Any]:
+    """#1476 — „Chwyt sztauera": 1/walka (STR). Wypchnięcie/przyciągnięcie wroga między
+    strefami ZWARCIE↔DYSTANS. Test przeciwny STR; na sukcesie strefa wroga się odwraca.
+    Wróg melee wypchnięty na DYSTANS pali turę na doskok (kontrakt #232); wrogi strzelec
+    przyciągnięty do ZWARCIA łapie karę #1508. Ładunek zużywa się tylko na sukcesie.
+    Konsumuje turę."""
+    ref_lo = str(target_ref or "").strip().lower()
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("stevedore grip only on player's turn")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        _ensure_zones(combatants)
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+
+        ch = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (int(row["character_id"]),)
+        ).fetchone()
+        sheet = json.loads(ch["sheet_json"] or "{}") if ch and ch["sheet_json"] else {}
+        if not _zabijaka_ok(conn, int(row["character_id"]), sheet):
+            raise ValueError("not_zabijaka")
+        if bool(p.get(_GRIP_USED_MARKER)):
+            return {"ok": False, "blocked": True, "block_reason": "already_used",
+                    "combat_state": load_combat_snapshot(campaign_id)}
+
+        target = _zabijaka_pick_target(combatants, ref_lo)
+        if target is None:
+            raise ValueError("no living enemy target")
+
+        try:
+            skill_rank = int((sheet.get("skills") or {}).get("wrestling", 0) or 0)
+        except (TypeError, ValueError):
+            skill_rank = 0
+        proficiency = proficiency_bonus(skill_rank)
+        player_mod = _combatant_stat_modifier(p, sheet=None, stat="STR") + skill_rank + proficiency
+        enemy_mod = _combatant_stat_modifier(target, sheet=None, stat="STR")
+        player_d20 = roll_d20()
+        enemy_d20 = roll_d20()
+        opponent_total = enemy_d20 + enemy_mod
+        from app.services.skill_service import _derive_outcome
+        derived = _derive_outcome(player_d20, player_mod, opponent_total)
+        success = bool(derived["success"])
+
+        target_name = str(target.get("name") or target.get("enemy_key") or "Wróg")
+        old_zone = str(target.get("zone") or ZONE_ENGAGED)
+        new_zone = old_zone
+        if success:
+            new_zone = _opposite_zone(old_zone)
+            target["zone"] = new_zone
+            p[_GRIP_USED_MARKER] = True  # ładunek 1/walka zużyty tylko na sukcesie
+
+        cid = int(row["id"])
+        tn = _next_combat_log_sequence(conn, cid)
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn,
+            actor="player", event_type="stevedore_grip",
+            roll_value=int(derived["player_total"]), damage=None,
+            hp_after=int(p.get("hp_current", 0) or 0),
+            target_id=str(target.get("id")), target_name=target_name, hit=success,
+            narrative=json.dumps({
+                "outcome": derived["outcome"], "margin": derived["margin"],
+                "player_roll": player_d20, "enemy_roll": enemy_d20, "stat": "STR",
+                "from_zone": old_zone, "to_zone": new_zone,
+            }, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+
+    advance_turn(campaign_id)
+    return {
+        "ok": True, "outcome": derived["outcome"], "success": success,
+        "player_roll": player_d20, "enemy_roll": enemy_d20, "stat": "STR",
+        "target": target_name, "from_zone": old_zone, "to_zone": new_zone,
+        "combat_state": load_combat_snapshot(campaign_id),
+    }
+
+
+def resolve_dirty_blow(campaign_id: int, target_ref: str | None = None) -> dict[str, Any]:
+    """#1476 — „Brudny cios": 1/walka. Podły cios w zwarciu (piach w oczy) — zadaje
+    połowiczne obrażenia broni i nakłada ``blinded`` na rundę. Wymaga ZWARCIA (gracz i cel
+    engaged); cel poza zwarciem → blocked bez konsumpcji tury. Ładunek zużywany na użyciu.
+    Konsumuje turę."""
+    ref_lo = str(target_ref or "").strip().lower()
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("dirty blow only on player's turn")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        _ensure_zones(combatants)
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+
+        ch = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (int(row["character_id"]),)
+        ).fetchone()
+        sheet = json.loads(ch["sheet_json"] or "{}") if ch and ch["sheet_json"] else {}
+        if not _zabijaka_ok(conn, int(row["character_id"]), sheet):
+            raise ValueError("not_zabijaka")
+        if bool(p.get(_DIRTY_USED_MARKER)):
+            return {"ok": False, "blocked": True, "block_reason": "already_used",
+                    "combat_state": load_combat_snapshot(campaign_id)}
+
+        target = _zabijaka_pick_target(combatants, ref_lo)
+        if target is None:
+            raise ValueError("no living enemy target")
+
+        # Gate zwarcia — piach w oczy działa tylko z bliska.
+        if str(p.get("zone") or ZONE_ENGAGED) != ZONE_ENGAGED or \
+           str(target.get("zone") or ZONE_ENGAGED) != ZONE_ENGAGED:
+            return {"ok": False, "blocked": True, "block_reason": "out_of_range",
+                    "target": str(target.get("name") or target.get("enemy_key") or ""),
+                    "combat_state": load_combat_snapshot(campaign_id)}
+
+        try:
+            _fw = resolve_sheet_weapon(conn, sheet, int(row["character_id"])) or {}
+            _die = str(_fw.get("damage_die") or "1d6").strip().lower()
+            _dstat = str(_fw.get("linked_stat") or "STR").upper()
+            _wlabel = str(_fw.get("label") or "broń")
+        except Exception:
+            _die, _dstat, _wlabel = "1d6", "STR", "broń"
+        _raw = roll_damage_dice(_die, _stat_mod(sheet, _dstat))
+        dmg = max(1, _raw // 2)  # ÷2 floor, min 1 — podły, słabszy cios
+        prev_hp = int(target.get("hp_current", 0) or 0)
+        new_hp = max(0, prev_hp - dmg)
+        target["hp_current"] = new_hp
+        enemy_dead = new_hp <= 0
+        p[_DIRTY_USED_MARKER] = True
+
+        target_key = str(target.get("enemy_key") or target.get("name") or target.get("id"))
+        target_name = str(target.get("name") or target.get("enemy_key") or "Wróg")
+        cid = int(row["id"])
+        tn = _next_combat_log_sequence(conn, cid)
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn,
+            actor="player", event_type="dirty_blow",
+            roll_value=None, damage=dmg, hp_after=new_hp,
+            target_id=str(target.get("id")), target_name=target_name, hit=True,
+            narrative=json.dumps({
+                "raw_damage": _raw, "damage": dmg, "halved": True,
+                "weapon_label": _wlabel, "enemy_dead": enemy_dead,
+                "condition": ZABIJAKA_DIRTY_CONDITION,
+            }, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+
+    applied = None
+    if not enemy_dead:
+        applied = apply_condition_to_combatant(campaign_id, target_key, ZABIJAKA_DIRTY_CONDITION)
+    advance_turn(campaign_id)
+    return {
+        "ok": True, "damage": dmg, "raw_damage": _raw, "weapon_label": _wlabel,
+        "target": target_name, "target_hp_remaining": new_hp, "enemy_dead": enemy_dead,
+        "condition": ZABIJAKA_DIRTY_CONDITION if not enemy_dead else None,
+        "applied": applied, "combat_state": load_combat_snapshot(campaign_id),
+    }
+
+
 def _persist_combatants(
     conn: sqlite3.Connection,
     row: sqlite3.Row,

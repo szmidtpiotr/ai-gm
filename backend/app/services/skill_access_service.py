@@ -58,6 +58,9 @@ RACE_SKILL_WEIGHTS: Final[dict[str, tuple[str, ...]]] = {
     "dwarf": ("endurance", "athletics", "intimidation", "alchemy"),
     # #1475 — Piętnowani: krew oswojona z Rdzeniem, uczą się od pokoleń.
     "pietnowani": ("arcana", "lore", "magic_sense", "survival"),
+    # #1476 — Wyspiarze: cwaniacy portowi. Gadka (perswazja/zastraszenie),
+    # zręczne palce (kieszonkostwo) i morze we krwi (żeglarstwo).
+    "wyspiarze": ("persuasion", "intimidation", "pickpocket", "sailing"),
     "human": (),
 }
 

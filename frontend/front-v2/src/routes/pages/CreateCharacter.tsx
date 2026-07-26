@@ -90,6 +90,13 @@ const RACES: Array<{ key: Race; icon: string; title: string; desc: string; bonus
     desc: "Naznaczony przez Rdzeń potomek tych, którzy nie uciekli. Krew oswojona z magią — łagodniejszy miscast i więcej many, lecz obcy się go boją. Droga: Uczony albo Wojownik-Mag.",
     bonus: "+2 INT · +1 MĄD · −1 KON · Magia krwi oswojonej",
   },
+  {
+    key: "wyspiarze",
+    icon: "⚓",
+    title: "Wyspiarz",
+    desc: "Diaspora bez domu — ojczyzna odcięta Sztormem Wiecznym. Krzepki cwaniak portowy: wygrywa głową, gadką i łokciem. Morska krew (żeglarstwo od charyzmy), u siebie tam, gdzie pachnie solą. Droga: Łotrzyk-Kombinator albo Wojownik-Zabijaka.",
+    bonus: "+1 SIŁ · +2 CHA · −1 INT · Morska krew",
+  },
 ];
 
 const ARCHETYPES: Array<{ key: Archetype; icon: string; title: string; desc: string; bonus: string }> = [
@@ -123,6 +130,18 @@ const RACE_ARCHETYPE_OVERRIDE: Partial<
     scholar: {
       title: "Uczony",
       desc: "Pełny mag krwi oswojonej: łagodniejszy miscast, więcej many, cały arsenał zaklęć. Kruchy w zwarciu.",
+    },
+  },
+  // #1476 — Wyspiarz gra Kombinatorem (CHA-cwaniak portowy) i Zabijaką (Wojownik,
+  // którego siłą jest kontrola pola i morale, nie czysty DPS). Klucze bez zmian.
+  wyspiarze: {
+    rogue: {
+      title: "Kombinator",
+      desc: "Cwaniak z portu: zastraszanie, gadka, targ, hazard i przemyt. Wygrywa łokciem i sprytem, nie łukiem.",
+    },
+    warrior: {
+      title: "Zabijaka",
+      desc: "Kontrola pola i morale zamiast czystego DPS: Groźba bosmana (strach), Chwyt sztauera (przesuwa wroga między strefami) i Brudny cios (piach w oczy).",
     },
   },
 };

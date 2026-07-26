@@ -6,7 +6,7 @@ export const WIZARD_MAX_SWAPS = 4;
 export const WIZARD_STAT_MIN = 8;
 export const WIZARD_STAT_MAX = 18;
 
-export type Race = "human" | "dwarf" | "elf" | "pietnowani";
+export type Race = "human" | "dwarf" | "elf" | "pietnowani" | "wyspiarze";
 export type Archetype = "warrior" | "scholar" | "rogue" | "wojownik_mag";
 
 // #1477 (SG-8) — archetypy zamknięte dla rasy. Krasnolud nie gra Łotrzykiem
@@ -21,6 +21,9 @@ export const RACE_BLOCKED_ARCHETYPES: Record<Race, Archetype[]> = {
   elf: ["warrior", "wojownik_mag"],
   // #1475 — Piętnowani chodzą tylko drogą magii: Uczony albo Wojownik-Mag (gish).
   pietnowani: ["warrior", "rogue"],
+  // #1476 — Wyspiarze nie studiują ksiąg (INT −1 + kultura): Łotrzyk-Kombinator
+  // albo Wojownik-Zabijaka. Uczony i gish zamknięte.
+  wyspiarze: ["scholar", "wojownik_mag"],
 };
 
 export const STAT_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"] as const;
@@ -44,6 +47,8 @@ export const RACE_STAT_MODS: Record<Race, Partial<Record<StatKey, number>>> = {
   elf: { DEX: 2, WIS: 1, CON: -1 },
   // #1475 — Piętnowani: krew oswojona z Rdzeniem (INT+2/WIS+1), kruche ciało (CON−1).
   pietnowani: { INT: 2, WIS: 1, CON: -1 },
+  // #1476 — Wyspiarze: krzepcy cwaniacy portowi (STR+1/CHA+2), nieuczeni (INT−1).
+  wyspiarze: { STR: 1, CHA: 2, INT: -1 },
 };
 
 // #1522 — lustro `backend/app/services/skill_access_service.py`. Umiejętność
@@ -71,6 +76,9 @@ export const RACE_SKILL_UNLOCK: Record<Race, string[]> = {
   dwarf: ["shield_block", "two_handed"],
   // #1475 — Piętnowani czują Rdzeń we krwi: dostają zmysł magii jak elf.
   pietnowani: ["magic_sense"],
+  // #1476 — Wyspiarze nie odblokowują nic ponad klasę (sailing/pickpocket idą
+  // klasą Kombinatora); Morska krew działa po stronie silnika (sailing→CHA).
+  wyspiarze: [],
 };
 
 /** Czy ta para klasa+rasa może mieć tę umiejętność (lustro backendu). */
