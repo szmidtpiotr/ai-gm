@@ -83,6 +83,13 @@ const RACES: Array<{ key: Race; icon: string; title: string; desc: string; bonus
     desc: "Cichy strażnik starych granic. Celny łuk, zmierzchowy wzrok, odskok ze zwarcia. Kruchy w bezpośrednim starciu.",
     bonus: "+2 ZRĘ · +1 MĄD · −1 KON · Magia strojenia",
   },
+  {
+    key: "pietnowani",
+    icon: "🔥",
+    title: "Piętnowany",
+    desc: "Naznaczony przez Rdzeń potomek tych, którzy nie uciekli. Krew oswojona z magią — łagodniejszy miscast i więcej many, lecz obcy się go boją. Droga: Uczony albo Wojownik-Mag.",
+    bonus: "+2 INT · +1 MĄD · −1 KON · Magia krwi oswojonej",
+  },
 ];
 
 const ARCHETYPES: Array<{ key: Archetype; icon: string; title: string; desc: string; bonus: string }> = [
@@ -105,6 +112,14 @@ const RACE_ARCHETYPE_OVERRIDE: Partial<
     scholar: {
       title: "Uczony-Stroiciel",
       desc: "Stroi pęknięcia Rdzenia zamiast je rwać: kontrola, ochrona i iluzje zamiast czystego ognia.",
+    },
+  },
+  // #1475 — Piętnowany-Uczony to pełny mag krwi oswojonej. Wojownik-Mag (gish)
+  // to osobny archetyp dodany w PN-2 (klucz `wojownik_mag`), nie override.
+  pietnowani: {
+    scholar: {
+      title: "Uczony",
+      desc: "Pełny mag krwi oswojonej: łagodniejszy miscast, więcej many, cały arsenał zaklęć. Kruchy w zwarciu.",
     },
   },
 };

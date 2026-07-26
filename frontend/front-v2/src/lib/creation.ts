@@ -6,7 +6,7 @@ export const WIZARD_MAX_SWAPS = 4;
 export const WIZARD_STAT_MIN = 8;
 export const WIZARD_STAT_MAX = 18;
 
-export type Race = "human" | "dwarf" | "elf";
+export type Race = "human" | "dwarf" | "elf" | "pietnowani";
 export type Archetype = "warrior" | "scholar" | "rogue";
 
 // #1477 (SG-8) — archetypy zamknięte dla rasy. Krasnolud nie gra Łotrzykiem
@@ -18,6 +18,8 @@ export const RACE_BLOCKED_ARCHETYPES: Record<Race, Archetype[]> = {
   dwarf: ["rogue"],
   // #1474 — elf leśny nie gra Wojownikiem (CON −1, lekki chód): Zwiadowca albo Stroiciel.
   elf: ["warrior"],
+  // #1475 — Piętnowani chodzą tylko drogą magii: Uczony albo Wojownik-Mag (gish).
+  pietnowani: ["warrior", "rogue"],
 };
 
 export const STAT_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"] as const;
@@ -37,6 +39,8 @@ export const RACE_STAT_MODS: Record<Race, Partial<Record<StatKey, number>>> = {
   human: {},
   dwarf: { CON: 2, STR: 1, CHA: -1, DEX: -1 },
   elf: { DEX: 2, WIS: 1, CON: -1 },
+  // #1475 — Piętnowani: krew oswojona z Rdzeniem (INT+2/WIS+1), kruche ciało (CON−1).
+  pietnowani: { INT: 2, WIS: 1, CON: -1 },
 };
 
 // #1522 — lustro `backend/app/services/skill_access_service.py`. Umiejętność
@@ -60,6 +64,8 @@ export const RACE_SKILL_UNLOCK: Record<Race, string[]> = {
   human: [],
   elf: ["magic_sense"],
   dwarf: ["shield_block", "two_handed"],
+  // #1475 — Piętnowani czują Rdzeń we krwi: dostają zmysł magii jak elf.
+  pietnowani: ["magic_sense"],
 };
 
 /** Czy ta para klasa+rasa może mieć tę umiejętność (lustro backendu). */

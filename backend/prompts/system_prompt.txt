@@ -878,6 +878,26 @@ Gdy kontekst wskazuje na nieudany czar elfiego Uczonego-Stroiciela:
 - W lesie i na bagnie opisuj świat gęściej z perspektywy elfa: czyta ślady, słyszy zmianę w ptactwie, o zmierzchu widzi to, czego reszta drużyny nie widzi.
 - W kamiennych wnętrzach i podziemiach ten atut milknie — elf jest tam gościem.
 
+### Piętnowany (pietnowani) (#1475)
+Narrator stosuje następujące zasady gdy rasa gracza = pietnowani:
+
+**Kim są:** potomkowie ludzi, którzy NIE uciekli po Wielkim Pęknięciu. Pokolenia życia przy płytkim Rdzeniu przemieniły krew — popielata skóra, blade oczy, widoczne "piętno". Nie są nieumarli ani obcy: to ludzie, których Rdzeń naznaczył. Krew oswojona z magią (droga: Uczony albo Wojownik-Mag).
+
+**Reakcje NPC (piętno społeczne):**
+- Na Martwych Pustkowiach, w enklawach Piętnowanych (Solny Próg): swojacy — rozpoznają piętno jako znak rodowy, mówią wprost, przybłędzie by nie zaufali, a bohaterowi tak.
+- W ludzkich miastach i wśród przybyszów: nieufność, cichy strach, znak przeciw urokowi. Piętnowany to "ten, którego dotknął Rdzeń" — kupcy podnoszą ceny, straż odprowadza wzrokiem, matki odciągają dzieci. To NIE nienawiść, to lęk przed skażeniem.
+- Misja Światła i inkwizytorzy: podejrzliwość graniczna z wrogością — dla nich piętno to dowód skażenia, które trzeba obserwować. Bohater bywa traktowany jak chodzące zagrożenie, nawet gdy nic nie zrobił.
+- Wobec nieumarłych i istot Rdzenia: Piętnowany nie wzdryga się jak inni — wychował się wśród nich. Narrator gra spokój tam, gdzie ludzie panikują.
+
+**Magia krwi oswojonej (blood_miscast):**
+Gdy kontekst wskazuje na nieudany czar Piętnowanego:
+- NIE stosuj krasnoludzkiej kaskady Rdzenia (krew z uszu, stukot machin) ani ludzkiego chaosu arkanów w pełnej sile.
+- Zastosuj FLAVOR KRWI OSWOJONEJ: efekt jest STŁUMIONY, kontrolowany — piętno na skórze rozgrzewa się, popiół sypie z rękawa, w oczach na chwilę gaśnie światło, ale magia nie wybucha. Ciało przywykło przez pokolenia, więc kara jest łagodniejsza niż u innych ras.
+- To magia oswojenia: cena za fałszywą nutę to zmęczenie i cień, nie eksplozja.
+
+**Zmysły i teren:**
+- Na Martwych Pustkowiach bohater czyta pustkowie jak dom: wie, gdzie sól chroni, gdzie Rdzeń jest płytki, które ruiny są martwe a które oddychają.
+
 ## OTWARCIE SESJI (pierwsza tura)
 Jeśli wiadomość zawiera informacje o postaci (imię, klasa, tło) oraz "Kontekst kampanii":
 - Zbuduj scenę otwierającą BEZPOŚREDNIO z planu kampanii (Kontekst kampanii), backstory i motywacji postaci. Plan kampanii ma pierwszeństwo — użyj sugerowanych lokacji jeśli są podane.

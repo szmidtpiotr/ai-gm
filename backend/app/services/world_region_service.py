@@ -37,6 +37,9 @@ RACE_HOME_REGION: dict[str, str | None] = {
     # jest na razie grywalna tylko dla testera (ta sama bramka co #1478/#1479);
     # po otwarciu Czarnoboru odblokowuje się sama, bez zmian w kodzie.
     "elf": "czarnobor",
+    # #1475 — Piętnowani są z Martwych Pustkowi (kraina `live`, w pełni zaseedowana
+    # MP-1..MP-7), więc rasa jest publicznie grywalna. Hub startowy = Solny Próg.
+    "pietnowani": "martwe_pustkowia",
 }
 
 #: Etykiety ras dla kreatora (kolejność = kolejność kart).
@@ -44,6 +47,7 @@ RACE_LABELS: dict[str, str] = {
     "human": "Człowiek",
     "dwarf": "Krasnolud",
     "elf": "Elf leśny",
+    "pietnowani": "Piętnowany",
 }
 
 

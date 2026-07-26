@@ -106,6 +106,10 @@ RACIAL_STAT_MODS: dict[str, dict[str, int]] = {
     # #1474: elf leśny — smukły, długowieczny, kruchszy. Tożsamość rasy to celność
     # i czujność (Zwiadowca / Uczony-Stroiciel), nie wytrzymałość w zwarciu.
     "elf": {"DEX": +2, "WIS": +1, "CON": -1},
+    # #1475: Piętnowani — potomkowie ludzi żyjących pokoleniami przy płytkim
+    # Rdzeniu. Krew przywykła do magii (INT+2/WIS+1), ale popielate ciało jest
+    # kruche (CON−1). Tożsamość: Uczony i Wojownik-Mag (gish). Wartości startowe.
+    "pietnowani": {"INT": +2, "WIS": +1, "CON": -1},
     "human": {},
 }
 

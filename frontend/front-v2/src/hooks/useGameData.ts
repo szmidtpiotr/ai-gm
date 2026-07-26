@@ -580,7 +580,7 @@ export function useAssignHero() {
 interface CreateCharacterVars {
   userId: number;
   name: string;
-  race: "human" | "dwarf" | "elf";  // #1474 — elf leśny dołącza do puli ras
+  race: "human" | "dwarf" | "elf" | "pietnowani";  // #1474 elf, #1475 Piętnowani
   archetype: "warrior" | "scholar" | "rogue";
   backstory: string;
 }

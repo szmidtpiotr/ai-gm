@@ -29,6 +29,10 @@ RACE_BLOCKED_ARCHETYPES: dict[str, tuple[str, ...]] = {
     # frontowe zwarcie; tożsamość rasy = Zwiadowca (łuk + odskok) i
     # Uczony-Stroiciel (kontrola/iluzje).
     "elf": ("warrior",),
+    # #1475 — Piętnowani chodzą tylko drogą magii: Uczony (pełny mag) albo
+    # Wojownik-Mag (gish, PN-2). Czysty Wojownik i Łotrzyk są zamknięte —
+    # tożsamość rasy to krew oswojona z Rdzeniem, nie stal ani skrytobójstwo.
+    "pietnowani": ("warrior", "rogue"),
 }
 
 #: Powód pokazywany graczowi, gdy mimo wszystko spróbuje zapisać taką parę.
@@ -40,6 +44,14 @@ _BLOCK_REASON: dict[tuple[str, str], str] = {
     ("elf", "warrior"): (
         "Leśne elfy nie stają w ścianie tarcz — ich droga to Zwiadowca "
         "albo Uczony-Stroiciel."
+    ),
+    ("pietnowani", "warrior"): (
+        "Piętnowani noszą Rdzeń we krwi — ich droga to Uczony albo "
+        "Wojownik-Mag, nie czysta stal."
+    ),
+    ("pietnowani", "rogue"): (
+        "Piętnowani noszą Rdzeń we krwi — ich droga to Uczony albo "
+        "Wojownik-Mag, nie skrytobójstwo."
     ),
 }
 
@@ -66,6 +78,19 @@ RACE_START: dict[str, dict] = {
         "variants": (
             "szept_goscinne_drzewo",
             "ostep_graniczny",
+        ),
+    },
+    # #1475 — Piętnowani startują na Martwych Pustkowiach (kraina `live`, hub
+    # „Solny Próg" w `game_locations` na heksie 64,37; 2500 heksów regionu).
+    # `default` = Gospoda dla Obcych (sub huba — onboarding, dziedziczy heks
+    # rodzica); `variant` = Dom Starszych (rada enklawy). Reszta pustkowi (sól,
+    # ruiny, martwa ziemia) NIE jest startem. Lore: `docs/world/regions/martwe_pustkowia.md`.
+    "pietnowani": {
+        "region": "martwe_pustkowia",
+        "default": "solny_prog_gospoda",
+        "variants": (
+            "solny_prog_gospoda",
+            "solny_prog_dom_starszych",
         ),
     },
 }
@@ -108,6 +133,28 @@ RACE_PLAN_HINT: dict[str, str] = {
         "Kręgu, twarz ZAMKNIĘCIA) werbują bohatera do przeciwnych wizji: Cathel "
         "chce wyjść poza wardy i szukać źródła zła, Nimriel chce zamknąć się i "
         "wzmocnić granice. Bohater wybiera stronę albo lawiruje — napęd Aktu 1.\n"
+    ),
+    # #1475 — Piętnowany startuje na Martwych Pustkowiach, hub „Solny Próg"
+    # (enklawa Piętnowanych na skraju pustkowi). Haki: Raszid (Starszy enklawy,
+    # chroni swoich) vs Siostra Verena (Misja Światła, nieufna wobec Piętna) —
+    # napięcie „swoi kontra obcy, którzy się ciebie boją", wprost z cechy Piętna.
+    "pietnowani": (
+        "KRAINA STARTOWA (obowiązkowa — bohater jest Piętnowanym):\n"
+        "  Martwe Pustkowia — spopielała kraina przy płytkim Rdzeniu; sól jako "
+        "waluta i tarcza, ruiny Pradawnych, nieumarli i istoty Rdzenia. "
+        "Piętnowani to potomkowie ludzi, którzy NIE uciekli po Wielkim Pęknięciu "
+        "— popielata skóra, blade oczy, widoczne piętno; obcy im nie ufają.\n"
+        "  Pierwsza lokacja planu (key_locations[0]) MUSI być jedną z:\n"
+        "    - „Solny Próg: Gospoda dla Obcych\" (enklawa Piętnowanych — domyślna, zalecana)\n"
+        "    - „Solny Próg: Dom Starszych\" (rada enklawy)\n"
+        "  Otwarte pustkowia (Pola Szkła, Krypta, Twierdza Bezimiennego) NIE są startem.\n"
+        "PIERWSZE HAKI (użyj obu jako przeciwstawnych ofert w Akcie 1):\n"
+        "  - Raszid, Starszy enklawy — chroni Piętnowanych i handel solą; prosi "
+        "bohatera o przysługę, która wzmocni pozycję enklawy wobec przybyszów.\n"
+        "  - Siostra Verena, inkwizytorka-obserwatorka Misji Światła — patrzy na "
+        "Piętno z podejrzliwością; oferuje bohaterowi „oczyszczenie imienia\" w "
+        "zamian za robotę, która może uderzyć we własnych. Bohater wybiera "
+        "lojalność wobec swoich albo akceptację obcych — napęd Aktu 1.\n"
     ),
 }
 
