@@ -726,5 +726,109 @@
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
+  },
+  {
+    "id": 37608,
+    "location_key": "solny_prog",
+    "npc_key": "raszid_starszy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37609,
+    "location_key": "solny_prog",
+    "npc_key": "lejla_przewodniczka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37610,
+    "location_key": "solny_prog",
+    "npc_key": "nadira_zniwiarka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37611,
+    "location_key": "solny_prog",
+    "npc_key": "farid_kupiec",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37612,
+    "location_key": "solny_prog_dom_starszych",
+    "npc_key": "raszid_starszy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37613,
+    "location_key": "solny_prog_targ_przewodnikow",
+    "npc_key": "farid_kupiec",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37614,
+    "location_key": "solny_prog_targ_przewodnikow",
+    "npc_key": "lejla_przewodniczka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37615,
+    "location_key": "solny_prog_solne_magazyny",
+    "npc_key": "nadira_zniwiarka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37616,
+    "location_key": "oboz_goraczki",
+    "npc_key": "greta_szefowa",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37617,
+    "location_key": "oboz_goraczki",
+    "npc_key": "fabian_paser",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37618,
+    "location_key": "misja_swiatla",
+    "npc_key": "brat_ansgar",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37619,
+    "location_key": "misja_swiatla",
+    "npc_key": "siostra_verena",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37620,
+    "location_key": "solne_zniwa",
+    "npc_key": "nadira_zniwiarka",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
   }
 ]

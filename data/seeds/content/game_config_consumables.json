@@ -1482,5 +1482,33 @@
     "image_gen_prompt": "slender glass vial, cork stopper, cloudy corrosive acid, sickly green liquid, steaming fumes, bubbling surface, caustic glow, etched glass, hazardous alchemical consumable, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
     "hidden": 0
+  },
+  {
+    "key": "szczypta_soli",
+    "label": "Szczypta soli",
+    "description": "Garść solnego pyłu rzucona w twarz nieumarłemu rwie na chwilę Rdzeń, który go ożywia — pustka wzdryga się, jakby ją oślepiono. Piętnowani noszą szczyptę zawsze przy pasie: na pustkowiach to tańsze niż modlitwa i pewniejsze.",
+    "effect_type": "misc",
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "enemy",
+    "weight_kg": 0.1,
+    "charges": 1,
+    "base_price": 8,
+    "note": "Rzucona w nieumarłego zakłóca go na turę (§6). Wartości startowe.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 12:38:31",
+    "updated_at": "2026-07-26 12:38:31",
+    "rarity": 1,
+    "ai_generated": 0,
+    "approved": 1,
+    "min_level": 1,
+    "location_tags": "martwe_pustkowia,siwe_granie",
+    "price_gp": 8,
+    "effect_json": "{\"effect_category\": \"salt_disrupt\", \"target_type\": \"undead\", \"purity\": \"premium\"}",
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0
   }
 ]
