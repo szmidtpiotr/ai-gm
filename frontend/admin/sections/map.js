@@ -1776,9 +1776,203 @@ const _ROW_REGISTRY = {
 
   function _wbWs(wx, wy) { return { x: wx * _wbZoom + _wbPan.x, y: wy * _wbZoom + _wbPan.y }; }
 
+  // ══ Mapa 2.0: renderer PixiJS „stary wygląd" (płaskie kolory rodzin) ═════════
+  // Silnik pod SKALĘ (docelowo ~20k hexów / 3×3 krainy, mobile). Wygląd IDENTYCZNY
+  // ze starym SVG (kolory rodzin + ikony + etykiety + duchy + teleporty + znaczniki
+  // lokacji), tylko rysowany na GPU. Trafianie geometryczne (bez DOM per-hex) →
+  // SVG zostaje jako PUSTA przezroczysta powierzchnia zdarzeń (skaluje się) i jako
+  // awaryjny fallback (localStorage `wbMapEngine=svg`).
+  let _wbEngine = 'pixi';
+  let _wbPIXI = null, _wbPixiApp = null, _wbPixiRoot = null;
+  let _wbHexG = null, _wbGhostG = null, _wbTpG = null, _wbIconLayer = null;
+  let _wbPixiReady = false, _wbPixiBooting = false, _wbPixiSig = '', _wbPixiRAF = null, _wbKickT = null;
+  let _wbDownPt = null;
+
+  function _wbCol(hex) { return parseInt((hex || '#4a6a4a').slice(1), 16); }
+  function _wbHexPathG(g, x, y, s) {
+    for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * 60 * i, px = x + s * Math.cos(a), py = y + s * Math.sin(a);
+      i ? g.lineTo(px, py) : g.moveTo(px, py); } g.closePath();
+  }
+  // screen px → najbliższy hex (geometryczne trafianie zamiast elementFromPoint)
+  function _wbHexAtScreen(clientX, clientY) {
+    const svg = document.getElementById('wb-svg'); if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const wx = (clientX - rect.left - _wbPan.x) / _wbZoom;
+    const wy = (clientY - rect.top - _wbPan.y) / _wbZoom;
+    const S = _WB_SIZE, R3 = Math.sqrt(3);
+    const qf = wx / (1.5 * S), rf = (wy / S - R3 / 2 * qf) / R3;
+    let best = null, bd = 1e9;
+    for (let dq = -1; dq <= 1; dq++) for (let dr = -1; dr <= 1; dr++) {
+      const q = Math.round(qf) + dq, r = Math.round(rf) + dr;
+      const p = _wbHexToPixel(q, r), d = (p.x - wx) ** 2 + (p.y - wy) ** 2;
+      if (d < bd) { bd = d; best = { q, r }; }
+    }
+    return best;
+  }
+
+  function _wbPixiKick() {
+    if (_wbEngine !== 'pixi' || !_wbPixiApp) return;
+    const cv = document.getElementById('wb-pixi');
+    if (cv) { cv.style.display = 'none'; void cv.offsetHeight; cv.style.display = 'block'; }
+    _wbApplyCamera(); _wbPixiApp.render();
+  }
+  function _wbApplyCamera() {
+    if (!_wbPixiRoot) return;
+    _wbPixiRoot.scale.set(_wbZoom); _wbPixiRoot.position.set(_wbPan.x, _wbPan.y);
+  }
+
+  async function _wbPixiInit() {
+    if (_wbPixiApp || _wbPixiBooting) return; _wbPixiBooting = true;
+    try {
+      const wrap = document.querySelector('#wtab-builder .wb-canvas-wrap');
+      if (!wrap) { _wbPixiBooting = false; return; }
+      let canvas = document.getElementById('wb-pixi');
+      if (!canvas) {  // odtworzenie po resecie (świeży kontekst GL = pewny render)
+        canvas = document.createElement('canvas'); canvas.id = 'wb-pixi';
+        canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
+        wrap.insertBefore(canvas, wrap.firstChild);
+      }
+      const PIXI = await import('/vendor/pixi.min.mjs'); _wbPIXI = PIXI;
+      const app = new PIXI.Application();
+      await app.init({ canvas, resizeTo: wrap, background: '#080608',
+        antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1,
+        preserveDrawingBuffer: true });   // bez tego canvas WebGL bywa czarny po przebudowie
+      _wbPixiApp = app;
+      _wbPixiRoot = new PIXI.Container(); app.stage.addChild(_wbPixiRoot);
+      _wbHexG = new PIXI.Graphics(); _wbGhostG = new PIXI.Graphics();
+      _wbTpG = new PIXI.Graphics(); _wbIconLayer = new PIXI.Container();
+      _wbPixiRoot.addChild(_wbHexG, _wbGhostG, _wbTpG, _wbIconLayer);
+      _wbPixiReady = true; _wbPixiSig = '';
+      _wbRenderPixi();
+      // rozgrzewka kompozytora WebGL (pierwszy paint po twardym reloadzie bywa
+      // czarny do przecyklowania canvasa) — kilka prób w oknie osiadania layoutu
+      [200, 600, 1200].forEach(ms => setTimeout(() => { if (_wbEngine === 'pixi') _wbPixiKick(); }, ms));
+    } catch (e) {
+      console.error('[wb-pixi] init failed', e);
+      _showToast('PixiJS nie ruszył — wracam do SVG', 'error');
+      _wbEngine = 'svg'; _wbSyncEngineUi();
+    }
+    _wbPixiBooting = false;
+  }
+
+  function _wbFlatSig() {
+    let s = 0; for (const k in _wbHexes) { const h = _wbHexes[k];
+      s = (s * 31 + k.length + (h.hex_type ? h.hex_type.charCodeAt(0) : 0) + (h.label ? 7 : 0)) | 0; }
+    const sel = _wbSelected ? _wbSelected.q + ',' + _wbSelected.r : '-';
+    const Z = _wbZoom;  // przebudowa tylko przy przekroczeniu progu ODSŁONIĘCIA
+    const zb = (Z >= 0.3 ? 1 : 0) + (Z >= 0.35 ? 1 : 0) + (Z >= 0.45 ? 1 : 0)
+      + (Z >= 0.5 ? 1 : 0) + (Z >= 0.55 ? 1 : 0) + (Z >= 0.6 ? 1 : 0);
+    return Object.keys(_wbHexes).length + '|' + s + '|' + sel + '|' + _wbPaintType + '|'
+      + (_wbPaintMode ? 1 : 0) + '|' + (_wbShowLocOverlay ? 1 : 0) + '|'
+      + Object.keys(_wbLocations).length + '|' + _wbTeleports.length + '|' + zb;
+  }
+
+  function _wbFlatBuild() {
+    if (!_wbPixiReady) return;
+    const PIXI = _wbPIXI, S = _WB_SIZE, Z = _wbZoom;
+    _wbHexG.clear(); _wbGhostG.clear(); _wbTpG.clear(); _wbIconLayer.removeChildren();
+    const hexes = Object.values(_wbHexes);
+    // fills
+    for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      const pal = terrainStyle(h.hex_type); const cfg = _wbHexTypes[h.hex_type] || {};
+      _wbHexPathG(_wbHexG, x, y, S - 1); _wbHexG.fill(_wbCol(pal ? pal.color : (cfg.map_color || '#4a6a4a'))); }
+    // strokes + loc overlay (per hex — sel/loc/paint-type/default, jak w SVG)
+    for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      const sel = _wbSelected && _wbSelected.q === h.q && _wbSelected.r === h.r;
+      const hl = !sel && _wbPaintType && h.hex_type === _wbPaintType;
+      const hasLoc = _wbShowLocOverlay && !!_wbLocations[_wbKey(h.q, h.r)];
+      let col = 0x222222, w = 0.7;
+      if (sel) { col = 0xf0c040; w = 2; } else if (hasLoc) { col = 0x4ade80; w = 2.5; } else if (hl) { col = 0x38bdf8; w = 2; }
+      _wbHexPathG(_wbHexG, x, y, S - 1); _wbHexG.stroke({ width: w / Z, color: col });
+      if (hasLoc) { _wbHexPathG(_wbHexG, x, y, S - 1); _wbHexG.fill({ color: 0x4ade80, alpha: 0.18 }); }
+    }
+    // ghosts (sąsiedzi pustych hexów)
+    if (Z >= 0.3) {
+      const placed = new Set(Object.keys(_wbHexes)); const ghosts = new Set();
+      for (const h of hexes) for (const n of _wbNeighbors(h.q, h.r)) { const kk = _wbKey(n.q, n.r); if (!placed.has(kk)) ghosts.add(kk); }
+      for (const k of ghosts) { const [q, r] = k.split(',').map(Number); const { x, y } = _wbHexToPixel(q, r); _wbHexPathG(_wbGhostG, x, y, S - 1); }
+      _wbGhostG.stroke({ width: 0.6 / Z, color: 0x2a2a3a, alpha: 0.7 });
+    }
+    // ikony + etykiety terenu (rozmiar świata dobrany tak, by ekran ≈ SVG)
+    for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      const pal = terrainStyle(h.hex_type); const cfg = _wbHexTypes[h.hex_type] || {};
+      const icon = pal ? pal.icon : (cfg.map_icon || '');
+      if (Z >= 0.45 && icon) { const t = new PIXI.Text({ text: icon, style: { fontSize: Math.max(9, 13 * Z) / Z } });
+        t.anchor.set(0.5); t.position.set(x, y - S * 0.05); _wbIconLayer.addChild(t); }
+      if (Z >= 0.5 && h.label) { const t = new PIXI.Text({ text: h.label.slice(0, 14), style: { fontSize: Math.max(7, 9 * Z) / Z, fill: 0xc8c0a8 } });
+        t.anchor.set(0.5, 0); t.position.set(x, y + S * 0.30); _wbIconLayer.addChild(t); }
+    }
+    // teleporty
+    for (const t of _wbTeleports) {
+      const p1 = _wbHexToPixel(t.from_q, t.from_r), p2 = _wbHexToPixel(t.to_q, t.to_r);
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2 - 28;
+      const colors = { boat: 0x3a8aaa, magic: 0x8a3aaa, tunnel: 0x8a6a3a, portal: 0x3aaa6a };
+      const col = colors[t.travel_type] || 0x888888;
+      _wbTpG.moveTo(p1.x, p1.y); _wbTpG.quadraticCurveTo(mx, my, p2.x, p2.y);
+      _wbTpG.stroke({ width: 1.4 / Z, color: col, alpha: 0.9 });
+      if (Z >= 0.55 && t.label) { const tt = new PIXI.Text({ text: t.label, style: { fontSize: Math.max(7, 8 * Z) / Z, fill: col } });
+        tt.anchor.set(0.5, 1); tt.position.set(mx, my - 4 / Z); _wbIconLayer.addChild(tt); }
+    }
+    // znaczniki lokacji ★ / ◈
+    if (Z >= 0.35) {
+      for (const loc of Object.values(_wbLocations)) { const { x, y } = _wbHexToPixel(loc.q, loc.r);
+        const pending = loc.pending; const col = pending ? 0x888888 : 0xf0c040;
+        const t = new PIXI.Text({ text: pending ? '◈' : '★', style: { fontSize: Math.max(8, 14 * Z) / Z, fill: col } });
+        t.anchor.set(0.5); t.alpha = pending ? 0.55 : 1; t.position.set(x, y - S * 0.25); _wbIconLayer.addChild(t);
+        if (Z >= 0.6) { const lt = new PIXI.Text({ text: (loc.label || '').slice(0, 12), style: { fontSize: Math.max(6, 8 * Z) / Z, fill: col } });
+          lt.anchor.set(0.5, 1); lt.alpha = pending ? 0.55 : 1; lt.position.set(x, y - S * 0.52); _wbIconLayer.addChild(lt); } }
+    }
+  }
+
+  function _wbRenderPixi() {
+    if (!_wbPixiReady) { _wbPixiInit(); return; }
+    _wbApplyCamera();
+    const sig = _wbFlatSig();
+    if (sig !== _wbPixiSig && !_wbPixiRAF) {
+      _wbPixiRAF = requestAnimationFrame(() => {
+        _wbPixiRAF = null; _wbFlatBuild(); _wbPixiSig = _wbFlatSig();
+        clearTimeout(_wbKickT); _wbKickT = setTimeout(_wbPixiKick, 180);
+      });
+    }
+  }
+
+  function _wbSyncEngineUi() {
+    const cv = document.getElementById('wb-pixi'); const svg = document.getElementById('wb-svg');
+    const btn = document.getElementById('wb-engine-toggle'); const pixi = _wbEngine === 'pixi';
+    if (cv) cv.style.display = pixi ? 'block' : 'none';
+    if (svg) svg.style.background = pixi ? 'transparent' : '#080608';
+    if (btn) { btn.textContent = pixi ? '🗺 Silnik: PixiJS' : '🗺 Silnik: SVG';
+      btn.style.background = pixi ? '#16281c' : '#1e2a3a';
+      btn.style.borderColor = pixi ? '#2f6b3d' : '#2f4a6b';
+      btn.style.color = pixi ? '#8de89f' : '#8fb8e8'; }
+    _wbRender();
+  }
+  function wbToggleEngine() {
+    _wbEngine = _wbEngine === 'pixi' ? 'svg' : 'pixi';
+    try { localStorage.setItem('wbMapEngine', _wbEngine); } catch (e) {}
+    if (_wbEngine === 'pixi') _wbPixiInit();
+    _wbSyncEngineUi();
+  }
+  // klik selekcji w trybie pixi (geometryczny; SVG używa handlerów na polygonach)
+  function _wbSvgClick(e) {
+    if (_wbEngine !== 'pixi') return;
+    if (e.button !== 0 || e.altKey || _wbPaintMode) return;
+    if (_wbDownPt && (Math.abs(e.clientX - _wbDownPt.x) > 4 || Math.abs(e.clientY - _wbDownPt.y) > 4)) return; // to był pan
+    const cell = _wbHexAtScreen(e.clientX, e.clientY);
+    if (cell) _wbHexClickAt(cell.q, cell.r);
+  }
+
   function _wbRender() {
     const svg = document.getElementById('wb-svg');
     if (!svg) return;
+    if (_wbEngine === 'pixi') {
+      _wbRenderPixi();
+      // pusta przezroczysta powierzchnia zdarzeń (jeden rect → skaluje się do 20k)
+      const W = svg.clientWidth || 900, H = svg.clientHeight || 600;
+      svg.innerHTML = `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent" style="pointer-events:all;cursor:${_wbPaintMode ? 'crosshair' : 'pointer'}"/>`;
+      const zl = document.getElementById('wb-zoom-label'); if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
+      return;
+    }
     let html = '';
 
     for (const hex of Object.values(_wbHexes)) {
@@ -1870,7 +2064,10 @@ const _ROW_REGISTRY = {
   }
 
   async function _wbOnHexClick(e) {
-    const q = parseInt(e.target.dataset.q), r = parseInt(e.target.dataset.r);
+    _wbHexClickAt(parseInt(e.target.dataset.q), parseInt(e.target.dataset.r));
+  }
+
+  async function _wbHexClickAt(q, r) {
     if (_wbDrawingTp) {
       if (_wbDrawingTp.q === q && _wbDrawingTp.r === r) {
         _wbDrawingTp = null; _showToast('Anulowano.', 'info'); return;
@@ -2079,6 +2276,7 @@ const _ROW_REGISTRY = {
   }
 
   function _wbHexUnderPoint(clientX, clientY) {
+    if (_wbEngine === 'pixi') return _wbHexAtScreen(clientX, clientY);  // geometryczne (brak polygonów)
     const el = document.elementFromPoint(clientX, clientY);
     const poly = el && el.closest && el.closest('.whx,.whg');
     if (!poly) return null;
@@ -2577,7 +2775,18 @@ const _ROW_REGISTRY = {
       });
       svg._wbDragWired = true;
     }
+    // Mapa 2.0: wiring dla trybu PixiJS (klik selekcji geometryczny + tracker panu)
+    if (!svg._wbPixiWired) {
+      svg.addEventListener('mousedown', (e) => { _wbDownPt = { x: e.clientX, y: e.clientY }; });
+      svg.addEventListener('click', _wbSvgClick);
+      svg._wbPixiWired = true;
+    }
     _wbUpdateUndoBtn();
+
+    // Mapa 2.0: silnik — PixiJS domyślny (skala krain); SVG = awaryjny fallback.
+    try { _wbEngine = localStorage.getItem('wbMapEngine') === 'svg' ? 'svg' : 'pixi'; } catch (e) { _wbEngine = 'pixi'; }
+    _wbSyncEngineUi();
+    if (_wbEngine === 'pixi') _wbPixiInit();
 
     // ResizeObserver for re-render on container resize
     if (typeof ResizeObserver !== 'undefined' && !svg._wbRO) {
@@ -3155,11 +3364,13 @@ function _sectionHtml() {
               <div class="wb-hint" id="wb-hint">Maluj: wybierz typ + przeciągnij<br>Kliknij hex → edytuj<br>Ctrl+Z → cofnij<br>Alt+drag → przesuń · Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
+              <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
             </div>
             <div style="display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden">
               <div id="wb-region-bar"></div>
-              <div class="wb-canvas-wrap" style="flex:1">
-                <svg id="wb-svg" style="background:#080608"></svg>
+              <div class="wb-canvas-wrap" style="flex:1;position:relative">
+                <canvas id="wb-pixi" style="position:absolute;inset:0;width:100%;height:100%;display:none"></canvas>
+                <svg id="wb-svg" style="position:absolute;inset:0;background:#080608"></svg>
               </div>
             </div>
             <div class="wb-detail" id="wb-detail">
@@ -3183,7 +3394,7 @@ export async function init(panel) {
   Object.assign(window, {
     filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal,
     saveKnowledgeBubble,
-    wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
+    wbCenter, wbToggleEngine, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
     openLocDetailModal, wbFilterRegion, wbToggleRegionStatus,
