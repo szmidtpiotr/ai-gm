@@ -24,13 +24,16 @@ import sqlite3
 
 #: Archetypy niedostępne dla rasy (klucz rasy → krotka archetypów).
 RACE_BLOCKED_ARCHETYPES: dict[str, tuple[str, ...]] = {
-    "dwarf": ("rogue",),
+    # #1475 — Wojownik-Mag (gish) jest EKSKLUZYWNY dla Piętnowanych (krew oswojona
+    # z Rdzeniem). Każda inna rasa ma go zamkniętego.
+    "human": ("wojownik_mag",),
+    "dwarf": ("rogue", "wojownik_mag"),
     # #1474 — elf leśny nie gra Wojownikiem. CON −1 i lekki chód wykluczają
     # frontowe zwarcie; tożsamość rasy = Zwiadowca (łuk + odskok) i
     # Uczony-Stroiciel (kontrola/iluzje).
-    "elf": ("warrior",),
+    "elf": ("warrior", "wojownik_mag"),
     # #1475 — Piętnowani chodzą tylko drogą magii: Uczony (pełny mag) albo
-    # Wojownik-Mag (gish, PN-2). Czysty Wojownik i Łotrzyk są zamknięte —
+    # Wojownik-Mag (gish). Czysty Wojownik i Łotrzyk są zamknięte —
     # tożsamość rasy to krew oswojona z Rdzeniem, nie stal ani skrytobójstwo.
     "pietnowani": ("warrior", "rogue"),
 }
@@ -52,6 +55,18 @@ _BLOCK_REASON: dict[tuple[str, str], str] = {
     ("pietnowani", "rogue"): (
         "Piętnowani noszą Rdzeń we krwi — ich droga to Uczony albo "
         "Wojownik-Mag, nie skrytobójstwo."
+    ),
+    ("human", "wojownik_mag"): (
+        "Wojownik-Mag to droga Piętnowanych — tylko krew oswojona z Rdzeniem "
+        "udźwignie stal i zaklęcie naraz."
+    ),
+    ("dwarf", "wojownik_mag"): (
+        "Wojownik-Mag to droga Piętnowanych — Rdzeń-magia krasnoluda idzie "
+        "inną ścieżką (Uczony Rdzenia)."
+    ),
+    ("elf", "wojownik_mag"): (
+        "Wojownik-Mag to droga Piętnowanych — magia elfa to strojenie, "
+        "nie krew oswojona."
     ),
 }
 

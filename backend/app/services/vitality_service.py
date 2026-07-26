@@ -25,13 +25,27 @@ ARCHETYPE_BASE_HP: dict[str, int] = {
     "rogue":   8,    # B2 (#642): zwiadowca — mniej HP niż warrior, więcej niż mag
     "scholar": 6,
     "ranger":  8,    # future archetype — forward-compatible
+    # #1475 PN-2: Wojownik-Mag (gish) — HP między Wojownikiem (10) a Uczonym (6).
+    # Nosi stal, więc twardszy od maga, ale dzieli uwagę z zaklęciami. Wartość startowa.
+    "wojownik_mag": 8,
 }
 
 ARCHETYPE_BASE_MANA: dict[str, int] = {
     "warrior": 0,
     "scholar": 8,
     "ranger":  0,
+    # #1475 PN-2: gish — baza many połowiczna (Uczony 8). Pełna formuła niżej.
+    "wojownik_mag": 4,
 }
+
+#: #1475 — archetypy, które w ogóle rzucają czary (mają manę). Uczony = pełny mag,
+#: Wojownik-Mag = połowiczny gish. Reszta = 0 many.
+CASTER_ARCHETYPES: frozenset[str] = frozenset({"scholar", "wojownik_mag"})
+
+
+def is_caster(archetype: str | None) -> bool:
+    """Czy archetyp rzuca czary (ma pulę many). Jedno źródło prawdy dla walki."""
+    return str(archetype or "").strip().lower() in CASTER_ARCHETYPES
 
 
 # ── Core formulas ──────────────────────────────────────────────────────────
@@ -61,19 +75,23 @@ def calculate_hp(archetype: str, con: int, level: int = 1) -> int:
 
 def calculate_mana(archetype: str, int_stat: int, level: int = 1) -> int:
     """
-    Mana = 8 + INT_modifier × level  (Scholar only, minimum 1).
-    Warriors and Rangers always return 0.
+    Mana per archetype (minimum 1 for casters, 0 for non-casters):
+      Scholar (Uczony)       : 8 + INT_mod × level
+      Wojownik-Mag (gish)    : 4 + (INT_mod × level) // 2   (#1475 — połowiczna pula)
+      Warrior / Rogue / etc. : 0
 
     Args:
-        archetype: "warrior" | "scholar" | "ranger"
+        archetype: "warrior" | "scholar" | "rogue" | "wojownik_mag" | "ranger"
         int_stat: INT stat value (e.g. 12)
         level: character level (1 at creation)
     """
-    arc = archetype.lower()
-    if arc != "scholar":
-        return 0
-    base = ARCHETYPE_BASE_MANA["scholar"]
-    return max(1, base + stat_modifier(int_stat) * level)
+    arc = archetype.strip().lower()
+    if arc == "scholar":
+        return max(1, ARCHETYPE_BASE_MANA["scholar"] + stat_modifier(int_stat) * level)
+    if arc == "wojownik_mag":
+        # #1475 — gish: baza 4 + połowa progresji INT (zaokrąglona w dół).
+        return max(1, ARCHETYPE_BASE_MANA["wojownik_mag"] + (stat_modifier(int_stat) * level) // 2)
+    return 0
 
 
 # ── #1466 — single source of truth for max_hp / max_mana ────────────────────

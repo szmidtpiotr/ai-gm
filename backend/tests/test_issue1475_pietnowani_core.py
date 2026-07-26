@@ -70,10 +70,10 @@ def test_pietnowani_can_be_scholar():
 
 def test_blocked_list_for_creator():
     assert rss.blocked_archetypes_for_race("pietnowani") == ["warrior", "rogue"]
-    # Pozostałe rasy bez zmian.
-    assert rss.blocked_archetypes_for_race("elf") == ["warrior"]
-    assert rss.blocked_archetypes_for_race("dwarf") == ["rogue"]
-    assert rss.blocked_archetypes_for_race("human") == []
+    # Wojownik-Mag (gish) jest ekskluzywny dla Piętnowanych → zamknięty innym rasom (PN-2).
+    assert set(rss.blocked_archetypes_for_race("elf")) == {"warrior", "wojownik_mag"}
+    assert set(rss.blocked_archetypes_for_race("dwarf")) == {"rogue", "wojownik_mag"}
+    assert rss.blocked_archetypes_for_race("human") == ["wojownik_mag"]
 
 
 # ─── Kraina ojczysta i dostępność ────────────────────────────────────────────

@@ -272,7 +272,7 @@ def _build_character_sheet(
     skills = dict(sheet.get("skills") or {})
 
     normalized_archetype = (archetype or sheet.get("archetype") or "").strip().lower()
-    if normalized_archetype not in ("warrior", "scholar", "rogue"):
+    if normalized_archetype not in ("warrior", "scholar", "rogue", "wojownik_mag"):
         normalized_archetype = "warrior"
     sheet["archetype"] = normalized_archetype
 
@@ -284,6 +284,17 @@ def _build_character_sheet(
             skills["athletics"] = max(int(skills.get("athletics", 0)), 2)
             skills["melee_attack"] = max(int(skills.get("melee_attack", 0)), 2)
             skills["intimidation"] = max(int(skills.get("intimidation", 0)), 1)
+    elif normalized_archetype == "wojownik_mag":
+        # #1475 PN-2: gish — „miecz w jednej ręce, popiół w drugiej". Czerpie z obu
+        # dróg, ale oddaje szczyt każdej: +1 SIŁ (stal) + +1 INT (magia) + +1 KON.
+        # Skill-minima: mieszają melee + arkany. Wartości startowe (Numbers Policy).
+        stats["STR"] = int(stats.get("STR", 10)) + 1
+        stats["INT"] = int(stats.get("INT", 10)) + 1
+        stats["CON"] = int(stats.get("CON", 10)) + 1
+        if apply_archetype_skill_minimums:
+            skills["melee_attack"] = max(int(skills.get("melee_attack", 0)), 1)
+            skills["arcana"] = max(int(skills.get("arcana", 0)), 1)
+            skills["spell_attack"] = max(int(skills.get("spell_attack", 0)), 1)
     elif normalized_archetype == "rogue":
         # B1 (#624): łotrzyk = zwinny zwiadowca/złodziej (canon AK.2: DEX+2/LCK+1),
         # nie bonusy maga. Lustro frontendu app.js ARCHETYPE_BONUS.rogue.
@@ -528,7 +539,7 @@ def _core_bases_from_stored_stats(stats: dict, archetype: str, race: str = "huma
         lk = k.lower()
         out[k] = int(stats.get(k, stats.get(lk, 10)))
     a = (archetype or "warrior").strip().lower()
-    if a not in ("scholar", "warrior", "rogue"):
+    if a not in ("scholar", "warrior", "rogue", "wojownik_mag"):
         a = "warrior"
     if a == "warrior":
         out["STR"] -= 2
@@ -537,6 +548,11 @@ def _core_bases_from_stored_stats(stats: dict, archetype: str, race: str = "huma
         # B1 (#624): odwrotność bonusu łotrzyka (DEX+2/LCK+1).
         out["DEX"] -= 2
         out["LCK"] -= 1
+    elif a == "wojownik_mag":
+        # #1475 — odwrotność bonusu gisha (STR+1/INT+1/CON+1).
+        out["STR"] -= 1
+        out["INT"] -= 1
+        out["CON"] -= 1
     else:
         out["INT"] -= 2
         out["WIS"] -= 1
@@ -1057,7 +1073,9 @@ def _create_roll_initial_sheet(req) -> tuple[dict, str, str | None]:
     base_sheet = dict(req.sheet_json or {})
     requested_archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
     starter_archetype_key = (
-        requested_archetype if requested_archetype in ("warrior", "scholar", "rogue") else None
+        requested_archetype
+        if requested_archetype in ("warrior", "scholar", "rogue", "wojownik_mag")
+        else None
     )
     archetype = starter_archetype_key or "warrior"
     base_sheet["archetype"] = archetype
@@ -1108,7 +1126,11 @@ def _build_char_summary(
     location: str,
 ) -> str:
     """Build the character summary string used in GM plan and opening scene prompts."""
-    archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
+    archetype_label = (
+        "Uczony" if archetype == "scholar"
+        else "Wojownik-Mag" if archetype == "wojownik_mag"
+        else "Wojownik"
+    )
     stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
     skill_lines = (
         ", ".join(
@@ -1424,7 +1446,7 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
         raise HTTPException(status_code=400, detail="user_id and name are required")
 
     archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "scholar", "rogue"):
+    if archetype not in ("warrior", "scholar", "rogue", "wojownik_mag"):
         archetype = "warrior"
 
     race = _normalize_race(req.get("race"))
@@ -1485,13 +1507,20 @@ def create_standalone_character(req: dict = Body(...), authorization: str | None
         conn.commit()
         char_id = cur.lastrowid
 
-        if archetype == "scholar":
+        if archetype in ("scholar", "wojownik_mag"):
             try:
                 from app.services.spell_service import grant_starting_spells
+                # #1475 — gish dostaje 1 punkt arkanów na starcie (jak Uczony),
+                # ale wolniej je zdobywa na awansach (1/2 poziomy) — patrz xp_service.
+                created_sheet.setdefault("arcane_points", 1)
+                conn.execute(
+                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                    (json.dumps(created_sheet, ensure_ascii=False), char_id),
+                )
                 grant_starting_spells(char_id, conn)
                 conn.commit()
             except Exception as e:
-                logger.warning("[create_standalone_character] scholar starting spells failed (non-fatal): %s", str(e))
+                logger.warning("[create_standalone_character] starting spells failed (non-fatal): %s", str(e))
 
         # Grant + auto-equip starter loadout from the archetype config.
         # Standalone (idle) heroes need their kit just like campaign-bundled ones.
@@ -2818,7 +2847,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         )
 
     archetype = str(sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "scholar", "rogue"):
+    if archetype not in ("warrior", "scholar", "rogue", "wojownik_mag"):
         archetype = "warrior"
     sheet["archetype"] = archetype
 
@@ -3284,8 +3313,8 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     except Exception as e:
         logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))
 
-    # Grant starting spells for Scholar
-    if archetype == "scholar":
+    # Grant starting spells for Scholar and Wojownik-Mag (gish, #1475)
+    if archetype in ("scholar", "wojownik_mag"):
         try:
             from app.services.spell_service import grant_starting_spells
             created_sheet["arcane_points"] = 1
@@ -3297,7 +3326,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
             grant_starting_spells(character_id, conn)
             conn.commit()
         except Exception as e:
-            logger.warning("[create_character] scholar starting spells failed (non-fatal): %s", str(e))
+            logger.warning("[create_character] starting spells failed (non-fatal): %s", str(e))
 
     name = (req.name or "").strip() or "Bohater"
     stats = created_sheet.get("stats", {}) or {}

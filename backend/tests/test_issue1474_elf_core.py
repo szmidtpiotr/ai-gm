@@ -73,10 +73,12 @@ def test_elf_allowed_archetypes(arch):
 
 
 def test_blocked_list_for_creator():
-    assert rss.blocked_archetypes_for_race("elf") == ["warrior"]
-    # Krasnolud bez zmian (#1477).
-    assert rss.blocked_archetypes_for_race("dwarf") == ["rogue"]
-    assert rss.blocked_archetypes_for_race("human") == []
+    # #1475 PN-2: Wojownik-Mag (gish) jest ekskluzywny dla Piętnowanych, więc od
+    # tej pory każda inna rasa (w tym elf) ma go w liście zablokowanych.
+    assert "warrior" in rss.blocked_archetypes_for_race("elf")
+    assert "wojownik_mag" in rss.blocked_archetypes_for_race("elf")
+    assert "rogue" in rss.blocked_archetypes_for_race("dwarf")
+    assert rss.blocked_archetypes_for_race("human") == ["wojownik_mag"]
 
 
 # ─── Kraina ojczysta i dostępność ────────────────────────────────────────────
@@ -108,7 +110,7 @@ def test_elf_locked_for_normal_player_while_czarnobor_is_coming():
         elf = _entry(race_availability(conn, include_coming=False), "elf")
         assert elf["available"] is False
         assert "Czarnobór" in (elf["reason"] or "")
-        assert elf["blocked_archetypes"] == ["warrior"]
+        assert "warrior" in elf["blocked_archetypes"]  # #1475 PN-2: + wojownik_mag
     finally:
         conn.close()
 

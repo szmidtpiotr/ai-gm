@@ -26,14 +26,16 @@ from typing import Final
 #: Umiejętność → archetypy, które mogą ją mieć. Klucz spoza mapy = wspólny.
 SKILL_ARCHETYPE_LOCK: Final[dict[str, frozenset[str]]] = {
     # ── Magiczne: wymagają many albo znajomości zaklęć ───────────────────────
-    "arcana": frozenset({"scholar"}),
-    "arcane_ward": frozenset({"scholar"}),
-    "mana_shield": frozenset({"scholar"}),
-    "magic_sense": frozenset({"scholar"}),
+    # #1475 — Wojownik-Mag (gish) też włada arkanami (krew oswojona z Rdzeniem).
+    "arcana": frozenset({"scholar", "wojownik_mag"}),
+    "arcane_ward": frozenset({"scholar", "wojownik_mag"}),
+    "mana_shield": frozenset({"scholar", "wojownik_mag"}),
+    "magic_sense": frozenset({"scholar", "wojownik_mag"}),
     # ── Ciężka walka: ściana tarcz i broń, której uczony nie udźwignie ───────
+    # two_handed zostaje wojownikowi — gish włada tylko bronią jednoręczną.
     "shield_block": frozenset({"warrior"}),
     "two_handed": frozenset({"warrior"}),
-    "wrestling": frozenset({"warrior"}),
+    "wrestling": frozenset({"warrior", "wojownik_mag"}),
     # ── Złodziejskie: rzemiosło dzielnicy złodziei ──────────────────────────
     "lockpick": frozenset({"rogue"}),
     "pickpocket": frozenset({"rogue"}),
@@ -54,10 +56,12 @@ RACE_SKILL_UNLOCK: Final[dict[str, frozenset[str]]] = {
 RACE_SKILL_WEIGHTS: Final[dict[str, tuple[str, ...]]] = {
     "elf": ("survival", "stealth", "awareness", "acrobatics"),
     "dwarf": ("endurance", "athletics", "intimidation", "alchemy"),
+    # #1475 — Piętnowani: krew oswojona z Rdzeniem, uczą się od pokoleń.
+    "pietnowani": ("arcana", "lore", "magic_sense", "survival"),
     "human": (),
 }
 
-_ARCHETYPES: Final = frozenset({"warrior", "scholar", "rogue"})
+_ARCHETYPES: Final = frozenset({"warrior", "scholar", "rogue", "wojownik_mag"})
 
 
 def _norm_archetype(archetype: str | None) -> str:

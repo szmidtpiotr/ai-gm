@@ -7571,8 +7571,9 @@ def _load_player_spell_gate(
     if not spell_row:
         return _block("spell_not_known", f"Nie znasz zaklęcia „{spell_key}”.")
     _label = str(spell_row["label"] or spell_key)
-    if str(sheet.get("archetype") or "").strip().lower() != "scholar":
-        return _block("not_a_caster", "Tylko Uczony potrafi rzucać zaklęcia.")
+    from app.services.vitality_service import is_caster as _is_caster
+    if not _is_caster(sheet.get("archetype")):
+        return _block("not_a_caster", "Tylko Uczony i Wojownik-Mag potrafią rzucać zaklęcia.")
     known = conn.execute(
         "SELECT rank FROM character_spells WHERE character_id = ? AND spell_key = ?",
         (int(ch_id), spell_key),
@@ -10504,8 +10505,9 @@ def _scholar_restore_mana_after_combat(
     maskował bug wczesnym returnem).
     """
     try:
+        from app.services.vitality_service import is_caster as _is_caster
         archetype = str(sheet.get("archetype") or "").strip().lower()
-        if archetype != "scholar":
+        if not _is_caster(archetype):
             return
         row = conn.execute(
             "SELECT sheet_json FROM characters WHERE id = ?", (int(character_id),)

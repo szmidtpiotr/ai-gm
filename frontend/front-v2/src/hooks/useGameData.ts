@@ -581,7 +581,7 @@ interface CreateCharacterVars {
   userId: number;
   name: string;
   race: "human" | "dwarf" | "elf" | "pietnowani";  // #1474 elf, #1475 Piętnowani
-  archetype: "warrior" | "scholar" | "rogue";
+  archetype: "warrior" | "scholar" | "rogue" | "wojownik_mag";  // #1475 gish
   backstory: string;
 }
 

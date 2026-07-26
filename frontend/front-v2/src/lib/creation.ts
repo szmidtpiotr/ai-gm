@@ -7,17 +7,18 @@ export const WIZARD_STAT_MIN = 8;
 export const WIZARD_STAT_MAX = 18;
 
 export type Race = "human" | "dwarf" | "elf" | "pietnowani";
-export type Archetype = "warrior" | "scholar" | "rogue";
+export type Archetype = "warrior" | "scholar" | "rogue" | "wojownik_mag";
 
 // #1477 (SG-8) — archetypy zamknięte dla rasy. Krasnolud nie gra Łotrzykiem
 // (DEX to fabularnie słaba cecha rasy). Fallback offline'owy: serwer podaje to
 // samo w GET /creation/races → races[].blocked_archetypes, i on jest źródłem
 // prawdy; ta stała ratuje kreator, gdy odpowiedź jeszcze nie doszła.
 export const RACE_BLOCKED_ARCHETYPES: Record<Race, Archetype[]> = {
-  human: [],
-  dwarf: ["rogue"],
+  // #1475 — Wojownik-Mag (gish) jest ekskluzywny dla Piętnowanych; reszta ras go nie ma.
+  human: ["wojownik_mag"],
+  dwarf: ["rogue", "wojownik_mag"],
   // #1474 — elf leśny nie gra Wojownikiem (CON −1, lekki chód): Zwiadowca albo Stroiciel.
-  elf: ["warrior"],
+  elf: ["warrior", "wojownik_mag"],
   // #1475 — Piętnowani chodzą tylko drogą magii: Uczony albo Wojownik-Mag (gish).
   pietnowani: ["warrior", "rogue"],
 };
@@ -29,6 +30,8 @@ export const ARCHETYPE_BONUS: Record<Archetype, Partial<Record<StatKey, number>>
   warrior: { STR: 2, CON: 1 },
   scholar: { INT: 2, WIS: 1 },
   rogue: { DEX: 2, LCK: 1 },
+  // #1475 — Wojownik-Mag (gish): hybryda stali i magii, +1 SIŁ / +1 INT / +1 KON.
+  wojownik_mag: { STR: 1, INT: 1, CON: 1 },
 };
 
 // #1520 — lustro backendu (`actor_stats.RACIAL_STAT_MODS`). Kreator musi odjąć
@@ -48,13 +51,15 @@ export const RACE_STAT_MODS: Record<Race, Partial<Record<StatKey, number>>> = {
 // mieć. Rasa potrafi odblokować to, co zamknęła klasa (elf czyta pęknięcia
 // Rdzenia, krasnolud wyrasta przy tarczy i kowadle).
 export const SKILL_ARCHETYPE_LOCK: Record<string, Archetype[]> = {
-  arcana: ["scholar"],
-  arcane_ward: ["scholar"],
-  mana_shield: ["scholar"],
-  magic_sense: ["scholar"],
+  // #1475 — Wojownik-Mag (gish) też włada arkanami: dostęp do umiejętności maga
+  // (poza two_handed — broń dwuręczna jest mu zamknięta).
+  arcana: ["scholar", "wojownik_mag"],
+  arcane_ward: ["scholar", "wojownik_mag"],
+  mana_shield: ["scholar", "wojownik_mag"],
+  magic_sense: ["scholar", "wojownik_mag"],
   shield_block: ["warrior"],
   two_handed: ["warrior"],
-  wrestling: ["warrior"],
+  wrestling: ["warrior", "wojownik_mag"],
   lockpick: ["rogue"],
   pickpocket: ["rogue"],
   disguise: ["rogue"],
@@ -144,11 +149,15 @@ export function statMod(v: number): number {
 }
 
 export function calcHp(archetype: Archetype, con: number, level = 1): number {
-  const base = archetype === "warrior" ? 10 : archetype === "rogue" ? 8 : 6;
+  // #1475 — gish HP 8 (między Wojownikiem 10 a Uczonym 6).
+  const base =
+    archetype === "warrior" ? 10 : archetype === "wojownik_mag" ? 8 : archetype === "rogue" ? 8 : 6;
   return Math.max(1, base + statMod(con) * level);
 }
 
 export function calcMana(archetype: Archetype, intv: number, level = 1): number {
+  // #1475 — gish: połowiczna pula many 4 + (INT_mod × level) / 2 (floor).
+  if (archetype === "wojownik_mag") return Math.max(1, 4 + Math.floor((statMod(intv) * level) / 2));
   if (archetype !== "scholar") return 0;
   return Math.max(1, 8 + statMod(intv) * level);
 }

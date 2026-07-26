@@ -83,6 +83,12 @@ _RACE_STARTING_SPELLS: dict[str, tuple[str, ...]] = {
     "elf": ELF_SCHOLAR_STARTING_SPELLS,
 }
 
+# #1475 PN-2 — Wojownik-Mag (gish) czerpie z magii, ale oddaje jej szczyt: włada
+# tylko czarami tier 1–2 i rozwija je do R2 (Uczony: tier 1–5, R3). Wartości
+# startowe (Numbers Policy) — strojne na Sandboxie.
+GISH_MAX_SPELL_TIER = 2
+GISH_MAX_SPELL_RANK = 2
+
 
 def is_miscast(raw_d20: int, race: str = "human") -> bool:
     """Return True if the roll triggers a miscast for this race.
@@ -674,10 +680,13 @@ def learn_spell(character_id: int, spell_key: str, conn=None) -> dict:
         import json as _j
         char_level = 1
         char_race = "human"
+        char_archetype = ""
         if sj_row:
             try:
-                char_level = int(_j.loads(sj_row["sheet_json"] or "{}").get("level") or 1)
+                _sj = _j.loads(sj_row["sheet_json"] or "{}")
+                char_level = int(_sj.get("level") or 1)
                 char_race = str(sj_row["race"] or "human").strip().lower()
+                char_archetype = str(_sj.get("archetype") or "").strip().lower()
             except Exception:
                 char_level = 1
         # #975 R6 / #1373: race_lock = lista ras (CSV) dopuszczonych do nauki.
@@ -702,6 +711,13 @@ def learn_spell(character_id: int, spell_key: str, conn=None) -> dict:
             )
         # B7 (#652): bramka tieru — nie wolno nauczyć się czaru ponad max_tier dla poziomu.
         spell_tier = int(spell["tier"] or 1) if "tier" in spell.keys() else 1
+        # #1475 — Wojownik-Mag (gish) włada tylko czarami tier 1–2. Pełne szkoły
+        # (tier 3–5) są domeną Uczonego. Wartość startowa (Numbers Policy).
+        if char_archetype == "wojownik_mag" and spell_tier > GISH_MAX_SPELL_TIER:
+            raise ValueError(
+                f"Wojownik-Mag włada tylko czarami tier 1–{GISH_MAX_SPELL_TIER} — "
+                f"'{spell['label']}' to tier {spell_tier}; pełne szkoły są dla Uczonego."
+            )
         max_tier = max_spell_tier_for_level(char_level)
         if spell_tier > max_tier:
             raise ValueError(
@@ -738,6 +754,21 @@ def upgrade_spell(character_id: int, spell_key: str, conn=None) -> dict:
         current_rank = int(existing["rank"])
         if current_rank >= 3:
             raise ValueError(f"'{spell_key}' is already at max rank 3")
+        # #1475 — Wojownik-Mag (gish) rozwija czary tylko do R2; R3 jest dla Uczonego.
+        _arch_row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        if _arch_row:
+            import json as _j
+            try:
+                _arch = str(_j.loads(_arch_row["sheet_json"] or "{}").get("archetype") or "").strip().lower()
+            except Exception:
+                _arch = ""
+            if _arch == "wojownik_mag" and current_rank >= GISH_MAX_SPELL_RANK:
+                raise ValueError(
+                    f"Wojownik-Mag rozwija czary tylko do rangi R{GISH_MAX_SPELL_RANK} — "
+                    f"R3 jest domeną Uczonego."
+                )
         new_rank = current_rank + 1
         conn.execute(
             "UPDATE character_spells SET rank = ? WHERE character_id = ? AND spell_key = ?",

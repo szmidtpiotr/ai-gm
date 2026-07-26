@@ -96,6 +96,9 @@ const ARCHETYPES: Array<{ key: Archetype; icon: string; title: string; desc: str
   { key: "warrior", icon: "⚔️", title: "Wojownik", desc: "Frontowy wojownik w ciężkiej zbroi. Wysoki HP, silne ciosy.", bonus: "+2 SIŁ · +1 KON · HP 10" },
   { key: "rogue", icon: "🏹", title: "Łotrzyk", desc: "Zwinny cień: skradanie, łuk, inteligentna walka.", bonus: "+2 ZRĘ · +1 SZC · HP 8" },
   { key: "scholar", icon: "📜", title: "Uczony", desc: "Tkacz arkanów: kruchy, ale niszczycielski dzięki zaklęciom i manie.", bonus: "+2 INT · +1 MĄD · HP 6 · Mana" },
+  // #1475 — Wojownik-Mag (gish): karta widoczna tylko dla Piętnowanych (bramka
+  // blocked_archetypes zamyka ją innym rasom).
+  { key: "wojownik_mag", icon: "🗡️", title: "Wojownik-Mag", desc: "Miecz w jednej ręce, popiół w drugiej. Broń jednoręczna, czary tier 1–2, połowiczna mana — wojownik z zaklęciem na krytyczny moment.", bonus: "+1 SIŁ · +1 INT · +1 KON · HP 8 · Mana ½" },
 ];
 
 // #1474 — ta sama mechanika archetypu, inna nazwa i klimat wedle rasy. Elf nie ma

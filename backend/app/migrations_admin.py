@@ -3798,6 +3798,27 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     except Exception as e:
         logger.warning("v2_migration_skipped", label="v2-archetypes-hp-base-seed", error=str(e))
 
+    # #1475 PN-2 — Wojownik-Mag (gish): archetyp Piętnowanych. HP 8 (między
+    # Wojownikiem a Uczonym); loadout jednoręczny (bez tarczy w off-hand — druga
+    # ręka wolna na zaklęcia) + fokus/mikstury. Broń dwuręczna i off-hand gate
+    # w loot_service.equip_item. Wartości startowe (Numbers Policy).
+    try:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_archetypes
+            (key, label, description, starter_items_json, starter_gold_gp, hp_base, is_active, created_at, updated_at)
+            VALUES ('wojownik_mag', 'Wojownik-Mag',
+                    'Gish Piętnowanych: miecz w jednej ręce, popiół w drugiej. Broń jednoręczna, czary tier 1–2 (R2), połowiczna mana.',
+                    '[{"weapon_key":"shortsword"},{"item_key":"leatherarmor"},{"consumable_key":"health_potion_small"},{"consumable_key":"mana_potion"}]',
+                    12, 8, 1, datetime('now'), datetime('now'))
+            """
+        )
+        conn.execute("UPDATE game_config_archetypes SET hp_base = 8 WHERE key = 'wojownik_mag'")
+        conn.commit()
+        logger.info("v2_migration_applied", label="v2-archetype-wojownik-mag-seed")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-archetype-wojownik-mag-seed", error=str(e))
+
     _exec("ALTER TABLE game_config_consumables ADD COLUMN ai_generated INTEGER NOT NULL DEFAULT 0", "v2-consumables-ai-generated")
     _exec("ALTER TABLE game_config_consumables ADD COLUMN approved INTEGER NOT NULL DEFAULT 1", "v2-consumables-approved")
 

@@ -2787,6 +2787,28 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
         if auto_armor and not is_armor:
             raise ValueError("invalid slot")
 
+        # #1475 — Wojownik-Mag (gish): „miecz w jednej ręce, popiół w drugiej".
+        # Tylko broń jednoręczna w głównej dłoni — bez dwuręcznej i bez broni
+        # w off-hand (druga ręka zostaje wolna na zaklęcia; brak dual-wield).
+        if is_weapon and (weapon_slot_kind == "two_handed" or s == "off_hand"):
+            _arch_row = conn.execute(
+                "SELECT sheet_json FROM characters WHERE id = ?", (cid,)
+            ).fetchone()
+            _arch = ""
+            if _arch_row:
+                try:
+                    _arch = str(json.loads(_arch_row["sheet_json"] or "{}").get("archetype") or "").strip().lower()
+                except Exception:
+                    _arch = ""
+            if _arch == "wojownik_mag":
+                if weapon_slot_kind == "two_handed":
+                    raise ValueError(
+                        "Wojownik-Mag włada tylko bronią jednoręczną — dwuręczna zajmuje rękę na zaklęcia."
+                    )
+                raise ValueError(
+                    "Wojownik-Mag trzyma drugą rękę wolną na zaklęcia — bez broni w off-hand."
+                )
+
         # #1448: relic-class = non-weapon, non-armor item carrying a passive
         # (worn) effect_json. `get_equipment_bonuses` SUMS every equipped row's
         # static_stat/skill/ac effect regardless of slot, so a relic squeezed

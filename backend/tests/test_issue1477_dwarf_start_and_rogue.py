@@ -86,12 +86,15 @@ def test_dwarf_keeps_its_two_paths(archetype):
 
 @pytest.mark.parametrize("archetype", ["warrior", "scholar", "rogue"])
 def test_human_unrestricted(archetype):
+    # #1475 PN-2: Wojownik-Mag (gish) jest ekskluzywny dla Piętnowanych, więc
+    # człowiek gra 3 klasyczne archetypy, ale gisha ma zamkniętego.
     assert archetype_allowed("human", archetype)
-    assert blocked_archetypes_for_race("human") == []
+    assert blocked_archetypes_for_race("human") == ["wojownik_mag"]
 
 
 def test_blocked_list_for_dwarf_is_rogue_only():
-    assert blocked_archetypes_for_race("dwarf") == ["rogue"]
+    # #1475 PN-2: dwarf nadal bez Łotrzyka, dodatkowo bez gisha (ekskluzywnego dla Piętnowanych).
+    assert set(blocked_archetypes_for_race("dwarf")) == {"rogue", "wojownik_mag"}
 
 
 def test_unknown_race_is_not_blocked():
