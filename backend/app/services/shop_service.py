@@ -31,6 +31,10 @@ TREASURE_FRAGMENT_BM_PRICE = 50
 # #973 R4: Kowalskie oko — krasnolud discount (STARTING value, tunable via Sandbox)
 DWARF_SHOP_DISCOUNT = 0.15
 DWARF_REPAIR_COST_GP = 20  # złoto za akcję Reperuj (startowo)
+# #1475: Piętno społeczne — Piętnowany płaci WIĘCEJ (obcy się go boją). Odwrotność
+# kowalskiego oka: +10% narzutu na cenach kupna. Mechaniczna przeciwwaga bonusów
+# rasy (łagodniejszy miscast, magia krwi). STARTING value — tunable via Sandbox.
+PIETNOWANI_SHOP_MARKUP = 0.10
 
 # Type aliases: catalog may return sub-types that map to canonical stored types.
 # "gear" appears in game_config_items.item_type and is returned by catalog for
@@ -691,8 +695,12 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         # G8 #1472: krasnolud (kowalskie oko, −15%) widzi cenę PO rabacie także w
         # podglądzie — wcześniej okno sklepu pokazywało cenę wyższą niż faktycznie
         # pobierana przy kupnie (combined_buy_multiplier). Klamer jak na torze kupna.
-        if _get_character_race(conn, character_id) == "dwarf":
+        _shopper_race = _get_character_race(conn, character_id)
+        if _shopper_race == "dwarf":
             eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT))), 4)
+        elif _shopper_race == "pietnowani":
+            # #1475: piętno społeczne — obcy podnoszą cenę Piętnowanemu (+10%).
+            eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * (1.0 + PIETNOWANI_SHOP_MARKUP))), 4)
         ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         # #1127: night economy — reflect open state + black-market pricing in the UI.
         night_state = _shop_open_state(conn, npc, character_id)
@@ -800,8 +808,11 @@ def combined_buy_multiplier(
     """
     cha = _get_character_cha(conn, character_id)
     raw = _cha_buy_multiplier(cha) * (1.0 - float(haggle_discount or 0.0))
-    if _get_character_race(conn, character_id) == "dwarf":
+    _buyer_race = _get_character_race(conn, character_id)
+    if _buyer_race == "dwarf":
         raw *= (1.0 - DWARF_SHOP_DISCOUNT)
+    elif _buyer_race == "pietnowani":
+        raw *= (1.0 + PIETNOWANI_SHOP_MARKUP)  # #1475: piętno społeczne — obcy podnoszą cenę
     rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
     if rep_mult != 1.0:
         raw *= rep_mult

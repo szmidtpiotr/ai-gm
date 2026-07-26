@@ -6647,6 +6647,12 @@ def _margin_damage_bonus(attack_total: int, defense_stat: int) -> int:
 DWARF_TOUGHNESS_TYPES = {"poison", "dark", "rdzen"}
 DWARF_TOUGHNESS_REDUCTION = 2
 
+# #1475: Krew oswojona — Piętnowany żyje wśród nieumarłych i Rdzenia od pokoleń,
+# więc obrażenia nekrotyczne/Rdzenia go mniej ranią (−2, min 1). Lustro dwarf
+# toughness. STARTING value — Sandbox-tunable.
+PIETNOWANI_RESIST_TYPES = {"necrotic", "rdzen"}
+PIETNOWANI_RESIST_REDUCTION = 2
+
 
 def _effective_defense_stat(
     base_defense: int, defender: dict, *, sheet: dict | None = None
@@ -6686,10 +6692,15 @@ def apply_defense_model(
     else:
         armor = _armor_value(defense_stat)
         raw_final = max(1, pre_armor - armor)
-    # Twardy jak kamień: racial DR for dwarf on qualifying damage types
+    # Racial damage reduction on qualifying types (dwarf: kamień; Piętnowany: krew oswojona)
+    _race_lo = str(race or "human").strip().lower()
+    _dtype_lo = str(damage_type or "physical").strip().lower()
     toughness_reduction = 0
-    if str(race or "human").strip().lower() == "dwarf" and str(damage_type or "physical").strip().lower() in DWARF_TOUGHNESS_TYPES:
+    if _race_lo == "dwarf" and _dtype_lo in DWARF_TOUGHNESS_TYPES:
         toughness_reduction = DWARF_TOUGHNESS_REDUCTION
+        raw_final = max(1, raw_final - toughness_reduction)
+    elif _race_lo == "pietnowani" and _dtype_lo in PIETNOWANI_RESIST_TYPES:
+        toughness_reduction = PIETNOWANI_RESIST_REDUCTION
         raw_final = max(1, raw_final - toughness_reduction)
     if ignore_armor:
         return {"final": raw_final, "margin_bonus": bonus, "armor_reduction": 0, "toughness_reduction": toughness_reduction}

@@ -6501,6 +6501,100 @@ def _seed_elf_spells(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _seed_pietnowani_spells(conn: sqlite3.Connection) -> None:
+    """#1475 — magia KRWI OSWOJONEJ: czary race-locked Piętnowanych (tier 1–5).
+
+    Kanon magii (#1509): jedno źródło (Rdzeń), cztery techniki. Piętnowany czerpie
+    **krwią oswojoną** — efektywność i kontrola, ryzyko↓, flavor popiołu/soli/piętna.
+    Pula spina obie drogi rasy: Uczony gra całą (tier 1–5), Wojownik-Mag (gish) tylko
+    tier 1–2 (cap w spell_service). Tier 1–2 celowo pokrywa PEŁNY zestaw ról solo
+    (uderz/zasłoń/wylecz/zatrzymaj), żeby gish był grywalny (#1519). Kolumny
+    (`race_lock`, `effect_json`, `aoe`) dokłada `_seed_dwarf_spells`. Liczby STARTOWE.
+    """
+    pietnowani_spells = [
+        # ── Tier 1 (dostępne gishowi) — trzon: uderzenie + zasłona ───────────
+        {
+            "key": "ash_bolt", "label": "Popielny Pocisk", "tier": 1, "mana_cost": 1,
+            "spell_type": "attack", "damage_die": "1d8", "aoe": 0,
+            "effect_json": None,
+            "description": "1d8 dmg — smuga rozżarzonego popiołu z dłoni Piętnowanego.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        {
+            "key": "salt_ward", "label": "Solna Osłona", "tier": 1, "mana_cost": 2,
+            "spell_type": "defense", "damage_die": None, "aoe": 0,
+            "effect_json": None,
+            "description": "Pochłania następny cios — krąg soli twardnieje w powietrzu.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        # ── Tier 2 (dostępne gishowi) — heal + kontrola + drugie uderzenie ───
+        {
+            "key": "blood_mend", "label": "Krew Zrasta", "tier": 2, "mana_cost": 2,
+            "spell_type": "heal", "damage_die": "2d4", "aoe": 0,
+            "effect_json": None,
+            "description": "Leczy 2d4 — oswojona krew zamyka ranę popiołem.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        {
+            "key": "cinder_snare", "label": "Pęta Żaru", "tier": 2, "mana_cost": 2,
+            "spell_type": "effect", "damage_die": None, "aoe": 0,
+            "effect_json": '{"effect_type":"hobbled"}',
+            "description": "Rozżarzony popiół oplata kostki wroga — unieruchomienie bez obrażeń.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        {
+            "key": "salt_lance", "label": "Solna Włócznia", "tier": 2, "mana_cost": 2,
+            "spell_type": "attack", "damage_die": "2d6", "aoe": 0,
+            "effect_json": '{"on_hit_conditions":[{"key":"stunned","save":{"stat":"CON","dc":12}}]}',
+            "description": "2d6 dmg + ogłuszenie (DC 12 CON). Sól pali żywych i martwych z pustkowi.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        # ── Tier 3+ (tylko Uczony) — AoE, wyższe obrażenia, potężna zasłona ──
+        {
+            "key": "ash_cloud", "label": "Chmura Popiołu", "tier": 3, "mana_cost": 3,
+            "spell_type": "effect_aoe", "damage_die": None, "aoe": 1,
+            "effect_json": '{"effect_type":"confused"}',
+            "description": "Gryzący popiół zasłania pole — dezorientacja obszarowa.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        {
+            "key": "searing_vein", "label": "Rozpalona Żyła", "tier": 3, "mana_cost": 3,
+            "spell_type": "attack", "damage_die": "2d6", "aoe": 0,
+            "effect_json": '{"on_hit_conditions":[{"key":"slowed","save":{"stat":"CON","dc":12}}]}',
+            "description": "2d6 dmg + spowolnienie (DC 12 CON). Krew wroga wrze od Rdzenia.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        {
+            "key": "blood_bulwark", "label": "Wał Krwi", "tier": 4, "mana_cost": 4,
+            "spell_type": "defense", "damage_die": None, "aoe": 0,
+            "effect_json": '{"absorb":2}',
+            "description": "Pochłania dwa kolejne ciosy — piętno wzbiera i twardnieje jak zbroja.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+        {
+            "key": "pyre_of_ash", "label": "Stos Popiołu", "tier": 5, "mana_cost": 5,
+            "spell_type": "attack_aoe", "damage_die": "3d8", "aoe": 1,
+            "effect_json": '{"on_hit_conditions":[{"key":"burning"}]}',
+            "description": "3d8 dmg obszarowe + podpalenie — pustkowie staje w słupie popielnego ognia.",
+            "is_active": 1, "race_lock": "pietnowani",
+        },
+    ]
+    for sp in pietnowani_spells:
+        try:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_config_spells
+                    (key, label, tier, mana_cost, spell_type, damage_die, aoe, effect_json, description, is_active, race_lock)
+                VALUES
+                    (:key, :label, :tier, :mana_cost, :spell_type, :damage_die, :aoe, :effect_json, :description, :is_active, :race_lock)
+                """,
+                sp,
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def _seed_race_utility_spells(conn: sqlite3.Connection) -> None:
     """#1518 — czary UŻYTKOWE elfa i krasnoluda (po 7), własne, nie pożyczone od ludzi.
 
@@ -6845,17 +6939,19 @@ def _purge_race_illegal_spells(conn: sqlite3.Connection) -> None:
             DWARF_SCHOLAR_STARTING_SPELLS,
             ELF_SCHOLAR_STARTING_SPELLS,
             HUMAN_SCHOLAR_STARTING_SPELLS,
+            PIETNOWANI_STARTING_SPELLS,
         )
         starting = {
             "human": HUMAN_SCHOLAR_STARTING_SPELLS,
             "dwarf": DWARF_SCHOLAR_STARTING_SPELLS,
             "elf": ELF_SCHOLAR_STARTING_SPELLS,
+            "pietnowani": PIETNOWANI_STARTING_SPELLS,
         }
         rows = conn.execute(
             """
             SELECT c.id, LOWER(COALESCE(c.race, 'human')) AS race
             FROM characters c
-            WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+            WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') IN ('scholar', 'wojownik_mag')
               AND NOT EXISTS (
                   SELECT 1 FROM character_spells cs WHERE cs.character_id = c.id
               )
@@ -8731,6 +8827,7 @@ def run_admin_migrations() -> None:
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
         _seed_elf_spells(conn)  # #1474 — szkoła Stroiciela
+        _seed_pietnowani_spells(conn)  # #1475 — magia krwi oswojonej
         _seed_race_utility_spells(conn)  # #1518 — czary użytkowe elfa i krasnoluda
         _seed_race_combat_balance(conn)  # #1519 — balans bojówki ras + przycięcie duplikatów
         _backfill_spell_race_lock(conn)  # #1510 — jawny race_lock na każdym czarze

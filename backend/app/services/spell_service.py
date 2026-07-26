@@ -76,11 +76,16 @@ HUMAN_SCHOLAR_STARTING_SPELLS = ("fire_bolt", "minor_heal", "ward_of_iron", "det
 # #1474: elf-Stroiciel — kontrola i ochrona zamiast ognia. Pula rozłączna z ludzką
 # i krasnoludzką (race_lock='elf'), zestaw startowy wg tożsamości rasy.
 ELF_SCHOLAR_STARTING_SPELLS = ("tune_thorn", "leaf_veil", "root_snare")
+# #1475: Piętnowany — magia krwi oswojonej (race_lock='pietnowani'). Zestaw tier 1–2
+# działa dla OBU dróg rasy (Uczony i Wojownik-Mag/gish — mieści się w capie gisha)
+# i pokrywa pełny zestaw ról solo: uderz / zasłoń / wylecz / zatrzymaj.
+PIETNOWANI_STARTING_SPELLS = ("ash_bolt", "salt_ward", "blood_mend", "cinder_snare")
 
 #: Rasy, których zestaw startowy jest inny niż ludzki (jedno miejsce zamiast if-ów).
 _RACE_STARTING_SPELLS: dict[str, tuple[str, ...]] = {
     "dwarf": DWARF_SCHOLAR_STARTING_SPELLS,
     "elf": ELF_SCHOLAR_STARTING_SPELLS,
+    "pietnowani": PIETNOWANI_STARTING_SPELLS,
 }
 
 # #1475 PN-2 — Wojownik-Mag (gish) czerpie z magii, ale oddaje jej szczyt: włada
@@ -308,12 +313,17 @@ def resolve_miscast(
     # dysonansem, nie eksplozją. Techniki czerpania różnią się (kanon #1509):
     # krasnolud płaci krwią, człowiek chaosem, elf — nieposłuszeństwem lasu.
     is_elf = _race_lo == "elf"
+    # #1475: Piętnowany — krew oswojona z Rdzeniem. Ciało przywykło przez pokolenia,
+    # więc miscast jest STŁUMIONY i kontrolowany (kanon #1509: krasnolud moc↑/kara↑,
+    # Piętnowany kontrola/kara↓). Lustro łagodności elfa, flavor popiołu i piętna.
+    is_pietnowani = _race_lo == "pietnowani"
 
     # G8 #1472 (#1432): stun is NOT universal. Per game_mechanics.md miscast ladder —
     # stun only (L1-2), self-damage only (L3-4), damage+stun (L5-7), damage+stun+secondary
     # (L8+). Default False, then each branch opts in where the Księga says so.
     result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": False, "narrative": "",
-                              "rdzen_miscast": is_dwarf, "tuning_miscast": is_elf}
+                              "rdzen_miscast": is_dwarf, "tuning_miscast": is_elf,
+                              "blood_miscast": is_pietnowani}
 
     if soften:
         result["softened"] = True
@@ -351,6 +361,32 @@ def resolve_miscast(
             result["stun"] = True
             result["narrative"] = (
                 f"Cały gaj podchwytuje fałszywą nutę. {dmg} HP strat, w uszach dzwoni obcy chór."
+            )
+    elif is_pietnowani:
+        # #1475 — krew oswojona: kara stłumiona, kontrolowana. Popiół i piętno
+        # zamiast eksplozji. Drabina o stopień łagodniejsza od ludzkiej (jak elf),
+        # ale bez leśnego dysonansu — tu ciało samo tłumi Rdzeń.
+        if level <= 4:
+            result["self_damage"] = 0
+            result["stun"] = False
+            result["narrative"] = (
+                "Piętno na skórze rozgrzewa się, w oczach na oddech gaśnie światło — "
+                "czar rozprasza się bez szkody. Krew wie, jak to znieść."
+            )
+        elif level <= 7:
+            dmg = random.randint(1, 4)
+            result["self_damage"] = dmg
+            result["narrative"] = (
+                f"Popiół sypie z rękawa, krew tętni w piętnie — {dmg} HP strat, "
+                f"ale magia nie wybucha. Ciało bierze cios na siebie."
+            )
+        else:
+            dmg = random.randint(1, 6)
+            result["self_damage"] = dmg
+            result["stun"] = True
+            result["narrative"] = (
+                f"Rdzeń we krwi zawiera na chwilę — {dmg} HP strat, świat gaśnie na "
+                f"oddech. Nawet oswojona żyła ma granicę."
             )
     elif is_dwarf:
         # Rdzeń-magia: żyła wibruje — inny flavor
