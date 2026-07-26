@@ -1,6 +1,6 @@
 # MARTWE PUSTKOWIA — rozdział krainy (baza wiedzy świata)
 
-> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20; imiona Piętnowanych domknięte — pula alternatywna). Rozwija LORE_v1_KANON.md (sekcja 3F). Kraina rasy: **Piętnowani** (#1475 — mechanika NIEwdrożona; kraina seedowana ~równolegle z wdrażaniem rasy, gdy Piotr uruchomi etap wykonawczy).
+> **Status:** ZATWIERDZONY + **WDROŻONY** (seed MP-1…MP-9 zakończony 2026-07-26; dyskusja z Piotrem 2026-07-20; imiona Piętnowanych domknięte — pula alternatywna). Rozwija LORE_v1_KANON.md (sekcja 3F). Kraina rasy: **Piętnowani** (#1475 — rasa **WDROŻONA**, rekord #1547; start w Solnym Progu, MP-8 zrobione). Doprecyzowania z implementacji: §9.
 > Serce metafizyki świata: Rdzeń najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi.
 
 ---
@@ -95,4 +95,26 @@ Whitelist startowa: default **gospoda w Solnym Progu**; wariant: Obóz Gorączki
 
 ---
 
-*Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa: `data/regions/region_martwe_pustkowia.json` (surowy plik generatora — do przerobienia w fali seedowania; DB pusta).*
+## 9. Doprecyzowania z wdrożenia (MP-9, 2026-07-26)
+
+Wartości **jak-wdrożono** (startowe, tuningowalne). Uzupełniają, nie zastępują §5-8.
+
+**Teren jak-wdrożono** (2500 hexów, `world_hexes` map_level=0, region `martwe_pustkowia`): heath 1085 · martwa_ziemia 692 · sol 333 · ruins 301 · road 33 · swamp 28 · forest 28 (dwa ostatnie = styk granic z Kresami/Czarnoborem). Rozkład zbliżony do budżetu §5; heath wyszło więcej (obrzeża), road mniej (33 vs ~60) — spójny graf traktu zachowany (granica Czarnoboru → Koniec Traktu → Aschfeld + odnoga do Solnego Progu).
+
+**Gradient spotkań jak-wdrożono** (`hex_type_config.encounter_base_chance`, spójny z lore „sól tłumi"): sol **0.18** (najspokojniej — sól izoluje Rdzeń) · heath 0.20 · martwa_ziemia **0.42** · ruins **0.60** (najgęściej) · road **0.05** (bezpieczny trakt). Pule nieumarłych: sol → skeleton/ghoul, martwa_ziemia → ghoul/skeleton/zombie. Koszt marszu: sol 3h (żar, blask), martwa_ziemia 2h.
+
+**Bezwodne hexy / bukłak** (`wasteland_service.py`): `sol` i `martwa_ziemia` = bezwodne. Poza enklawą pełny odpoczynek wymaga bukłaka (`waterskin`); bez niego odpoczynek częściowy — **50%** regeneracji (`WATERLESS_PARTIAL_MULT = 0.5`) + kondycja „Zmęczony". Woda za darmo w: **Solnym Progu** (wszystkie suby, prefiks `solny_prog`) i **Misji Światła**. Kompas kościany: mnożnik zasadzki ×0.5 z kompasem + bonus percepcji w ruinach.
+
+**Piętno społeczne — swój/obcy** (`shop_service.py`, MP-8): Piętnowany płaci **+10%** (`PIETNOWANI_SHOP_MARKUP = 0.10`) u obcych (Obóz Gorączki, Misja Światła), ale **0% we własnej enklawie** — Solny Próg i wszystkie jego suby (prefiks `solny_prog`). Dotyczy kupna i sprzedaży.
+
+**Lokacje** (40): 15 makro (w tym 5 kanonicznych POI + Solny Próg + 6 zapomnianych + 3 zasiedlone) + 25 sub. Każda makro-lokacja z hexem (15 hexów z `location_key`). **NPC-ikony (8)** obsadzone: Solny Próg — Raszid, Lejla, Nadira, Farid; Obóz Gorączki — Greta, Fabian (skup reliktów); Misja Światła — Brat Ansgar, Siostra Verena.
+
+**Dungeony:** Aschfeld = farmowalny (cooldown **48h**, boss `komendant_aschfeld`, loot `rich`); Krypta Krwawego Hrabiego = endgame fabularny (cooldown **8760h** ≈ raz na rok, boss `krwawy_hrabia`). Świątynia Pradawnych i Twierdza Bezimiennego — NIE dungeony (mit świata / long mystery, tylko atmosfera).
+
+**Plotki:** 13 w `world_rumors` (Wycofanie, pieczęcie Aschfeld, Studnia Głosów, Hrabia, gorączka reliktów, sól tłumiąca umarłych) — bez spoilerów hierarchii tajemnic.
+
+**Snapshot / odtwarzalność:** `data/regions/region_martwe_pustkowia.json` = 2500 hexów, 15 z `location_key`; round-trip (seed → snapshot na KOPII DB) zweryfikowany **1:1**, `location_key` zachowane.
+
+---
+
+*Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa: `data/regions/region_martwe_pustkowia.json` (snapshot z DB — round-trip 1:1; seed: `scripts/seed_world_map.py --region martwe_pustkowia`).*
