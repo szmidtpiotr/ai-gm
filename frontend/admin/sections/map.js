@@ -1517,7 +1517,8 @@ const _ROW_REGISTRY = {
   // Jawna lista, nie próba-z-onerror: ta druga wysypywała ~27 błędów 404 do konsoli
   // (jeden na każdy teren bez kafla). Dodajesz nowy kafel → dopisz tu klucz.
   const TERRAIN_TILE_KEYS = new Set(['lodowiec', 'siarka', 'las_iglasty',
-    'czarny_las', 'trzesawisko', 'step']); // CB-1 #Czarnobor
+    'czarny_las', 'trzesawisko', 'step', // CB-1 #Czarnobor
+    'sol', 'martwa_ziemia']); // MP-1 #1495 Martwe Pustkowia
 
   async function _loadTerrain() {
     const tbody = document.getElementById('terrain-tbody');

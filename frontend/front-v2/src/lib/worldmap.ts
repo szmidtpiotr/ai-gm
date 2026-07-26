@@ -93,6 +93,9 @@ const TERRAIN_ICONS: Record<string, Icon> = {
   czarny_las: Tree,
   trzesawisko: Waves,
   step: Plant,
+  // MP-1 #1495 — Martwe Pustkowia: sol (biała równina → słońce/blask), martwa_ziemia (kości).
+  sol: Sun,
+  martwa_ziemia: Skull,
 };
 
 export function terrainIcon(hexType: string | null | undefined): Icon {
@@ -132,6 +135,9 @@ const TERRAIN_HOURS: Record<string, number> = {
   czarny_las: 7,
   trzesawisko: 8,
   step: 4,
+  // MP-1 #1495 — sol 3.0h → wysoki 7 (żar, blask); martwa_ziemia 2.0h → średni 6 (jak siarka).
+  sol: 7,
+  martwa_ziemia: 6,
 };
 
 const TERRAIN_DIFFICULTY: Record<string, string> = {
@@ -159,6 +165,9 @@ const TERRAIN_DIFFICULTY: Record<string, string> = {
   czarny_las: "trudny",
   trzesawisko: "bardzo trudny",
   step: "łatwy",
+  // MP-1 #1495 — sol trudny (żar/blask, 3.0h); martwa_ziemia umiarkowany (2.0h, średni marsz).
+  sol: "trudny",
+  martwa_ziemia: "umiarkowany",
 };
 
 // Ryzyko spotkania — high=czerwone ostrzeżenie w panelu.
@@ -179,6 +188,9 @@ const HIGH_RISK = new Set([
   // CB-1 #Czarnobór — Bór Zmarłych i trzęsawisko = wysokie ryzyko (encounter 0.32/0.40).
   "czarny_las",
   "trzesawisko",
+  // MP-1 #1495 — martwa_ziemia 0.42 = serce krainy nieumarłych, najwyższe ryzyko.
+  // `sol` (0.28) celowo POZA listą — otwarta równina, ryzyko umiarkowane.
+  "martwa_ziemia",
 ]);
 const LOW_RISK = new Set([
   "road",

@@ -301,6 +301,10 @@ _WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
     "czarny_las": ["wolf", "goblin", "unknown_attacker"],
     "trzesawisko": ["giant_rat", "unknown_attacker"],
     "step": ["wolf", "bandit"],
+    # MP-1 #1495 — Martwe Pustkowia (kraina nieumarłych, docs/.../martwe_pustkowia.md §5).
+    # sol = biała solna równina, risen kości; martwa_ziemia = serce krainy, najgęstsi nieumarli.
+    "sol": ["skeleton", "unknown_attacker", "ghoul"],
+    "martwa_ziemia": ["ghoul", "skeleton", "zombie"],
 }
 _WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
 

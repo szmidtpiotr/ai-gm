@@ -4204,6 +4204,28 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('step',        'Step',        1.0, 0.12, '#9caf3e', '🌾', 1, 'biome', 0.10)
     """, "vCB1-czarnobor-hex-types")
 
+    # MP-1 #1495 — dwa nowe typy terenu Martwych Pustkowi
+    # (docs/world/regions/martwe_pustkowia.md §5). WARTOŚCI STARTOWE (Numbers Policy —
+    # strojone po playtestach, NIE kanon; edytowalne w admin → Mapa → Konfiguracja terenu):
+    #   sol            travel 3.0h = WYSOKI (żar, oślepiający blask spowalnia marsz);
+    #                  encounter 0.28 (średni) — Pustkowie Solne, otwarta biała równina,
+    #                  mało zasadzek, ale sól-blizna przy pęknięciach budzi kości.
+    #                  Kandydat na „bezwodny hex" (pełny odpoczynek wymaga bukłaka — MP-7).
+    #   martwa_ziemia  travel 2.0h = ŚREDNI (jak siarka/forest) — serce krainy, popiół
+    #                  i martwy wrzos; encounter 0.42 (najwyższy) — tu nieumarli najgęściej
+    #                  w świecie (miasta umarłych). Też kandydat na „bezwodny hex" (MP-7).
+    # map_color UNIKALNY (sol #eae3cf biel soli; martwa_ziemia #6f6a63 popiół).
+    # spawn_weight = 0 (domyślne) → NIE generowane proceduralnie; wchodzą seedem krainy
+    # (MP-3) z pliku. INSERT OR IGNORE = idempotentne.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
+             is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('sol',           'Sól',           3.0, 0.28, '#eae3cf', '🧂', 1, 'biome', 0.05),
+        ('martwa_ziemia', 'Martwa ziemia', 2.0, 0.42, '#6f6a63', '💀', 1, 'biome', 0.10)
+    """, "vMP1-martwe-pustkowia-hex-types")
+
     # SG-9 #1481/#1193 — wydarzenia regionalne przypisane do krainy.
     # Bez `region_scope` roll_event losował z całej puli szablonów, więc „Głębokie
     # Bicie" (stukanie w żyle Rdzenia pod Graniami) mogło wypaść w Kresach. Pusty
@@ -4259,6 +4281,11 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ("czarny_las",  '["wolf", "goblin", "unknown_attacker"]'),
         ("trzesawisko", '["giant_rat", "unknown_attacker"]'),
         ("step",        '["wolf", "bandit"]'),
+        # MP-1 — Martwe Pustkowia. Kraina nieumarłych: sól i martwa ziemia budzą kości.
+        # sol = otwarta biała równina, rzadziej, ale risen; martwa_ziemia = serce krainy,
+        # nieumarli najgęściej (ghoul/szkielet/zombie). Klucze w game_config_enemies.
+        ("sol",           '["skeleton", "unknown_attacker", "ghoul"]'),
+        ("martwa_ziemia", '["ghoul", "skeleton", "zombie"]'),
     ):
         _exec(
             "UPDATE hex_type_config SET default_encounter_pool = '%s' "

@@ -45,6 +45,8 @@ TERRAIN_DC = {
     # CB-1 #Czarnobór — martwy bór skąpy w runo (Medium 12); trzęsawisko wilgotne
     # i bujne jak bagno (Easy 8). Step nie wpisany — DEFAULT_DC 12 (Medium, jak równiny).
     "czarny_las": 12, "trzesawisko": 8,
+    # MP-1 #1495 — Martwe Pustkowia: jałowizna. Sól i popiół nie rodzą runa (Hard 16).
+    "sol": 16, "martwa_ziemia": 16,
 }
 DEFAULT_DC = 12  # Medium — równiny/wzgórza/wrzosowiska/drogi itd.
 

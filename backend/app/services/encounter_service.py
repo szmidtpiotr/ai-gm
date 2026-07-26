@@ -890,6 +890,11 @@ _HEX_TYPE_TO_TERRAIN = {
     "czarny_las": "forest",
     "trzesawisko": "swamp",
     "step": "plains",
+    # MP-1 #1495 — Martwe Pustkowia. Nieumarli (ghoul/szkielet/zombie) mają terrain_tag
+    # `ruins`, więc oba typy mapujemy na `ruins` — filtr terenu trafia w undeada zamiast
+    # relaksować do całej puli (off-theme wilki/zbóje na solnej równinie).
+    "sol": "ruins",
+    "martwa_ziemia": "ruins",
 }
 
 
