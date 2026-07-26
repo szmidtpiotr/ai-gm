@@ -5045,7 +5045,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]"
   },
   {
    "q": 80,
@@ -5053,7 +5054,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]"
   },
   {
    "q": 81,
@@ -5437,7 +5439,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]"
   },
   {
    "q": 79,
@@ -5446,6 +5449,7 @@
    "label": "Świątynia Pradawnych",
    "atmosphere": "Wnętrze martwego boga. Pęknięcie nad samym Rdzeniem. Nikt nie wraca do środka.",
    "encounter_chance": 0.55,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]",
    "location_key": "swiatynia_pradawnych"
   },
   {
@@ -5454,7 +5458,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]"
   },
   {
    "q": 81,
@@ -5838,7 +5843,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]"
   },
   {
    "q": 79,
@@ -5846,7 +5852,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\", \"widmo_studni\"]"
   },
   {
    "q": 80,
@@ -14552,7 +14559,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]"
   },
   {
    "q": 67,
@@ -14560,7 +14568,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]"
   },
   {
    "q": 68,
@@ -14944,7 +14953,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]"
   },
   {
    "q": 66,
@@ -14953,6 +14963,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]",
    "location_key": "studnia_glosow"
   },
   {
@@ -14961,7 +14972,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]"
   },
   {
    "q": 68,
@@ -15346,7 +15358,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]"
   },
   {
    "q": 66,
@@ -15354,7 +15367,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_studni\"]"
   },
   {
    "q": 67,
@@ -15418,7 +15432,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\"]"
   },
   {
    "q": 75,
@@ -15426,7 +15441,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\"]"
   },
   {
    "q": 76,
@@ -15794,7 +15810,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.55
+   "encounter_chance": 0.55,
+   "encounter_pool": "[\"bezimienna_straz\"]"
   },
   {
    "q": 74,
@@ -15803,6 +15820,7 @@
    "label": "Twierdza Bezimiennego",
    "atmosphere": "Nikt nie wrócił. Nikt.",
    "encounter_chance": 0.55,
+   "encounter_pool": "[\"bezimienna_straz\"]",
    "location_key": "twierdza_bezimiennego"
   },
   {
@@ -15811,7 +15829,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\"]"
   },
   {
    "q": 76,
@@ -16163,7 +16182,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\"]"
   },
   {
    "q": 74,
@@ -16171,7 +16191,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"bezimienna_straz\"]"
   },
   {
    "q": 75,
