@@ -1940,7 +1940,8 @@
    "hex_type": "heath",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "koniec_traktu"
   },
   {
    "q": 70,
@@ -7005,7 +7006,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "wieza_kronikarzy"
   },
   {
    "q": 75,
@@ -7085,7 +7087,8 @@
    "hex_type": "martwa_ziemia",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "pola_szkla"
   },
   {
    "q": 85,
@@ -9445,7 +9448,8 @@
    "hex_type": "martwa_ziemia",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "aschfeld"
   },
   {
    "q": 80,
@@ -9725,7 +9729,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "solny_prog"
   },
   {
    "q": 65,
@@ -10294,7 +10299,7 @@
    "label": "Krypta Krwawego Hrabiego",
    "atmosphere": "Wampir śpi tu od wieków. Nocą drzwi otwierają się od środka.",
    "encounter_chance": 0.55,
-   "location_key": "krypta_hrabiego"
+   "location_key": "krypta_krwawego_hrabiego"
   },
   {
    "q": 86,
@@ -10911,7 +10916,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "misja_swiatla"
   },
   {
    "q": 63,
@@ -11359,7 +11365,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "oboz_goraczki"
   },
   {
    "q": 69,
@@ -11695,7 +11702,8 @@
    "hex_type": "sol",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "solne_zniwa"
   },
   {
    "q": 61,
@@ -11879,7 +11887,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "cmentarzysko_machin"
   },
   {
    "q": 84,
@@ -14943,7 +14952,8 @@
    "hex_type": "ruins",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "studnia_glosow"
   },
   {
    "q": 67,
@@ -15312,7 +15322,7 @@
    "label": "Ruiny Pradawnego Klasztoru",
    "atmosphere": null,
    "encounter_chance": 0.55,
-   "location_key": "klasztor_pradawny"
+   "location_key": "ruiny_klasztoru_pradawnego"
   },
   {
    "q": 63,
