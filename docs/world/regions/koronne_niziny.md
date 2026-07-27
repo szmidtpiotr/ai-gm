@@ -103,4 +103,19 @@ Reguły stylu (poprawione po uwadze Piotra): **dwór i stolica** = archaiczno-dw
 
 ---
 
-*Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa: `data/regions/region_koronne_niziny.json` (PUSTY placeholder 2 hexy — siatka do wygenerowania od zera w fali seedowania).*
+## 9. Stan wdrożenia — domknięcie KN-11 (doprecyzowania)
+
+> Sekcja faktograficzna: co realnie siedzi w seedzie po sesjach KN-1…KN-9 + KN-LORE. Kanon (sekcje 1-8) bez zmian. Dodane przy zamknięciu krainy (KN-11).
+
+- **Mapa:** `data/regions/region_koronne_niziny.json` — **2500 heksów** (siatka wygenerowana OD ZERA, KN-2/KN-3; placeholder 2-hex już nieaktualny). Round-trip seed↔snapshot zweryfikowany **1:1** na kopii DB. Status pliku = `coming` do czasu ręcznego przełączenia na `live` przez Piotra po weryfikacji na DEV.
+- **Wiązania heks→lokacja:** 13 heksów z `location_key` (m.in. `vilnograd_stolica` @ q=-23,r=22, typ `city` — wchłonięty relikt „Targowa Wola" #1305; `katakumby_vilnogradu`, `volhynia_kupiecka`, `klasztor_iskry_centrum`, `rogatka_wschodnia` + miejsca zapomniane).
+- **Lokacje (`game_locations`, region=koronne_niziny):** 43 wpisy. Vilnograd = hub-gigant z **10 dzielnicami-subami** (Targ Wielki, Dzielnica Gildii, Dzielnica Złodziei, Enklawa Krasnoludzka, Katedra Światła, Port Rzeczny, Zamek Królewski, Kuźnia, Tawerna Pod Złotą Koroną). Volhynia = 8 subów (w tym Kantor, Plac Aukcyjny). Klasztor Iskry = 4 suby. Rogatka Wschodnia = Izba Celna + Posterunek. Wsie: Mühlfeld, Kornbrück, Ährenau (folwarki/młyn/karczmy). Miejsca zapomniane: Pierwszy Tron, Dwór Czwartego, Wieża Heroldów, Szubieniczne Wzgórze, Zatopione Opactwo.
+- **Smaczki-papiery:** `glejt_kupiecki` (60 zł), `list_zelazny` (120 zł), `falszywe_papiery` (40 zł) — jako wpisy w `game_items` (reprodukowalne skryptem `scripts/seed_vilnograd_obsada.py`, poza zestawem `CONTENT_TABLES`). **Weksel** = mechanika kantoru (złoto→papier) w Enklawie Krasnoludzkiej / Volhynia Kantor.
+- **Bestia i świat:** 14 wrogów (`region_tag=koronne_niziny`) + pule spotkań; **15 plotek** (`world_rumors`, region=koronne_niziny) niosących oś „pełzającego zamachu" (Rachmistrzyni, Nocny Burmistrz, latarnia na kredyt). Dungeon miejski: `game_dungeons` key `katakumby_vilnogradu`.
+- **Frakcje:** `korona_vilnograd`, `gildie_vilnogradu`, `enklawa_krasnoludzka`, `swiatlo_iskry`.
+- **Usługi Światła (Klasztor):** `blessing_light`, `curse_removal`, `healer_light`, `healer_heavy`.
+- **Start człowieka (KN-9):** losowanie Kresy/Vilnograd aktywne (draw w `sheet_json.kn9_start`), bramkowane zaseedowaniem Vilnogradu.
+
+---
+
+*Rozdział = źródło prawdy lore krainy. Zmiany wyłącznie przez commit po dyskusji z Piotrem. Mapa: `data/regions/region_koronne_niziny.json` (2500 heksów, seed OD ZERA; snapshot: `scripts/snapshot_world_map.py --region koronne_niziny`).*
