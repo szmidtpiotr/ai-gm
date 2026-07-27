@@ -54,6 +54,7 @@ import { ServicesOverlay } from "@/components/game/ServicesOverlay";
 import { CompanionsOverlay } from "@/components/game/CompanionsOverlay";
 import { CraftingOverlay } from "@/components/game/CraftingOverlay";
 import { SailOverlay } from "@/components/game/SailOverlay";
+import { TideIndicator } from "@/components/game/TideIndicator";
 import { CommandPalette } from "@/components/game/CommandPalette";
 import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
@@ -933,6 +934,9 @@ const closeWait = useAppStore((s) => s.closeWait);
 
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
       <GameRail hasMana={vitals.hasMana} hasRecipes={!!recipesGate.data?.has_any} />
+
+      {/* WL-5 (#1504/#1505) — wskaźnik pływu; sam się chowa poza wybrzeżem. */}
+      <TideIndicator campaignId={campaignId} characterId={characterId} />
 
       {gameTab === "map" ? (
         // FAZA ML: w osadzie z sub-lokacjami domyślnie mapa lokalna; „Świat"/„Osada"

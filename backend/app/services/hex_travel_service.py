@@ -2834,6 +2834,22 @@ def execute_travel(
         raise TravelError("no_target", "Provide target hex or location_key")
     dest_q, dest_r = dest
 
+    # WL-5 (#1504/#1505) — PŁYWY: przy PRZYPŁYWIE nie wolno wejść na `plycizna`.
+    # Przy odpływie mielizna jest przejezdna (wraki/skróty), przy przypływie zalana.
+    # Blokada CELU podróży (mielizny są terminalnymi hexami wybrzeża — rzadko tranzytowe).
+    try:
+        from app.services.tide_service import tide_blocks_entry
+        if tide_blocks_entry(conn, campaign_id, dest_q, dest_r):
+            raise TravelError(
+                "tide_high",
+                "Przypływ zalał mieliznę — przy wysokiej wodzie nie wejdziesz na płyciznę. "
+                "Zaczekaj na odpływ.",
+            )
+    except TravelError:
+        raise
+    except Exception as _tide_err:  # noqa: BLE001 — czytnik pływu nie może wywalić podróży
+        logger.warning("tide_entry_check_failed", error=str(_tide_err), campaign_id=campaign_id)
+
     # (1) resolve origin — current_hex if present, else canonical fallback via
     # resolve_starting_hex (consistent across all endpoints — replaces the old
     # (0,0)/dest ad-hoc fallbacks in turns.py).
@@ -2946,5 +2962,14 @@ def execute_travel(
     # podróży przerwanej — liczy tylko faktycznie przebyte hexy 'brod').
     if result.get("ok") and record_turn:
         maybe_ford_hazard(conn, campaign_id, character_id, result)
+
+    # WL-5 (#1504/#1505) — PŁYWY: jeśli po podróży bohater STOI na `plycizna` a zegar
+    # przekroczył granicę odpływ→przypływ (długa podróż), łagodnie go stąd wyrzuca.
+    if result.get("ok") and record_turn:
+        try:
+            from app.services.tide_service import maybe_tide_strand
+            maybe_tide_strand(conn, campaign_id, character_id, result)
+        except Exception as _tide_err:  # noqa: BLE001
+            logger.warning("tide_strand_failed", error=str(_tide_err), campaign_id=campaign_id)
 
     return result

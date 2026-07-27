@@ -1650,6 +1650,25 @@ ADMIN_SEEDS = [
     VALUES
     ('mapa_smolnego', 'Mapa Smolnego', 'map', 'Wytłuszczona, poplamiona solą mapa każdego ukrytego klifu i zatopionego wraku Wybrzeża Łez — dzieło Kapitana Jacka Smolnego. Kto ją ma, mija rafy bez błądzenia i zna skróty, o których milczą portowe plotki.', 200, 200, '{"mode":"region","region":"wybrzeze_lez"}', 1, 'rare', 1, datetime('now'), datetime('now'))
     """,
+    # WL-5 (#1504/#1505) — Tabliczka pływów. Przedmiot z portu Wybrzeża Łez. NIE zmienia
+    # mechaniki pływów (plycizna i tak jest zabójcza przy przypływie) — odsłania jedynie
+    # LICZNIK godzin do zmiany pływu w panelu ŻAR (get_tide_state.hours_to_change). Bez niej
+    # gracz zgaduje (kanon §6). item_type='tool' → nie wyzwala „Użyj"/odsłaniania mapy.
+    """
+    INSERT OR IGNORE INTO game_config_items
+    (key, label, item_type, description, value_gp, price_gp, effect_json, is_active, rarity, created_at, updated_at)
+    VALUES
+    ('tabliczka_plywow', 'Tabliczka pływów', 'tool', 'Naoliwiona deszczułka z rytymi kreskami i przesuwnym kołkiem — portowe marynarskie kalendarium przypływów. Kto ją nosi, wie na godziny, kiedy morze wróci na mieliznę.', 30, 30, '{"kind":"tide_table","region":"wybrzeze_lez"}', 1, 'common', datetime('now'), datetime('now'))
+    """,
+    # WL-5 — udostępnij Tabliczkę pływów w porcie: dołóż ją do sklepu Rudej Magdy
+    # (kowal_czarnogrod) TYLKO gdy nie ma jeszcze jawnego asortymentu (json='[]'/NULL),
+    # więc nie nadpisujemy ręcznej kurateli. Bez tego mielizna byłaby ślepa bez licznika.
+    """
+    UPDATE npcs
+       SET shop_inventory_json = json('[{"type":"item","key":"tabliczka_plywow","price":30},{"type":"item","key":"torch"}]')
+     WHERE key = 'kowal_czarnogrod'
+       AND (shop_inventory_json IS NULL OR TRIM(shop_inventory_json) IN ('', '[]'))
+    """,
     # S10 (#605) FAZA S — prymityw escalating_dot + kondycja hemorrhage (narastający DOT).
     # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
     # Top-level `cure` = deklaratywne zdjęcie kondycji udanym SKILL_TEST:medicine (DC z zamka).

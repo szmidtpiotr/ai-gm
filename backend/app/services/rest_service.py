@@ -300,6 +300,14 @@ def perform_long_rest(
 
     advance_clock(campaign_id, 8, "long_rest", conn=conn)
 
+    # WL-5 (#1504/#1505) — PŁYWY: długi odpoczynek (8 h) może przekroczyć granicę
+    # odpływ→przypływ. Jeśli obozowano na `plycizna`, przypływ łagodnie wyrzuca na ląd.
+    try:
+        from app.services.tide_service import maybe_tide_strand
+        maybe_tide_strand(conn, campaign_id, character_id)
+    except Exception:  # noqa: BLE001 — czytnik pływu nie może zepsuć odpoczynku
+        pass
+
     # #1193: nocleg w osadzie regionu objętego ZARAZĄ → test CON na zarażenie.
     # Operuje na własnym odczycie sheeta (chory dokłada się PO leczeniu HP/many —
     # odpoczynek regeneruje, ale można obudzić się chorym). No-op poza zarazą.
