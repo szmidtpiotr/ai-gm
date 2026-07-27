@@ -2830,7 +2830,7 @@
    "label": "Osada Kupiecka",
    "atmosphere": null,
    "encounter_chance": 0.0,
-   "location_key": "osada_kupiecka"
+   "location_key": "muhlfeld"
   },
   {
    "q": -27,
@@ -3887,7 +3887,8 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.0,
+   "location_key": "katakumby_vilnogradu"
   },
   {
    "q": -21,
@@ -5895,7 +5896,8 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "szubieniczne_wzgorze"
   },
   {
    "q": -14,
@@ -6615,7 +6617,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "location_key": "ahrenau"
   },
   {
    "q": -24,
@@ -7335,7 +7338,8 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "pierwszy_tron"
   },
   {
    "q": -34,
@@ -7767,7 +7771,8 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "dwor_czwartego"
   },
   {
    "q": -30,
@@ -7856,7 +7861,7 @@
    "label": "Volhynia",
    "atmosphere": "Skrzyżowanie czterech traktów. Aukcje, karawany, plotki z całego świata; sufit ekonomii gry.",
    "encounter_chance": 0.0,
-   "location_key": "volhynia"
+   "location_key": "volhynia_kupiecka"
   },
   {
    "q": -19,
@@ -8105,7 +8110,7 @@
    "label": "Klasztor Iskry",
    "atmosphere": "Centrum wiary w Światło. Matka Urszula, Brat Kazimierz uzdrawia, Brat Tomasz skupuje relikty (łącznik z Pustkowiami).",
    "encounter_chance": 0.0,
-   "location_key": "klasztor_iskry"
+   "location_key": "klasztor_iskry_centrum"
   },
   {
    "q": -38,
@@ -8561,7 +8566,8 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "location_key": "wieza_heroldow"
   },
   {
    "q": -31,
@@ -9954,7 +9960,7 @@
    "label": "Nowe Dobra",
    "atmosphere": null,
    "encounter_chance": 0.0,
-   "location_key": "nowe_dobra"
+   "location_key": "kornbruck"
   },
   {
    "q": -7,
@@ -11811,7 +11817,8 @@
    "hex_type": "lake",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.08
+   "encounter_chance": 0.08,
+   "location_key": "zatopione_opactwo"
   },
   {
    "q": -25,
