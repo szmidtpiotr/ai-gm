@@ -43,7 +43,7 @@
    "img": "assets/img/kraina-wybrzeze-lez.webp",
    "desc": "Morze jako żywioł i grób. Sól, sztorm i kontrabanda; piracka Zatoka bez prawa. Latarnia Topielców zapala się sama i ściąga statki na rafy — a w Radzie Pirackiej jeden fotel stoi pusty.",
    "anchor": "kraina-wybrzeze",
-   "available": false,
+   "available": true,
    "key": "wybrzeze_lez"
   },
   {

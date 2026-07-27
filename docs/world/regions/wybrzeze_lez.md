@@ -1,6 +1,7 @@
 # WYBRZEŻE ŁEZ — rozdział krainy (baza wiedzy świata)
 
-> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20). Rozwija LORE_v1_KANON.md (sekcja 3E) i **istniejącą zawartość gry** — ta kraina ma najwięcej gotowego materiału po Kresach: 3 makro-lokacje, 12 sub-lokacji i 6 NPC już w bazie (bez hexów) + bogatą sekcję w wizytówce. Rasa: **wyspiarze** (#1476 — mechanika NIEwdrożona).
+> **Status:** ZATWIERDZONY (dyskusja z Piotrem 2026-07-20). Rozwija LORE_v1_KANON.md (sekcja 3E) i **istniejącą zawartość gry** — ta kraina ma najwięcej gotowego materiału po Kresach: 3 makro-lokacje, 12 sub-lokacji i 6 NPC już w bazie (bez hexów) + bogatą sekcję w wizytówce. Rasa: **wyspiarze** (#1476 — **WDROŻONA**, start w Czarnogrodzie).
+> **WDROŻONE 2026-07-27 (WL-1…WL-11).** Konkretne liczby i decyzje as-built — patrz §11.
 > Mapa: `data/regions/region_wybrzeze_lez.json` = surówka generatora (31% bagien, 5% morza — NIE jest ustaleniem). **Mapę budujemy OD ZERA** wg §5.
 
 ---
@@ -91,9 +92,29 @@ Przy implementacji: wpis do **Księgi Zasad** + **wizytówki** — standard fali
 **Z bazy (6, tylko dopisać role):** Dziadek Florian · Kapitan Jacek Smolny · Ruda Magda · Doktor Marcin Szkalpel · Wielki Borek · Halina Morska.
 **Do dodania:** **Kapitan Roggen** (Korona, blokada portu) · **Taio** (starszy diaspory wyspiarzy) · **Nakea** (kapitanka-przemytniczka) · opcjonalnie **Malua** / **Ravu**.
 
-## 10. Start wyspiarza (po wdrożeniu #1476)
+## 10. Start wyspiarza (#1476 WDROŻONE)
 
-Whitelist: default **dzielnica diaspory w Czarnogrodzie**; wariant: Nabrzeże. Haki startowe: pusty fotel w Radzie, blokada Korony, Florian szuka śmiałka.
+Whitelist: default **dzielnica diaspory w Czarnogrodzie** (`czarnogrod_dzielnica_wyspiarzy`); wariant: **Nabrzeże** (`czarnogrod_nabrzeze`). Haki startowe: pusty fotel w Radzie, blokada Korony (Roggen), Florian szuka śmiałka. Kotwica startowa NIE bramkuje wyboru rasy — wyspiarza można stworzyć wszędzie, ale kampania domyślnie zaczyna się „u swoich".
+
+## 11. Stan wdrożenia — AS-BUILT (WL-1…WL-11, 2026-07-27)
+
+> Sekcja opisowa: notuje **liczby startowe i decyzje faktycznie w grze** po fali WL. Wartości liczbowe są strojalne (Sandbox / patrz issue #1504–#1505); ta sekcja opisuje, nie definiuje — źródło prawdy silnika to kod i `game_config_*`.
+
+**Mapa (WL-1…WL-3).** Kanon = `data/regions/region_wybrzeze_lez.json` — **2500 hexów**, bounds q −50…−1, r 51…124, status `coming`. Round-trip seed↔snapshot 1:1 (WL-11). Na hexach: **3 makro-lokacje** (Czarnogród `czarnogrod_port` q−19 r65 · obszar Wybrzeże `wybrzeze_lez` q−19 r75 · Zatoka `zatoka_topielcow` q−20 r102) + **10 etykiet-POI** (`latarnia_topielcow`, `warzelnie_solne`, `wsie_na_palach`, `osada_rybacka`, `osada_rolna`, `wybrzeze_lez_port`, `wysepka_diaspory`, `mokradla_ujscia`, `kryjowka_przemytnikow`, `opuszczona_latarnia`). Wyspy (Zatoka + wysepki) są **nieosiągalne lądem** — tylko rejsami.
+
+**Tereny morskie (WL-1).** `morze` i `rafy` — **nieprzejezdne pieszo** (`is_passable=0`); `plycizna` przejezdna (2 h marszu, ale patrz pływy); `wydmy` przejezdne (1 h). Kafle-ilustracje w `frontend/images/terrain/`.
+
+**Rejsy (WL-4).** Trasa **Czarnogród ↔ Zatoka Topielców: 40 gp / 8 h**, ryzyko „umiarkowane", rośnie nocą (rzut na zdarzenie: sztorm / rafa / piraci). **Mapa Smolnego** tłumi ryzyko rafy i otwiera skróty. Trasa do Portu Rzecznego Vilnogradu = **TODO WL-4b** (czeka na seed Koronnych Nizin).
+
+**Pływy (WL-5).** Cykl **6 h → 2 pełne cykle na dobę**: **odpływ** 00:00–06:00 i 12:00–18:00, **przypływ** 06:00–12:00 i 18:00–24:00. `plycizna` przy przypływie: wejścia się blokuje; kto zostaje — łagodny wariant (drobne HP / przeniesienie na suchy hex). **Tabliczka pływów** (kupno u Nakei, port) = licznik godzin do zmiany.
+
+**Loch bramkowany pływem (WL-5×WL-7).** **Cmentarzysko Wraków** (boss `utopiony_kapitan`) dostępne **tylko przy odpływie** — przy przypływie wejście zwraca „Przypływ zakrył dojście — wróć za ~N h". **Jaskinie Skarbów** (boss `straznik_klatwy`) bez bramki pływowej.
+
+**Ekonomia (WL-8).** Drabina soli (kup u źródła → sprzedaj w Nizinach): **Wybrzeże `sol_morska` 2 → 6 gp** · Granie `sol_gorska` 5 → 14 · Pustkowia `sol_z_blizny` 9 → 24. Kontrabanda (`contraband=True`): **Perła z Głębin** 40 → 140 · **Żywica topielców** 20 → 80. Region popytu = **Koronne Niziny**; na wjeździe do Nizin gra **rogatka** (#1500): kontrola → konfiskata + kara reputacji, fałszywe papiery pomagają. Szmugiel-loop domknięty.
+
+**Bestia i żywy świat (WL-7).** Nowi wrogowie: `bosman_herszt`, `topielec_morski`, `topielec_mielizny`, `nieumarly_marynarz`, `cos_z_sieci`, `glebinowy_pomiot`, `kultysta_glebi` (+ `bagienny_topielec`). **14 plotek** (`world_rumors`) — w tym „Latarnia zapala się sama" (utrzymany **zakaz rozstrzygania**, kto ją zapala — §4). Pule spotkań: porty bezpieczne, `plycizna` ryzykowna przy zmianie pływu, rafy/latarnia najgroźniejsze.
+
+**Obsada (WL-6).** Dodani: `kapitan_roggen`, `taio_starszy`, `nakea_przemytniczka`, `malua_doki`, `ravu_egzekutor` (+ istniejący Florian, Smolny, Magda, Szkalpel, Borek, Halina).
 
 ---
 
