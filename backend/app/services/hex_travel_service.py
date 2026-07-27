@@ -2972,4 +2972,17 @@ def execute_travel(
         except Exception as _tide_err:  # noqa: BLE001
             logger.warning("tide_strand_failed", error=str(_tide_err), campaign_id=campaign_id)
 
+    # WL-8 (#1504) — ROGATKA: przy wjeździe do Koronnych Nizin (region z rogatkami)
+    # z kontrabandą w plecaku → kontrola celna. Wpadka = konfiskata + reputacja.
+    # Liczy region hexu docelowego vs źródłowego (granica krain).
+    if result.get("ok") and record_turn:
+        try:
+            from app.services.smuggling_service import rogatka_control
+            rogatka_control(
+                conn, campaign_id, character_id,
+                from_hex=from_hex, to_hex=(dest_q, dest_r), result=result,
+            )
+        except Exception as _toll_err:  # noqa: BLE001 — czytnik rogatki nie wywala podróży
+            logger.warning("rogatka_control_failed", error=str(_toll_err), campaign_id=campaign_id)
+
     return result

@@ -19,6 +19,7 @@ from app.services import haggle_service
 from app.services import night_economy_service as night_econ
 from app.services import npc_memory_service
 from app.services import npc_placement_service
+from app.services import smuggling_service
 
 SELL_RATIO = 0.5
 
@@ -1069,31 +1070,42 @@ def sell_item(character_id: int, inventory_id: int, npc_id: int | None = None) -
         if night_state.get("is_black_market") and cha_sell_price > 0:
             cha_sell_price = max(1, int(math.floor(cha_sell_price * night_econ.BLACK_MARKET_SELL_MULT)))
 
-        # F12 (#472): anti-farm decay for repeated sales of the same item_key
-        # U16 (#564): także liczba sprzedaży w oknie + flaga oversupply dla komunikatu gracza
-        recent_sell_count = 0
-        try:
-            from app.services.anti_farm_service import (
-                get_anti_farm_multiplier, apply_anti_farm, _recent_sell_count,
-            )
-            af_mult = get_anti_farm_multiplier(conn, character_id, item_key)
-            earned = apply_anti_farm(cha_sell_price, af_mult)
-            recent_sell_count = _recent_sell_count(conn, character_id, item_key)
-        except Exception:
+        # WL-8 (#1504): towar handlowy krainy (sól morska / kontrabanda) ma cenę
+        # SPRZEDAŻY zależną od regionu — arbitraż międzykrainowy jest tu sensem gry
+        # (przemyt), więc CELOWO omija cap arbitrażu z AUDIT #1439 (ten cap chroni
+        # przed round-tripem w JEDNYM sklepie, nie przed handlem Wybrzeże↔Niziny).
+        _tg_sell = smuggling_service.trade_good_sell_price(conn, character_id, item_key)
+        if _tg_sell is not None:
+            earned = int(_tg_sell)
+            cha_sell_price = int(_tg_sell)
             af_mult = 1.0
-            earned = cha_sell_price
+            recent_sell_count = 0
+        else:
+            # F12 (#472): anti-farm decay for repeated sales of the same item_key
+            # U16 (#564): także liczba sprzedaży w oknie + flaga oversupply dla komunikatu gracza
+            recent_sell_count = 0
+            try:
+                from app.services.anti_farm_service import (
+                    get_anti_farm_multiplier, apply_anti_farm, _recent_sell_count,
+                )
+                af_mult = get_anti_farm_multiplier(conn, character_id, item_key)
+                earned = apply_anti_farm(cha_sell_price, af_mult)
+                recent_sell_count = _recent_sell_count(conn, character_id, item_key)
+            except Exception:
+                af_mult = 1.0
+                earned = cha_sell_price
 
-        # AUDIT #1439 (P1): kill buy-low / sell-high arbitrage. Cap the payout
-        # strictly BELOW what it would cost to buy the SAME item back from this NPC
-        # right now, so a round-trip can never net gold no matter how CHA / dwarf /
-        # reputation / event multipliers drift apart between the two sides.
-        buy_mult = combined_buy_multiplier(
-            conn, character_id, npc_id, item_type,
-            is_black_market=bool(night_state.get("is_black_market")),
-        )
-        buy_price_back = max(1, int(math.floor(base_price * buy_mult))) if base_price > 0 else 0
-        if buy_price_back > 0:
-            earned = max(0, min(int(earned), buy_price_back - 1))
+            # AUDIT #1439 (P1): kill buy-low / sell-high arbitrage. Cap the payout
+            # strictly BELOW what it would cost to buy the SAME item back from this NPC
+            # right now, so a round-trip can never net gold no matter how CHA / dwarf /
+            # reputation / event multipliers drift apart between the two sides.
+            buy_mult = combined_buy_multiplier(
+                conn, character_id, npc_id, item_type,
+                is_black_market=bool(night_state.get("is_black_market")),
+            )
+            buy_price_back = max(1, int(math.floor(base_price * buy_mult))) if base_price > 0 else 0
+            if buy_price_back > 0:
+                earned = max(0, min(int(earned), buy_price_back - 1))
 
         # AUDIT #1438 (P1): double-sell race. The old SELECT → unconditional
         # DELETE → credit let two concurrent requests on the same inventory_id both
