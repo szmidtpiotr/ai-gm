@@ -56,34 +56,46 @@ TOLL_REGIONS = {DEMAND_REGION}
 class TradeGood:
     """Towar o cenie zależnej od regionu (arbitraż międzykrainowy).
 
-    ``buy_at_source`` = docelowa cena kupna u źródła (Czarny Targ / warzelnia) —
-    seed wpisuje ją jako ``price`` w ``shop_inventory_json`` (narzut per-sklep bije
-    cenę katalogową, patrz shop_service). Ceny SPRZEDAŻY są region-zależne:
-    u źródła nadpodaż (tanio), w regionie popytu drogo, gdzie indziej średnio.
+    ``buy_at_source`` = docelowa cena kupna u źródła (Czarny Targ / warzelnia /
+    warsztat solny) — seed wpisuje ją jako ``price`` w ``shop_inventory_json``
+    (narzut per-sklep bije cenę katalogową, patrz shop_service). Ceny SPRZEDAŻY są
+    region-zależne: w regionie RODOWYM (``home_region``) nadpodaż → tanio, w regionie
+    popytu (Niziny) → drogo, gdzie indziej → średnio.
     """
     label: str
     contraband: bool
+    home_region: str
     buy_at_source: int
     sell_source: int
     sell_demand: int
     sell_default: int
 
 
-#: Katalog towarów krainy. Klucze = klucze ``game_items`` (seed_wl8_economy.py).
+#: Katalog towarów krainy. Klucze = klucze ``game_items`` (seed_wl8_economy.py,
+#: seed_wl8b_salt_ladder.py). Sól = 3 klasy tego samego towaru (gradacja handlowa,
+#: lore §3): Pustkowia (blizna) > Granie (górska) > Wybrzeże (morska). Ceny SPRZEDAŻY
+#: w Nizinach rosną wraz z klasą; każda sól najtańsza w swoim regionie rodowym.
 TRADE_GOODS: dict[str, TradeGood] = {
-    # LEGALNY — najtańsza sól świata (dolny szczebel drabiny). Bez rogatki.
-    "sol_morska": TradeGood(
-        label="Sól morska", contraband=False,
+    # ── SÓL (legalna, bez rogatki) — pełna drabina 3 klas ────────────────────
+    "sol_morska": TradeGood(  # najtańsza klasa — Wybrzeże (warzelnie na plycizna)
+        label="Sól morska", contraband=False, home_region="wybrzeze_lez",
         buy_at_source=2, sell_source=1, sell_demand=6, sell_default=3,
     ),
-    # KONTRABANDA „z głębin" — luksusowa perła wyrzucana przez morze na wrakach.
+    "sol_gorska": TradeGood(  # średnia klasa — Siwe Granie (sól kopalniana)
+        label="Sól górska", contraband=False, home_region="siwe_granie",
+        buy_at_source=5, sell_source=3, sell_demand=14, sell_default=8,
+    ),
+    "sol_blizny": TradeGood(  # najdroższa klasa — Martwe Pustkowia (sól z blizny)
+        label="Sól z blizny", contraband=False, home_region="martwe_pustkowia",
+        buy_at_source=9, sell_source=5, sell_demand=24, sell_default=14,
+    ),
+    # ── KONTRABANDA „z głębin" (Wybrzeże → Niziny, rogatka gra przeciw) ───────
     "perla_glebin": TradeGood(
-        label="Perła z Głębin", contraband=True,
+        label="Perła z Głębin", contraband=True, home_region="wybrzeze_lez",
         buy_at_source=40, sell_source=25, sell_demand=140, sell_default=70,
     ),
-    # KONTRABANDA — żywica topielców: narkotyczna, zakazana w Nizinach, cenna tam.
     "zywica_topielcow": TradeGood(
-        label="Żywica topielców", contraband=True,
+        label="Żywica topielców", contraband=True, home_region="wybrzeze_lez",
         buy_at_source=20, sell_source=12, sell_demand=80, sell_default=40,
     ),
 }
@@ -91,13 +103,13 @@ TRADE_GOODS: dict[str, TradeGood] = {
 #: Zbiór kluczy kontrabandy — szybki test w rogatce.
 CONTRABAND_KEYS = frozenset(k for k, g in TRADE_GOODS.items() if g.contraband)
 
-#: Drabina soli (gradacja handlowa, lore §3). Tylko dół (sól morska) to realny
-#: towar; górna dwójka to PLACEHOLDERY na przyszłe sesje Grań/Pustkowi (wersja
-#: bazowa — odnotowane w docstringu modułu). Kolejność: od najdroższej do najtańszej.
+#: Drabina soli (gradacja handlowa, lore §3) — od najdroższej klasy do najtańszej.
+#: WL-8b: wszystkie trzy szczeble to realne towary (górska z Grań i blizna z Pustkowi
+#: dopięte). Ceny SPRZEDAŻY w Nizinach: blizna > górska > morska.
 SALT_LADDER: list[tuple[str, str, bool]] = [
-    ("martwe_pustkowia", "sol_blizny", False),   # blizna Pustkowi — NIEZAIMPLEMENTOWANY towar
-    ("siwe_granie", "sol_gorska", False),         # sól górska — NIEZAIMPLEMENTOWANY towar
-    ("wybrzeze_lez", "sol_morska", True),         # sól morska — ten szczebel jest realny
+    ("martwe_pustkowia", "sol_blizny", True),   # blizna Pustkowi — najdroższa
+    ("siwe_granie", "sol_gorska", True),         # sól górska — średnia
+    ("wybrzeze_lez", "sol_morska", True),        # sól morska — najtańsza
 ]
 
 
@@ -215,7 +227,7 @@ def trade_good_sell_price(
     region = _character_region(conn, character_id)
     if region == DEMAND_REGION:
         return good.sell_demand
-    if region == SOURCE_REGION:
+    if region == good.home_region:
         return good.sell_source
     return good.sell_default
 
@@ -373,9 +385,9 @@ def rogatka_control(
     # narracja mechaniczna (bez LLM)
     seized_labels = ", ".join(f"{t['label']}×{t['quantity']}" for t in taken)
     msg = (
-        f"Rogatka. Celnik każe otworzyć juki. „A to co?” — wyciąga {seized_labels}. "
-        f"Towar przepada, a twoje imię trafia do celnego rejestru "
-        f"(reputacja Koronnych Nizin −{rep_pen})."
+        f"Rogatka Wschodnia. Berta Twarda Pieczęć każe otworzyć juki. „A to co?” — "
+        f"wyciąga {seized_labels}. Towar przepada, a twoje imię trafia do celnego "
+        f"rejestru Korony (reputacja Koronnych Nizin −{rep_pen})."
     )
     if used_forged:
         msg += " Fałszywe papiery też idą do kosza — a fałszerstwo pamiętają dłużej."

@@ -41,11 +41,22 @@ def test_selling_at_source_is_a_loss():
 def test_sea_salt_is_cheapest_salt_class():
     """Sól morska = dół drabiny (najtańsza klasa), gradacja Pustkowia>Granie>Wybrzeże."""
     assert sm.cheapest_salt_key() == "sol_morska"
-    # dół drabiny należy do Wybrzeża i jest jedynym realnym towarem (wersja bazowa)
     region, key, real = sm.SALT_LADDER[-1]
     assert (region, key, real) == ("wybrzeze_lez", "sol_morska", True)
-    # górne szczeble to placeholdery (jeszcze nie zaimplementowane jako towar)
-    assert all(not real for _r, _k, real in sm.SALT_LADDER[:-1])
+    # WL-8b: wszystkie trzy szczeble są realnymi towarami
+    assert all(real for _r, _k, real in sm.SALT_LADDER)
+
+
+def test_salt_gradation_prices_ordered():
+    """Cena SPRZEDAŻY soli w Nizinach rośnie z klasą: blizna > górska > morska."""
+    morska = sm.TRADE_GOODS["sol_morska"].sell_demand
+    gorska = sm.TRADE_GOODS["sol_gorska"].sell_demand
+    blizny = sm.TRADE_GOODS["sol_blizny"].sell_demand
+    assert morska < gorska < blizny
+    # każda sól ma inny region rodowy (dół drabiny = Wybrzeże)
+    homes = {sm.TRADE_GOODS[k].home_region for k in ("sol_morska", "sol_gorska", "sol_blizny")}
+    assert homes == {"wybrzeze_lez", "siwe_granie", "martwe_pustkowia"}
+    assert all(not sm.TRADE_GOODS[k].contraband for k in ("sol_morska", "sol_gorska", "sol_blizny"))
 
 
 def test_sea_salt_is_legal_contraband_is_not():

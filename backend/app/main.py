@@ -42,6 +42,7 @@ from app.api import (
     companions,
     sea_voyage,
     tides,
+    kantor,
 )
 from app.api.crafting import router as crafting_router
 from app.api.dungeons import router as dungeons_router
@@ -876,6 +877,7 @@ app.include_router(shop.router, prefix="/api")
 app.include_router(services_shop.router, prefix="/api")
 app.include_router(companions.router, prefix="/api")  # #1192 FAZA TW
 app.include_router(tides.router, prefix="/api")  # WL-5 #1504/#1505 — pływy Wybrzeża Łez
+app.include_router(kantor.router, prefix="/api")  # WL-8b #1504 — weksle kantorów Nizin
 app.include_router(sea_voyage.router, prefix="/api")  # WL-4 #1504 — rejsy port↔port
 app.include_router(auth.router, prefix="/api")
 app.include_router(friends.router, prefix="/api")
