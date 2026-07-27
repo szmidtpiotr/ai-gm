@@ -56,8 +56,11 @@ i wyrównania pasa row=0). Zmiana układu = edycja `region_blocks.py` + tej tabe
 > † **Siwe Granie** jest live (seedowane sprzed wzoru #1542) — jej faktyczne heksy
 > siedzą na legacy-offsecie (bounds r −75..−2), nie na `r_off=−50` z wzoru. Stykają
 > się z Kresami, więc nie ruszamy danych; wzór dotyczy krain regenerowanych.
-> **Martwe Pustkowia** — jedyna kraina `coming` już wsiana do żywej DB (MP-3, #1494),
+> **Martwe Pustkowia** — kraina `coming` wsiana do żywej DB (MP-3, #1494),
 > na kanonicznym offsecie `(50, 25)`; styka się z Czarnoborem (50 sąsiadów).
+> **Wybrzeże Łez** — NAPRAWIONE (#1542, 2026-07-27): plik/DB siedziały na legacy
+> `q_offset −55` (5-kolumnowa pustka na SW); przesunięte `q += 5` → kanoniczny
+> `(−50, 75)`, reseed DB. Blok SW dolega do kolumny Koronnych Nizin.
 
 > **Uwaga (CB-4, 2026-07-24):** dwie korekty układu, by krainy **dolegały** i były **na równi** z Kresami:
 > 1. **q = ±50** (nie ±55): sąsiednie krainy stykają się bez luki (q49 Kresów ↔ q50 Czarnoboru = sąsiedzi axial). ±55 dawał 5-kolumnową czarną pustkę.

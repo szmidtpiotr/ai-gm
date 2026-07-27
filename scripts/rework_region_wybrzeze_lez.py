@@ -105,17 +105,18 @@ BUDGET = {
 }
 
 # ── kotwice geograficzne (docelowe q,r; snapowane do najbliższego pasującego) ──
-# NW land → SE sea. q -55..-6 (W→E), r 51..124 (N→S).
-RIVER_SOURCE = (-40, 58)     # skąd wpływa rzeka z Koronnych Nizin (N ląd)
-CZARNOGROD_HINT = (-30, 80)  # okolica ujścia — Czarnogród snapuje do faktycznego ujścia
-LATARNIA_HINT = (-18, 88)    # Latarnia Topielców — przy pasie raf, ląd/klif
+# NW land → SE sea. q -50..-1 (W→E), r 51..124 (N→S).
+# #1542 fix: blok wybrzeze_lez wyrównany do wzoru bloków (q_off=-50, NIE -55) — kotwice +5.
+RIVER_SOURCE = (-35, 58)     # skąd wpływa rzeka z Koronnych Nizin (N ląd)
+CZARNOGROD_HINT = (-25, 80)  # okolica ujścia — Czarnogród snapuje do faktycznego ujścia
+LATARNIA_HINT = (-13, 88)    # Latarnia Topielców — przy pasie raf, ląd/klif
 
 # wyspy: (key, label, hex_type, q, r, rozmiar, rafy_ring?)
 ISLANDS = [
-    ("zatoka_topielcow",      "Zatoka Topielców",       "town",    -25, 102, 42, False),
-    ("kryjowka_przemytnikow", "Kryjówka Przemytników",  "ruins",   -13,  93,  8, False),
-    ("opuszczona_latarnia",   "Opuszczona Latarnia",    "ruins",   -12, 111,  7, True),
-    ("wysepka_diaspory",      "Wysepka Diaspory",       "village", -33, 114,  9, False),
+    ("zatoka_topielcow",      "Zatoka Topielców",       "town",    -20, 102, 42, False),
+    ("kryjowka_przemytnikow", "Kryjówka Przemytników",  "ruins",    -8,  93,  8, False),
+    ("opuszczona_latarnia",   "Opuszczona Latarnia",    "ruins",    -7, 111,  7, True),
+    ("wysepka_diaspory",      "Wysepka Diaspory",       "village", -28, 114,  9, False),
 ]
 
 # osady lądowe (key, label, hex_type, docelowe qn 0-1 W→E, yn 0-1 N→S, dozwolone typy)

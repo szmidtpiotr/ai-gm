@@ -53,7 +53,8 @@ EXPECTED_OFFSETS = {
 # kompensacji shear / sprzed kroku 50·row). Zostaną naprawione przy regeneracji w
 # fali krain — tu tylko udokumentowane, żeby strażnik nie mylił znanego długu z regresją.
 # martwe_pustkowia — NAPRAWIONE (MP-3+, offset kanoniczny (50,25), wsiane do DB #1494).
-_STALE_COMING_OFFSETS = {"wybrzeze_lez"}
+# wybrzeze_lez — NAPRAWIONE (#1542 fix: q_offset -55→-50, hexy +5, reseed DB; wyrównane do bloku SW).
+_STALE_COMING_OFFSETS: set[str] = set()
 
 
 # ── 1. WZÓR (czysta matematyka, bez danych) ──────────────────────────────────
