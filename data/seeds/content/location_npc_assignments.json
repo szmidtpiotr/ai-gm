@@ -728,6 +728,46 @@
     "is_active": 1
   },
   {
+    "id": 37600,
+    "location_key": "bagienna_pradawny_kamien",
+    "npc_key": "elaren",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37601,
+    "location_key": "las_czarnych_polanka_starszych",
+    "npc_key": "lethael",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37602,
+    "location_key": "trzesawiska_ognisty_kostkocian",
+    "npc_key": "vaeril",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37603,
+    "location_key": "zloty_oltarz_lesny",
+    "npc_key": "zyroslaw_mechowy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37604,
+    "location_key": "zloty_polana_elfow",
+    "npc_key": "witosz_swietlik",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
     "id": 37608,
     "location_key": "solny_prog",
     "npc_key": "raszid_starszy",
@@ -828,6 +868,86 @@
     "location_key": "solne_zniwa",
     "npc_key": "nadira_zniwiarka",
     "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37642,
+    "location_key": "czarnogrod_port",
+    "npc_key": "kapitan_roggen",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37643,
+    "location_key": "czarnogrod_port",
+    "npc_key": "taio_starszy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37644,
+    "location_key": "czarnogrod_port",
+    "npc_key": "nakea_przemytniczka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37645,
+    "location_key": "czarnogrod_nabrzeze",
+    "npc_key": "kapitan_roggen",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37646,
+    "location_key": "czarnogrod_dzielnica_wyspiarzy",
+    "npc_key": "taio_starszy",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37647,
+    "location_key": "czarnogrod_giełda_kontrabandy",
+    "npc_key": "nakea_przemytniczka",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37648,
+    "location_key": "zatoka_topielcow",
+    "npc_key": "malua_doki",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37649,
+    "location_key": "zatoka_topielcow",
+    "npc_key": "ravu_egzekutor",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37650,
+    "location_key": "zatoka_pirackie_doki",
+    "npc_key": "malua_doki",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37651,
+    "location_key": "zatoka_rada_piracka",
+    "npc_key": "ravu_egzekutor",
+    "assignment_type": "resident",
     "notes": null,
     "is_active": 1
   }
