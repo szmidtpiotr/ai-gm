@@ -9455,6 +9455,16 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             if int(row.get("map_level") or 0) == 0
         }
 
+        # #1549 — hexy TŁA (morze + Ziemie Północy) rysowane ZAWSZE, bez mgły wojny.
+        # To terra incognita: gracz widzi teren i nazwy POI, ale nie może tam dojść
+        # (region 'locked' → bramka podróży odrzuca). Trzymamy je poza pętlami FOW,
+        # emitujemy osobnym blokiem jako status 'background'.
+        from app.services.world_region_service import BACKGROUND_REGION_KEYS
+        background_coords = {
+            coord for coord, row in all_hexes_l0.items()
+            if row.get("region") in BACKGROUND_REGION_KEYS
+        }
+
         # Current hex + auto-placement (must happen BEFORE building result_hexes)
         current_hex = None
         gs = conn.execute(
@@ -9632,7 +9642,8 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             # Build adjacent unvisited outlines (known hexes render as 'known', not outline)
             for dq, dr in _DIRS:
                 nb = (coord[0]+dq, coord[1]+dr)
-                if nb not in discovered_coords and nb not in known_coords and nb in all_hexes:
+                if (nb not in discovered_coords and nb not in known_coords
+                        and nb not in background_coords and nb in all_hexes):
                     outline_coords.add(nb)
 
         # #1196 — the hero's treasure hex must be visible even through fog (the map
@@ -9643,7 +9654,7 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
         # PM1 (#1220): emit 'known' hexes — terrain visible, label only for
         # landmarks/canonical, NEVER location_key or game_locations data.
         for coord in known_coords:
-            if coord in _treasure_only:
+            if coord in _treasure_only or coord in background_coords:
                 continue
             hdata = all_hexes_l0.get(coord, {})
             cd = campaign_data.get(coord, {})
@@ -9666,7 +9677,8 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             ch = (int(current_hex["q"]), int(current_hex["r"]))
             for dq, dr in _DIRS:
                 nb = (ch[0]+dq, ch[1]+dr)
-                if nb not in discovered_coords and nb not in known_coords:
+                if (nb not in discovered_coords and nb not in known_coords
+                        and nb not in background_coords):
                     if nb in all_hexes:
                         outline_coords.add(nb)
                     else:
@@ -9693,6 +9705,22 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 "label": None,
                 "status": "known",
                 "is_treasure": True,
+            })
+
+        # #1549 — TŁO: emituj wszystkie hexy slotów tła jako status 'background'
+        # (rysowane zawsze, bez FOW). Teren + nazwa POI (world_hexes.label) widoczne;
+        # gracz tam nie dojdzie (region 'locked' → bramka podróży). is_poi = nazwany
+        # landmark („biała plama z nazwą" — Kronika).
+        for coord in background_coords:
+            hdata = all_hexes_l0.get(coord, {})
+            _bg_label = hdata.get("label")
+            result_hexes.append({
+                "q": coord[0], "r": coord[1],
+                "hex_type": hdata.get("hex_type", "plains"),
+                "label": _bg_label,
+                "status": "background",
+                "is_poi": bool(_bg_label),
+                "locked": True,
             })
 
         # Teleport connections (only where at least one endpoint is discovered)

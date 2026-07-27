@@ -282,7 +282,9 @@ export interface SkillTestResolveResponse {
 
 // ── F-43/F-47 mapa świata + podróż (KROK 4 FE8 #1235) ────────────────────────
 
-export type HexStatus = "discovered" | "known" | "outline" | "unexplored";
+// #1549 — 'background' = slot tła (morze / Ziemie Północy): teren + nazwa POI
+// rysowane ZAWSZE, bez mgły wojny; nieprzechodnie (region 'locked').
+export type HexStatus = "discovered" | "known" | "outline" | "unexplored" | "background";
 
 // Jeden heks z GET /campaigns/{id}/world-map (widok gracza, z mgłą wojny).
 export interface WorldHex {
@@ -297,6 +299,8 @@ export interface WorldHex {
   is_poi?: boolean;
   is_quest?: boolean;
   has_note?: boolean;
+  // #1549 — heks tła (nieprzechodni): brak akcji podróży, tylko podgląd.
+  locked?: boolean;
   // #1196 — hex holds this hero's completed, still-buried treasure map (✕ marker).
   is_treasure?: boolean;
 }

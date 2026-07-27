@@ -7381,6 +7381,11 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
         ("siwe_granie",      "Siwe Granie",        "#b0c4de", "coming", None, None, 4, "Kopalnia Czarnego Hutmana, Krzyż Gór"),
         ("wybrzeze_lez",     "Wybrzeże Łez",       "#4a7fa5", "coming", None, None, 5, "Czarnogród, Zatoka Topielców"),
         ("martwe_pustkowia", "Martwe Pustkowia",   "#8b7355", "coming", None, None, 6, "Pustkowie Solne, Świątynia Pradawnych"),
+        # #1549 — sloty TŁA (nie krainy z rosteru). status 'locked' = globalnie
+        # nieprzechodnie; player-map rysuje je zawsze bez FOW (patrz BACKGROUND_REGION_KEYS).
+        ("tlo_morze",        "Morze",              "#0b2a52", "locked", None, None, 7, "Slot tła — morze WL↔MP (#1549)"),
+        ("tlo_polnoc_nw",    "Ziemie Północy (zachód)", "#8aadad", "locked", None, None, 8, "Terra incognita — POI pod Kuźnię (#1549)"),
+        ("tlo_polnoc_ne",    "Ziemie Północy (wschód)", "#8aadad", "locked", None, None, 9, "Terra incognita — POI pod Kuźnię (#1549)"),
     ]
     for row in REGIONS:
         try:
@@ -7435,6 +7440,10 @@ def _align_region_status_to_files(conn: sqlite3.Connection, regions_dir: str = "
             continue
         key = d.get("region")
         status = d.get("status")
+        # #1549 — sloty tła zapisują w pliku status 'background'; w world_regions
+        # siadają jako 'locked' (nieprzechodnie, ale rysowane bez FOW).
+        if status == "background":
+            status = "locked"
         if not key or status not in ("live", "coming", "locked"):
             continue
         conn.execute(

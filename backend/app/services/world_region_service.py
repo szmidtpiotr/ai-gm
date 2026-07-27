@@ -25,6 +25,13 @@ REGION_STATUSES = ("live", "coming", "locked")
 #: Statusy, które zamykają granicę dla gracza (admin nadal widzi krainę).
 BLOCKING_STATUSES = ("coming", "locked")
 
+#: #1549 — sloty TŁA kontynentu: nie krainy z rosteru (lore = 6 krain), tylko
+#: wypełnienie pustych bloków siatki. W plikach data/regions mają status
+#: `background`; w world_regions siadają jako `locked` (globalnie nieprzechodnie),
+#: ale — inaczej niż zwykłe `locked` krainy — są RYSOWANE ZAWSZE, bez mgły wojny
+#: (player world-map je emituje jako status 'background'). Ciekawość = paliwo Kuźni.
+BACKGROUND_REGION_KEYS = ("tlo_morze", "tlo_polnoc_nw", "tlo_polnoc_ne")
+
 
 #: #1479 — rasa zakotwiczona w krainie ojczystej. Brak wpisu / None = rasa bez
 #: kotwicy, dostępna zawsze (człowiek jest wszędzie). Rasy są dziś hardcode'em

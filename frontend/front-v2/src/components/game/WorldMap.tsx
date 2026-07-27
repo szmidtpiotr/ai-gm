@@ -805,6 +805,18 @@ export function WorldMap({
                   </p>
                 )}
               </div>
+            ) : selected.status === "background" ? (
+              // #1549 — heks tła (terra incognita): tylko podgląd, brak podróży.
+              // Za zamkniętą granicą — ciekawość jako paliwo przyszłej Kuźni.
+              <div className="flex flex-col gap-2 p-4">
+                <p className="rounded-md border border-line-soft bg-white/[.02] px-3 py-2 text-center font-ui text-body text-text-2">
+                  Za zamkniętą granicą świata.
+                </p>
+                <p className="px-1 text-center font-ui text-micro text-text-3">
+                  Te ziemie widać z daleka, lecz zwykłą drogą tam nie dojdziesz.
+                  Może kiedyś wyprawa poprowadzi cię dalej.
+                </p>
+              </div>
             ) : (
               // Podróż do wybranego heksa
               <>
@@ -885,7 +897,10 @@ function HexTile({
   const { x, y } = hexToPixel(hex.q, hex.r);
   const known = hex.status === "known";
   const discovered = hex.status === "discovered";
-  const hasTerrain = (discovered || known) && !!hex.hex_type;
+  // #1549 — heks tła (morze / Ziemie Północy): teren widoczny zawsze, ale za
+  // zamkniętą granicą (nieprzechodni). Renderujemy jak odkryty, lecz przygaszony.
+  const background = hex.status === "background";
+  const hasTerrain = (discovered || known || background) && !!hex.hex_type;
   // Flaga celu tylko na NAZWANYCH heksach znanych z opowieści (nie na każdym
   // heksie mgły „known" — inaczej mapa tonie w chorągiewkach).
   const namedTarget =
@@ -901,6 +916,12 @@ function HexTile({
     stroke = "var(--ember)";
   } else if (discovered) {
     fill = color ? mix(color) : "#251b11";
+  } else if (background) {
+    // #1549 — terra incognita: pełny teren, lekko przygaszony, chłodna obwódka;
+    // czytelnie „za granicą świata", ale widoczny (bez FOW).
+    fill = color ? mix(color, 0.7) : "#1b2430";
+    stroke = "rgba(160,196,222,.28)";
+    opacity = 0.82;
   } else if (known) {
     fill = color ? mix(color, 0.42) : "#1a2028";
     stroke = "rgba(130,167,199,.35)";
@@ -920,7 +941,7 @@ function HexTile({
   const isNamed = !!hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label);
   // #1311 — lokacja (POI) i cel questa jako jawne flagi z backendu (fallback: label).
   // Bez tego heks z lokacją wyglądał jak zwykły teren (world_hexes.label = NULL).
-  const isPoi = (hex.is_poi ?? isNamed) && (discovered || known);
+  const isPoi = (hex.is_poi ?? isNamed) && (discovered || known || background);
   const isQuest = !!hex.is_quest;
   const isTreasure = !!hex.is_treasure; // #1196 — nieodkryty skarb na tym heksie
 
