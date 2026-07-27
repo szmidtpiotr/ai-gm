@@ -26,6 +26,7 @@ SERVICE_NOUN_RE = re.compile(
     r"|piw[aoęy]\w*|kufel\w*|kufl\w*|nap[oó]j\w*|napo\w*|win[aoęy]\w*|trunk\w*"
     r"|napraw\w*|kowal\w*"
     r"|uzdrowi\w*|lecz\w*|ran\w*"
+    r"|błogosław\w*|blogoslaw\w*|święc\w*|swiec\w*|odklęc\w*|odklec\w*|odklin\w*|klątw\w*|klatw\w*|kląt\w*"
     r"|stajni\w*|ko[nń]\w*|wierzchowc\w*"
     r"|przewodnik\w*"
     r"|posła[nń]c\w*|poslan\w*|wiadomo[śs][ćc]\w*"
@@ -39,8 +40,11 @@ _LODGING_SERVICES = ("inn_night", "inn_night_fine", "tavern_meal", "tavern_drink
 _SMITH_KEYWORDS = ("smithy", "blacksmith", "kowal", "forge", "kuznia", "kuźnia")
 _SMITH_SERVICES = ("blacksmith_repair",)
 
-_HEALER_KEYWORDS = ("temple", "shrine", "healer", "swiatynia", "świątynia", "uzdrowic", "klinika", "medyk")
-_HEALER_SERVICES = ("healer_light", "healer_heavy")
+# Światło shrines: temples/shrines/monasteries offer healing + blessing + curse removal.
+# "klasztor"/"kaplica"/"katedra" added (KN-6 #1500) so monastery & cathedral hubs qualify.
+_HEALER_KEYWORDS = ("temple", "shrine", "healer", "swiatynia", "świątynia", "uzdrowic",
+                    "klinika", "medyk", "klasztor", "kaplica", "katedra", "sanktuarium")
+_HEALER_SERVICES = ("healer_light", "healer_heavy", "blessing_light", "curse_removal")
 
 _STABLE_KEYWORDS = ("stable", "stajni", "stajnia")
 _STABLE_SERVICES = ("stable_night",)
