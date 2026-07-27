@@ -140,6 +140,11 @@ TOLL_REP_PENALTY = 8
 #: Dodatkowa kara reputacji, gdy wpadną fałszywe papiery (fałszerstwo).
 TOLL_FORGERY_REP_PENALTY = 6
 
+# ── Glejt na targach Nizin (KN-8 #1500 — „lepsze ceny na targach regionu") ────
+#: Rabat zakupu na targach Koronnych Nizin dla posiadacza glejtu kupieckiego.
+#: Licencjonowany kupiec dostaje cenę cechową — startowo −10% (Sandbox-tunable).
+GLEJT_MARKET_DISCOUNT = 0.10
+
 
 # ── Odczyt ekwipunku / położenia ─────────────────────────────────────────────
 
@@ -192,8 +197,8 @@ def _hex_region(conn: sqlite3.Connection, q: int, r: int) -> str:
     return str((row["region"] if row else "") or "")
 
 
-def _dex_mod(conn: sqlite3.Connection, character_id: int) -> int:
-    """Modyfikator ZR bohatera (ukrywanie towaru). Brak danych → 0."""
+def _stat_mod(conn: sqlite3.Connection, character_id: int, stat: str) -> int:
+    """Modyfikator wskazanej cechy bohatera (np. DEX/CHA). Brak danych → 0."""
     try:
         row = conn.execute(
             "SELECT sheet_json FROM characters WHERE id=? LIMIT 1", (int(character_id),)
@@ -202,10 +207,27 @@ def _dex_mod(conn: sqlite3.Connection, character_id: int) -> int:
             return 0
         sheet = json.loads((row["sheet_json"] if isinstance(row, sqlite3.Row) else row[0]) or "{}")
         stats = sheet.get("stats", {}) if isinstance(sheet, dict) else {}
-        dex = int(stats.get("DEX", 10))
-        return (dex - 10) // 2
+        val = int(stats.get(stat, 10))
+        return (val - 10) // 2
     except Exception:
         return 0
+
+
+def _dex_mod(conn: sqlite3.Connection, character_id: int) -> int:
+    """Modyfikator ZR bohatera (ukrywanie towaru). Brak danych → 0."""
+    return _stat_mod(conn, character_id, "DEX")
+
+
+def _conceal_mod(conn: sqlite3.Connection, character_id: int, *, forged: bool) -> int:
+    """Modyfikator ukrycia na rogatce — test „DEX/CHA wg kontekstu" (KN-8 §6).
+
+    Bez fałszywych papierów liczy się zręczne schowanie towaru (DEX). Z fałszywymi
+    papierami łotrzyk może zamiast tego zagadać celnika (CHA) — bierzemy lepszą z
+    dwóch cech (con-artist gada albo chowa)."""
+    dex = _stat_mod(conn, character_id, "DEX")
+    if not forged:
+        return dex
+    return max(dex, _stat_mod(conn, character_id, "CHA"))
 
 
 # ── Tor 1: cena sprzedaży towaru handlowego (region-zależna) ──────────────────
@@ -245,6 +267,24 @@ def _character_region(conn: sqlite3.Connection, character_id: int) -> str:
         return resolve_region(conn, int(cid))
     except Exception:
         return ""
+
+
+def glejt_market_multiplier(conn: sqlite3.Connection, character_id: int) -> float:
+    """Mnożnik ceny KUPNA na targach Koronnych Nizin dla posiadacza glejtu.
+
+    Glejt kupiecki = licencja Korony: na targach regionu (koronne_niziny) kupiec
+    dostaje cenę cechową — startowo −10% (``GLEJT_MARKET_DISCOUNT``). Poza regionem
+    albo bez glejtu → 1.0 (bez zmian). Read-only wizytator — nic nie zapisuje; przy
+    błędzie zwraca 1.0, żeby nigdy nie zepsuć ścieżki sklepu.
+    """
+    try:
+        if not _has_item(conn, character_id, PERMIT_ITEM):
+            return 1.0
+        if _character_region(conn, character_id) != DEMAND_REGION:
+            return 1.0
+        return 1.0 - GLEJT_MARKET_DISCOUNT
+    except Exception:  # noqa: BLE001
+        return 1.0
 
 
 # ── Tor 2: rogatka — kontrola kontrabandy przy wjeździe do Nizin ──────────────
@@ -322,7 +362,7 @@ def rogatka_control(
             result["rogatka"] = report
         return report
 
-    conceal = _dex_mod(conn, character_id)
+    conceal = _conceal_mod(conn, character_id, forged=has_forged)
     paper_bonus = 0
     used_forged = False
     if has_permit:

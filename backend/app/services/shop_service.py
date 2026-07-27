@@ -703,6 +703,10 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
             # #1475 / MP-8: piętno społeczne — obcy podnoszą cenę (+10%), ale we
             # własnej enklawie (Solny Próg) swoi NIE dokładają narzutu.
             eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * _pietnowani_markup(conn, character_id, location_key))), 4)
+        # KN-8 (#1500): glejt kupiecki → cena cechowa na targach Nizin (podgląd = kupno).
+        _glejt_mult = smuggling_service.glejt_market_multiplier(conn, character_id)
+        if _glejt_mult != 1.0:
+            eff_buy_mult = round(max(0.4, min(2.0, eff_buy_mult * _glejt_mult)), 4)
         ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         # #1127: night economy — reflect open state + black-market pricing in the UI.
         night_state = _shop_open_state(conn, npc, character_id)
@@ -818,6 +822,10 @@ def combined_buy_multiplier(
     rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
     if rep_mult != 1.0:
         raw *= rep_mult
+    # KN-8 (#1500): glejt kupiecki → cena cechowa na targach Nizin (−10%).
+    glejt_mult = smuggling_service.glejt_market_multiplier(conn, character_id)
+    if glejt_mult != 1.0:
+        raw *= glejt_mult
     if is_black_market:
         raw *= night_econ.BLACK_MARKET_BUY_MULT
     ev_mult = _event_price_multiplier(conn, character_id, item_type)
