@@ -20,6 +20,8 @@ i stara ścieżka. Bramka rasy nie może wywrócić tworzenia kampanii.
 """
 from __future__ import annotations
 
+import json
+import random
 import sqlite3
 
 #: Archetypy niedostępne dla rasy (klucz rasy → krotka archetypów).
@@ -344,6 +346,148 @@ def _pick_variant(conn: sqlite3.Connection, spec: dict, requested: str | None) -
     return spec["default"]
 
 
+# ── KN-9 (#1500) — losowy start człowieka: Kresy vs Vilnograd ─────────────────
+# Człowiek nie ma kotwicy krainy (RACE_START bez wpisu). §8 koronne_niziny.md:
+# przy tworzeniu planu losujemy 50/50 miejsce startu — gospoda „Pod Złamanym
+# Rogiem" na Kresach (pogranicze) ALBO Vilnograd, stolica Korony (miasto intryg).
+# Wariant miejski dobiera sub-lokację do archetypu: łotrzyk → Dzielnica Złodziei
+# (kanon — ludzki łotrzyk wyrasta z dzielnicy złodziei stolicy), reszta → zajazd
+# przy Targu Wielkim. Losowanie pada RAZ i jest zapisane na bohaterze
+# (``sheet_json.kn9_start``), więc plan-hint i fizyczny heks startu zawsze się
+# zgadzają — kolejność wywołań (plan przed heksem czy odwrotnie) nie ma znaczenia.
+# Aktywne DOPIERO po zaseedowaniu Vilnogradu (§8) — inaczej zawsze Kresy.
+
+HUMAN_START_KRESY_LOC = "gospoda_pod_zlamanym_rogiem"
+HUMAN_START_KRESY_REGION = "kresy"
+HUMAN_START_VILNOGRAD_HUB = "vilnograd_stolica"
+HUMAN_START_VILNOGRAD_MARKET = "vilnograd_rynek"  # zajazd przy Targu Wielkim
+HUMAN_START_VILNOGRAD_THIEVES = "vilnograd_dzielnica_zlodziei"  # łotrzyk (kanon)
+HUMAN_START_VILNOGRAD_REGION = "koronne_niziny"
+
+#: Szansa startu w Vilnogradzie zamiast na Kresach — WARTOŚĆ STARTOWA (50/50),
+#: strojona po obserwacji (KN-9 / §8).
+HUMAN_VILNOGRAD_START_CHANCE = 0.5
+
+_HUMAN_START_VARIANTS = ("kresy", "vilnograd")
+
+
+def _character_sheet(conn: sqlite3.Connection, character_id: int | None) -> dict | None:
+    """``sheet_json`` bohatera jako dict albo ``None`` przy braku/uszkodzeniu."""
+    if not character_id:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1", (int(character_id),)
+        ).fetchone()
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+    if not row:
+        return None
+    raw = row["sheet_json"] if isinstance(row, sqlite3.Row) else row[0]
+    try:
+        data = json.loads(raw or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def character_archetype(conn: sqlite3.Connection, character_id: int | None) -> str | None:
+    """Archetyp bohatera z ``sheet_json`` (np. ``rogue``) albo ``None``."""
+    sheet = _character_sheet(conn, character_id)
+    if not sheet:
+        return None
+    return (str(sheet.get("archetype") or "").strip().lower()) or None
+
+
+def _vilnograd_seeded(conn: sqlite3.Connection) -> bool:
+    """Vilnograd zaseedowany, gdy jego hub ma heks overworldu (§8 aktywacja)."""
+    return _hex_for_location(conn, HUMAN_START_VILNOGRAD_HUB) is not None
+
+
+def _persist_human_start(conn: sqlite3.Connection, character_id: int | None, variant: str) -> None:
+    """Zapisz wylosowany wariant na bohaterze (``sheet_json.kn9_start``)."""
+    sheet = _character_sheet(conn, character_id)
+    if sheet is None:
+        return
+    sheet["kn9_start"] = variant
+    try:
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+        )
+    except (sqlite3.Error, TypeError, ValueError):
+        pass
+
+
+def resolve_human_start_variant(conn: sqlite3.Connection, character_id: int | None) -> str:
+    """``'kresy'`` albo ``'vilnograd'``.
+
+    Losuje 50/50 RAZ (przy pierwszym wywołaniu — zwykle tworzenie planu), zapisuje
+    na bohaterze; kolejne wywołania czytają zapis. Vilnograd tylko, gdy kraina jest
+    zaseedowana (§8) — inaczej zawsze Kresy.
+    """
+    sheet = _character_sheet(conn, character_id)
+    stored = str((sheet or {}).get("kn9_start") or "").strip().lower()
+    if stored in _HUMAN_START_VARIANTS:
+        # Kraina zniknęła po zapisie → bezpieczny fallback bez nadpisywania zapisu.
+        if stored == "vilnograd" and not _vilnograd_seeded(conn):
+            return "kresy"
+        return stored
+    if not _vilnograd_seeded(conn):
+        _persist_human_start(conn, character_id, "kresy")
+        return "kresy"
+    variant = "vilnograd" if random.random() < HUMAN_VILNOGRAD_START_CHANCE else "kresy"
+    _persist_human_start(conn, character_id, variant)
+    return variant
+
+
+def _human_vilnograd_loc(conn: sqlite3.Connection, character_id: int | None) -> str:
+    """Sub-lokacja Vilnogradu wg archetypu: łotrzyk → Dzielnica Złodziei (kanon)."""
+    arch = character_archetype(conn, character_id)
+    return HUMAN_START_VILNOGRAD_THIEVES if arch == "rogue" else HUMAN_START_VILNOGRAD_MARKET
+
+
+def _resolve_human_random_start(
+    conn: sqlite3.Connection, character_id: int | None
+) -> dict | None:
+    """Heks + lokacja dla losowego startu człowieka (KN-9). ``None`` → stara ścieżka."""
+    variant = resolve_human_start_variant(conn, character_id)
+    if variant == "vilnograd":
+        loc_key = _human_vilnograd_loc(conn, character_id)
+        region = HUMAN_START_VILNOGRAD_REGION
+        coords = _hex_for_location(conn, loc_key)
+        if coords is None:  # sub bez heksa / nie zaseedowane → Kresy
+            loc_key, region = HUMAN_START_KRESY_LOC, HUMAN_START_KRESY_REGION
+            coords = _hex_for_location(conn, loc_key)
+    else:
+        loc_key, region = HUMAN_START_KRESY_LOC, HUMAN_START_KRESY_REGION
+        coords = _hex_for_location(conn, loc_key)
+    if coords is None:
+        return None  # brak gospody na heksie → stara ścieżka (label/random)
+
+    q, r = coords
+    try:
+        hrow = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 LIMIT 1",
+            (q, r),
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    if hrow is None:
+        return None
+
+    return {
+        "q": q,
+        "r": r,
+        "hex_type": hrow["hex_type"],
+        "label": hrow["label"],
+        "loc_key": loc_key,
+        "variant_key": loc_key,
+        "region": region,
+    }
+
+
 def resolve_race_start(
     conn: sqlite3.Connection,
     character_id: int | None,
@@ -355,6 +499,9 @@ def resolve_race_start(
     albo ``None``, gdy rasa nie ma kotwicy lub danych brakuje (fail-open).
     """
     race = character_race(conn, character_id)
+    # KN-9 (#1500) — człowiek ma LOSOWY start (Kresy vs Vilnograd), nie kotwicę.
+    if race == "human":
+        return _resolve_human_random_start(conn, character_id)
     spec = RACE_START.get(race or "")
     if not spec:
         return None
@@ -390,17 +537,64 @@ def resolve_race_start(
     }
 
 
+def _human_vilnograd_plan_hint(conn: sqlite3.Connection, character_id: int | None) -> str:
+    """Podpowiedź do promptu planu dla miejskiego startu człowieka (KN-9 §8).
+
+    Haki: drobne zlecenie gildii / dług / Nocny Burmistrz czegoś chce. Miejsce
+    startu dobrane do archetypu (łotrzyk → Dzielnica Złodziei).
+    """
+    if _human_vilnograd_loc(conn, character_id) == HUMAN_START_VILNOGRAD_THIEVES:
+        place = (
+            "„Vilnograd: Dzielnica Złodziei\" (kanon — ludzki łotrzyk wyrasta "
+            "z dzielnicy złodziei stolicy)"
+        )
+    else:
+        place = "„Vilnograd: Targ Wielki\" (zajazd przy targu — serce handlu stolicy)"
+    return (
+        "MIEJSCE STARTU (obowiązkowe — losowy MIEJSKI start człowieka, KN-9):\n"
+        "  Vilnograd — stolica Korony: gildie, Katedra Światła, Dzielnica Złodziei "
+        "i cień Rady Czterech. Miasto intryg, nie pogranicze — kampania od pierwszej "
+        "sceny toczy się inaczej niż na Kresach.\n"
+        f"  Pierwsza lokacja planu (key_locations[0]) to {place}.\n"
+        "PIERWSZE HAKI (użyj JEDNEGO–DWÓCH jako zaczep Aktu 1 — miejskie, drobne):\n"
+        "  - DROBNE ZLECENIE GILDII: gildia (kupiecka/rzemieślnicza) szuka kogoś "
+        "do małej, brudnej roboty — dostawa, dług do ściągnięcia, zniknięcie towaru; "
+        "pierwsza fucha, która wciąga w politykę stolicy.\n"
+        "  - DŁUG: bohater komuś winien (albo ktoś jemu) — lichwiarz, dawny wspólnik "
+        "lub gildia upomina się o spłatę; zegar tyka od pierwszej sceny.\n"
+        "  - NOCNY BURMISTRZ CZEGOŚ CHCE: „Nocny Burmistrz\", nieuchwytny władca "
+        "Dzielnicy Złodziei, przez posłańca zleca bohaterowi zadanie — odmówić nie "
+        "wypada. Nikt nie wie, kto nim jest.\n"
+        "  Ton: intryga, gildie, cień Rady Czterech — miasto, nie trakt.\n"
+    )
+
+
 def race_plan_hint(conn: sqlite3.Connection, campaign_id: int | None) -> str:
-    """Blok do promptu planu kampanii — kraina startowa + haki rodów (lore §9)."""
+    """Blok do promptu planu kampanii — kraina startowa + haki rodów (lore §9).
+
+    KN-9 (#1500): dla człowieka losuje 50/50 miejsce startu (Kresy vs Vilnograd)
+    i — tylko przy wariancie miejskim — dokłada haki stolicy. Kresy = bez zmian.
+    """
     if not campaign_id:
         return ""
     try:
         row = conn.execute(
-            "SELECT race FROM characters WHERE campaign_id = ? AND is_active = 1 "
+            "SELECT id, race FROM characters WHERE campaign_id = ? AND is_active = 1 "
             "ORDER BY id DESC LIMIT 1",
             (int(campaign_id),),
         ).fetchone()
     except (sqlite3.Error, TypeError, ValueError):
         return ""
-    race = ((row["race"] if row else "") or "").strip().lower()
+    if not row:
+        return ""
+    race = ((row["race"] if isinstance(row, sqlite3.Row) else row[1]) or "").strip().lower()
+    if race == "human":
+        char_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+        try:
+            variant = resolve_human_start_variant(conn, char_id)
+        except Exception:  # bramka startu nigdy nie wywraca tworzenia planu
+            return ""
+        if variant == "vilnograd":
+            return _human_vilnograd_plan_hint(conn, char_id)
+        return ""  # Kresy — plan bez zmian (jak dotąd)
     return RACE_PLAN_HINT.get(race, "")

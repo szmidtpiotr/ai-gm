@@ -553,8 +553,25 @@ gdyby ktoś próbował wysłać go z pominięciem UI. Człowiek ma wszystkie trz
 <p>Kampania krasnoluda startuje w <b>Siwych Graniach</b>: domyślnie w szynku
 <b>„Pod Rdzawym Młotem"</b> (Kamienny Gród). Plan kampanii może zamiast tego wskazać
 <b>Karawanseraj na Trakcie</b> lub <b>Wyrobisko Srebrnej Żyły</b> — nazwa spoza tej trójki
-cofa start do szynku. Człowiek startuje jak dotąd. Jawny <i>start-hex</i> ustawiony
+cofa start do szynku. Jawny <i>start-hex</i> ustawiony
 w Kuźni wygrywa z kotwicą rasy, więc szablon może celowo postawić bohatera gdzie indziej.</p>
+<h4>Człowiek — LOSOWY start Kresy albo Vilnograd (KN-9)</h4>
+<p>Człowiek nie ma kotwicy krainy, więc dostał <b>ciekawostkę</b>: przy tworzeniu planu
+kampania <b>losuje 50/50</b> miejsce startu i od pierwszej sceny może potoczyć się zupełnie
+inaczej:</p>
+<ul>
+  <li><b>Kresy</b> — gospoda <b>„Pod Złamanym Rogiem"</b> przy trakcie (pogranicze, jak dotąd).</li>
+  <li><b>Vilnograd</b> — stolica Korony (miasto intryg): gildie, Katedra Światła, cień Rady
+      Czterech. Sub dobiera się do archetypu — <b>łotrzyk → Dzielnica Złodziei</b> (kanon:
+      ludzki łotrzyk wyrasta z dzielnicy złodziei stolicy), reszta → <b>zajazd przy Targu
+      Wielkim</b>. Pierwsze haki to drobne zlecenie gildii, dług albo „Nocny Burmistrz czegoś
+      chce".</li>
+</ul>
+<p>Losowanie pada <b>raz</b> i jest zapisane na bohaterze (<code>sheet_json.kn9_start</code>),
+więc plan fabuły i fizyczny heks startu zawsze się zgadzają. Miejski start jest aktywny
+<b>dopiero po zaseedowaniu Vilnogradu</b> — wcześniej (i gdy stolica zniknie z mapy) człowiek
+zawsze startuje na Kresach. Szansa 50/50 to <b>wartość startowa</b> — strojona po obserwacji.
+Jawny <i>start-hex</i> w Kuźni nadal wygrywa z losowaniem. Inne rasy bez zmian.</p>
 <h4>Elf leśny (#1474)</h4>
 <p>Elf gra tylko <b>Zwiadowcą</b> albo <b>Uczonym-Stroicielem</b> — karty Wojownika nie ma
 w kreatorze po wybraniu tej rasy (backend też ją odrzuca). W kreatorze nazwy archetypów
