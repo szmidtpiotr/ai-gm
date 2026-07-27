@@ -1460,7 +1460,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -28,
@@ -1676,7 +1676,7 @@
    "hex_type": "road",
    "label": "Rogatka Wschodnia",
    "atmosphere": "Komora celna na trakcie z Kresów: glejty, myto, kontrola papierów. Berta Twarda Pieczęć nie mruga.",
-   "encounter_chance": 0.0,
+   "encounter_chance": 0.05,
    "location_key": "rogatka_wschodnia"
   },
   {
@@ -1909,7 +1909,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -2,
@@ -2157,7 +2157,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -3,
@@ -2421,7 +2421,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -4,
@@ -2701,7 +2701,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -5,
@@ -2998,7 +2998,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -6,
@@ -3142,7 +3142,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -28,
@@ -3190,7 +3190,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -22,
@@ -3198,7 +3198,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -21,
@@ -3206,7 +3206,7 @@
    "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12
+   "encounter_chance": 0.0
   },
   {
    "q": -20,
@@ -3310,7 +3310,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -7,
@@ -3470,7 +3470,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -29,
@@ -3518,7 +3518,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -23,
@@ -3526,7 +3526,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -22,
@@ -3534,7 +3534,7 @@
    "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12
+   "encounter_chance": 0.0
   },
   {
    "q": -21,
@@ -3542,7 +3542,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -20,
@@ -3630,7 +3630,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -9,
@@ -3638,7 +3638,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -8,
@@ -3814,7 +3814,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -30,
@@ -3862,7 +3862,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -24,
@@ -3870,7 +3870,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -23,
@@ -3896,7 +3896,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -20,
@@ -3976,7 +3976,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -10,
@@ -4184,7 +4184,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -30,
@@ -4232,7 +4232,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -24,
@@ -4240,7 +4240,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -23,
@@ -4248,7 +4248,7 @@
    "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12
+   "encounter_chance": 0.0
   },
   {
    "q": -22,
@@ -4336,7 +4336,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -11,
@@ -4568,7 +4568,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -30,
@@ -4616,7 +4616,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -24,
@@ -4624,7 +4624,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -23,
@@ -4632,7 +4632,7 @@
    "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12
+   "encounter_chance": 0.0
   },
   {
    "q": -22,
@@ -4640,7 +4640,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -21,
@@ -4712,7 +4712,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -12,
@@ -4968,7 +4968,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -30,
@@ -5040,7 +5040,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -21,
@@ -5048,7 +5048,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -20,
@@ -5056,7 +5056,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -19,
@@ -5104,7 +5104,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -13,
@@ -5368,7 +5368,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -30,
@@ -5456,7 +5456,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -19,
@@ -5496,7 +5496,8 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
   },
   {
    "q": -14,
@@ -5504,7 +5505,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
   },
   {
    "q": -13,
@@ -5760,7 +5762,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -31,
@@ -5856,7 +5858,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -19,
@@ -5888,7 +5890,8 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
   },
   {
    "q": -15,
@@ -5897,6 +5900,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]",
    "location_key": "szubieniczne_wzgorze"
   },
   {
@@ -5905,7 +5909,8 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
   },
   {
    "q": -13,
@@ -6153,7 +6158,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -32,
@@ -6257,7 +6262,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -19,
@@ -6281,7 +6286,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -16,
@@ -6289,7 +6294,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
   },
   {
    "q": -15,
@@ -6297,7 +6303,8 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.25,
+   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
   },
   {
    "q": -14,
@@ -6545,7 +6552,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -33,
@@ -6658,7 +6665,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -19,
@@ -6674,7 +6681,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -17,
@@ -6938,7 +6945,8 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -34,
@@ -6946,7 +6954,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -33,
@@ -7074,7 +7083,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": -17,
@@ -7330,7 +7339,8 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -35,
@@ -7339,6 +7349,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]",
    "location_key": "pierwszy_tron"
   },
   {
@@ -7347,7 +7358,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -33,
@@ -7371,7 +7383,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
   },
   {
    "q": -30,
@@ -7379,7 +7392,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
   },
   {
    "q": -29,
@@ -7451,7 +7465,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -20,
@@ -7475,7 +7489,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.0
   },
   {
    "q": -17,
@@ -7723,7 +7737,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -7731,7 +7745,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -35,
@@ -7739,7 +7754,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -34,
@@ -7763,7 +7779,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
   },
   {
    "q": -31,
@@ -7772,6 +7789,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]",
    "location_key": "dwor_czwartego"
   },
   {
@@ -7780,7 +7798,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
   },
   {
    "q": -29,
@@ -7877,7 +7896,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -17,
@@ -8118,7 +8137,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -37,
@@ -8166,7 +8185,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -31,
@@ -8174,7 +8194,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
   },
   {
    "q": -30,
@@ -8238,7 +8259,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -22,
@@ -8246,7 +8267,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -21,
@@ -8270,7 +8291,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -18,
@@ -8510,7 +8531,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -8558,7 +8579,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
   },
   {
    "q": -32,
@@ -8567,6 +8589,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]",
    "location_key": "wieza_heroldow"
   },
   {
@@ -8575,7 +8598,8 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
   },
   {
    "q": -30,
@@ -8583,7 +8607,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -29,
@@ -8599,7 +8623,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -27,
@@ -8607,7 +8631,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -26,
@@ -8615,7 +8639,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -25,
@@ -8623,7 +8647,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -24,
@@ -8631,7 +8655,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -23,
@@ -8647,7 +8671,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -21,
@@ -8655,7 +8679,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.0
   },
   {
    "q": -20,
@@ -8671,7 +8695,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -18,
@@ -8679,7 +8703,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -17,
@@ -8687,7 +8711,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -16,
@@ -8695,7 +8719,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -15,
@@ -8703,7 +8727,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -14,
@@ -8911,7 +8935,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -8959,7 +8983,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
   },
   {
    "q": -32,
@@ -8967,7 +8992,8 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15
+   "encounter_chance": 0.15,
+   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
   },
   {
    "q": -31,
@@ -8975,7 +9001,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -30,
@@ -9103,7 +9129,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -14,
@@ -9311,7 +9337,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -9367,7 +9393,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -31,
@@ -9503,7 +9529,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -14,
@@ -9711,7 +9737,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -9751,7 +9777,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -33,
@@ -9759,7 +9785,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -32,
@@ -9903,7 +9929,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -14,
@@ -9911,7 +9937,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -13,
@@ -9919,7 +9945,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -12,
@@ -9927,7 +9953,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -11,
@@ -9935,7 +9961,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -10,
@@ -9943,7 +9969,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -9,
@@ -9951,7 +9977,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -8,
@@ -10112,7 +10138,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -10144,7 +10170,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -34,
@@ -10304,7 +10330,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -14,
@@ -10512,7 +10538,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -10536,7 +10562,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -35,
@@ -10696,7 +10722,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -15,
@@ -10912,7 +10938,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -10928,7 +10954,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -11096,7 +11122,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -15,
@@ -11312,7 +11338,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -11320,7 +11346,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -37,
@@ -11416,7 +11442,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
   },
   {
    "q": -25,
@@ -11424,7 +11451,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
   },
   {
    "q": -24,
@@ -11496,8 +11524,7 @@
    "hex_type": "town",
    "label": "Wielkie Targi",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "wielkie_targi"
+   "encounter_chance": 0.0
   },
   {
    "q": -15,
@@ -11713,7 +11740,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -11809,7 +11836,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
   },
   {
    "q": -26,
@@ -11818,6 +11846,7 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.08,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]",
    "location_key": "zatopione_opactwo"
   },
   {
@@ -11826,7 +11855,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
   },
   {
    "q": -24,
@@ -12106,7 +12136,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -39,
@@ -12210,7 +12240,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
   },
   {
    "q": -26,
@@ -12218,7 +12249,8 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1
+   "encounter_chance": 0.1,
+   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
   },
   {
    "q": -25,
@@ -12498,7 +12530,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -40,
@@ -12890,7 +12922,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -41,
@@ -13282,7 +13314,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -42,
@@ -13674,7 +13706,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -43,
@@ -14066,7 +14098,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -14458,8 +14490,7 @@
    "hex_type": "town",
    "label": "Zachodnia Straż",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "zachodnia_straz"
+   "encounter_chance": 0.0
   },
   {
    "q": -45,
@@ -14467,7 +14498,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -14867,7 +14898,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -15267,7 +15298,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -15651,7 +15682,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -16019,7 +16050,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -16371,7 +16402,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -16707,7 +16738,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -16763,7 +16794,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -37,
@@ -16771,7 +16802,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -16779,8 +16810,7 @@
    "hex_type": "town",
    "label": "Kasztel Rycerski",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "kasztel_rycerski"
+   "encounter_chance": 0.0
   },
   {
    "q": -35,
@@ -17028,7 +17058,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -17076,7 +17106,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -17332,7 +17362,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -17372,7 +17402,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -39,
@@ -17620,7 +17650,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -44,
@@ -17628,7 +17658,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -43,
@@ -17636,7 +17666,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -42,
@@ -17652,7 +17682,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -40,
@@ -17908,7 +17938,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -42,
@@ -17916,7 +17946,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -41,
@@ -18172,7 +18202,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -41,
@@ -18412,7 +18442,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -41,
@@ -18636,7 +18666,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -41,
@@ -18708,8 +18738,7 @@
    "hex_type": "village",
    "label": "Przeprawa Królewska",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "przeprawa_krol"
+   "encounter_chance": 0.0
   },
   {
    "q": -32,
@@ -18845,7 +18874,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -41,
@@ -18853,7 +18882,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -40,
@@ -18861,7 +18890,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -39,
@@ -18869,7 +18898,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -38,
@@ -18877,7 +18906,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -37,
@@ -18885,7 +18914,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -18917,7 +18946,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -32,
@@ -19077,7 +19106,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -19109,7 +19138,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -32,
@@ -19253,7 +19282,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -19285,7 +19314,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -32,
@@ -19413,7 +19442,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -36,
@@ -19421,7 +19450,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -35,
@@ -19429,7 +19458,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0
+   "encounter_chance": 0.05
   },
   {
    "q": -34,
@@ -19437,8 +19466,7 @@
    "hex_type": "road",
    "label": "Rogatka Południowa",
    "atmosphere": "Rogatka na trakcie ku Wybrzeżu Łez. Za nią prawo Korony słabnie.",
-   "encounter_chance": 0.0,
-   "location_key": "rogatka_poludniowa"
+   "encounter_chance": 0.05
   },
   {
    "q": -33,

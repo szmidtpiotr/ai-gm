@@ -1,5 +1,16 @@
 [
   {
+    "key": "loot_arcykultysta_salonu",
+    "label": "Łupy: Arcykultysta Salonu",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 18,
+    "gold_max": 70
+  },
+  {
     "key": "loot_bagienna_jedza",
     "label": "Łupy: Bagienna Jędza",
     "description": "",
@@ -42,6 +53,17 @@
     "updated_at": "2026-06-20 10:37:17",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_bezimienna_straz",
+    "label": "Łupy: Bezimienna Straż",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 8,
+    "gold_max": 30
   },
   {
     "key": "loot_bezimienny_trup",
@@ -121,6 +143,17 @@
     "gold_max": 40
   },
   {
+    "key": "loot_bosman_herszt",
+    "label": "Łupy: Bosman-Herszt",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 15,
+    "gold_max": 60
+  },
+  {
     "key": "loot_brat_ciernia",
     "label": "Łupy: Brat Ciernia",
     "description": "",
@@ -187,6 +220,17 @@
     "gold_max": 3
   },
   {
+    "key": "loot_cos_z_sieci",
+    "label": "Łupy: Coś z Sieci",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 6,
+    "gold_max": 26
+  },
+  {
     "key": "loot_czarny_hask",
     "label": "Łupy: Czarny Hask",
     "description": "",
@@ -242,6 +286,17 @@
     "gold_max": 40
   },
   {
+    "key": "loot_ghul_katakumb",
+    "label": "Łupy: Ghul Katakumb",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 2,
+    "gold_max": 14
+  },
+  {
     "key": "loot_giant_rat",
     "label": "Łupy: Olbrzymi Szczur",
     "description": "",
@@ -262,6 +317,17 @@
     "updated_at": "2026-07-13 16:57:02",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_glebinowy_pomiot",
+    "label": "Łupy: Głębinowy Pomiot",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 6,
+    "gold_max": 24
   },
   {
     "key": "loot_goblin",
@@ -339,6 +405,28 @@
     "updated_at": "2026-07-24 14:12:30",
     "gold_min": 2,
     "gold_max": 14
+  },
+  {
+    "key": "loot_herold_umarlych",
+    "label": "Łupy: Herold Umarłych",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 15,
+    "gold_max": 60
+  },
+  {
+    "key": "loot_herszt_rozbojnikow",
+    "label": "Łupy: Herszt Rozbójników",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 25,
+    "gold_max": 90
   },
   {
     "key": "loot_herszt_wyrostkow",
@@ -440,6 +528,39 @@
     "gold_max": 40
   },
   {
+    "key": "loot_komendant_aschfeld",
+    "label": "Łupy: Popielny Komendant",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 15,
+    "gold_max": 55
+  },
+  {
+    "key": "loot_kosciany_sep",
+    "label": "Łupy: Kościany Sęp",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 0,
+    "gold_max": 3
+  },
+  {
+    "key": "loot_kosciej_katakumb",
+    "label": "Łupy: Kościej Katakumb",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 60,
+    "gold_max": 180
+  },
+  {
     "key": "loot_krolec_plechy",
     "label": "Łupy: Królec Plechy",
     "description": "",
@@ -449,6 +570,17 @@
     "updated_at": "2026-07-22 06:21:46",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_krwawy_hrabia",
+    "label": "Łupy: Krwawy Hrabia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 40,
+    "gold_max": 120
   },
   {
     "key": "loot_kultowy_tropiciel",
@@ -495,6 +627,28 @@
     "gold_max": 15
   },
   {
+    "key": "loot_kultysta_glebi",
+    "label": "Łupy: Kultysta Głębi",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 3,
+    "gold_max": 18
+  },
+  {
+    "key": "loot_kultysta_pekniecia",
+    "label": "Łupy: Kultysta Pęknięcia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 3,
+    "gold_max": 16
+  },
+  {
     "key": "loot_kultysta_popiolu",
     "label": "Łupy: Kultysta Popiołu",
     "description": "",
@@ -537,6 +691,17 @@
     "updated_at": "2026-07-10 15:58:49",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_kultysta_w_kaftanie",
+    "label": "Łupy: Kultysta w Kaftanie Kupca",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 5,
+    "gold_max": 22
   },
   {
     "key": "loot_lizardman",
@@ -594,6 +759,17 @@
     "gold_max": 15
   },
   {
+    "key": "loot_morski_rozbojnik",
+    "label": "Łupy: Morski Rozbójnik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 3,
+    "gold_max": 16
+  },
+  {
     "key": "loot_mroczny_elf_lowca",
     "label": "Łupy: Mroczny Elf Łowca",
     "description": "",
@@ -625,6 +801,17 @@
     "updated_at": "2026-07-13 16:39:44",
     "gold_min": 3,
     "gold_max": 20
+  },
+  {
+    "key": "loot_nieumarly_marynarz",
+    "label": "Łupy: Nieumarły Marynarz",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 2,
+    "gold_max": 14
   },
   {
     "key": "loot_ognik_siarkowy",
@@ -693,6 +880,17 @@
     "gold_max": 15
   },
   {
+    "key": "loot_piaskowy_ghul",
+    "label": "Łupy: Piaskowy Ghul",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 0,
+    "gold_max": 4
+  },
+  {
     "key": "loot_pijawczy_roj",
     "label": "Łupy: Pijawczy Rój",
     "description": "",
@@ -724,6 +922,17 @@
     "updated_at": "2026-07-10 15:58:49",
     "gold_min": 15,
     "gold_max": 40
+  },
+  {
+    "key": "loot_popielny_rycerz",
+    "label": "Łupy: Popielny Rycerz",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 6,
+    "gold_max": 26
   },
   {
     "key": "loot_popielny_straznik",
@@ -792,6 +1001,17 @@
     "gold_max": 100
   },
   {
+    "key": "loot_przemytnik_soli",
+    "label": "Łupy: Przemytnik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 5,
+    "gold_max": 22
+  },
+  {
     "key": "loot_rich",
     "label": "Bogaty łup",
     "description": "Łupy zamożnego lub dobrze wyposażonego wroga.",
@@ -845,6 +1065,17 @@
     "updated_at": "2026-07-13 16:39:43",
     "gold_min": 3,
     "gold_max": 20
+  },
+  {
+    "key": "loot_rzezimieszek_gildyjny",
+    "label": "Łupy: Rzezimieszek Gildyjny",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 8,
+    "gold_max": 30
   },
   {
     "key": "loot_s2_pw_bandyta_lucznik",
@@ -968,6 +1199,17 @@
     "gold_max": 4
   },
   {
+    "key": "loot_solny_umarlak",
+    "label": "Łupy: Solny Umarlak",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 0,
+    "gold_max": 8
+  },
+  {
     "key": "loot_spaczony_prorok",
     "label": "Łupy: Spaczony Prorok",
     "description": "",
@@ -1001,6 +1243,17 @@
     "gold_max": 20
   },
   {
+    "key": "loot_straznik_klatwy",
+    "label": "Łupy: Strażnik Klątwy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 35,
+    "gold_max": 110
+  },
+  {
     "key": "loot_straznik_rdzenia",
     "label": "Łupy: Strażnik Rdzenia",
     "description": "",
@@ -1010,6 +1263,28 @@
     "updated_at": "2026-07-20 16:45:45",
     "gold_min": 40,
     "gold_max": 100
+  },
+  {
+    "key": "loot_strzyga_katakumb",
+    "label": "Łupy: Strzyga Katakumb",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 12,
+    "gold_max": 55
+  },
+  {
+    "key": "loot_szczur_kanalowy",
+    "label": "Łupy: Szczur Kanałowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 0,
+    "gold_max": 3
   },
   {
     "key": "loot_szczur_spichrzowy",
@@ -1032,6 +1307,17 @@
     "updated_at": "2026-07-10 17:55:12",
     "gold_min": 0,
     "gold_max": 0
+  },
+  {
+    "key": "loot_szczurzy_roj",
+    "label": "Łupy: Szczurzy Rój",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 0,
+    "gold_max": 4
   },
   {
     "key": "loot_szepczacy_odlamek",
@@ -1111,6 +1397,28 @@
     "gold_max": 8
   },
   {
+    "key": "loot_topielec_morski",
+    "label": "Łupy: Topielec Morski",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 0,
+    "gold_max": 8
+  },
+  {
+    "key": "loot_topielica_opactwa",
+    "label": "Łupy: Topielica Opactwa",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 15,
+    "gold_max": 60
+  },
+  {
     "key": "loot_trash_common",
     "label": "Łupy: Drobiazgi (consolation)",
     "description": "T6 (#1352): gwarantowany drop minimalny po zwycięstwie.",
@@ -1177,6 +1485,28 @@
     "gold_max": 10
   },
   {
+    "key": "loot_utopiec_stawowy",
+    "label": "Łupy: Utopiec ze Stawów",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 4,
+    "gold_max": 18
+  },
+  {
+    "key": "loot_utopiony_kapitan",
+    "label": "Łupy: Utopiony Kapitan",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 40,
+    "gold_max": 120
+  },
+  {
     "key": "loot_utopiony_wojt",
     "label": "Łupy: Utopiony Wójt",
     "description": "",
@@ -1188,6 +1518,17 @@
     "gold_max": 55
   },
   {
+    "key": "loot_widmo_kolonisty",
+    "label": "Łupy: Widmo Kolonisty",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 2,
+    "gold_max": 12
+  },
+  {
     "key": "loot_widmo_lodowe",
     "label": "Łupy: Widmo Lodowe",
     "description": "",
@@ -1197,6 +1538,28 @@
     "updated_at": "2026-07-20 18:28:31",
     "gold_min": 0,
     "gold_max": 10
+  },
+  {
+    "key": "loot_widmo_studni",
+    "label": "Łupy: Widmo Studni Głosów",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-26 13:20:28",
+    "updated_at": "2026-07-26 13:20:28",
+    "gold_min": 4,
+    "gold_max": 20
+  },
+  {
+    "key": "loot_widmo_wisielca",
+    "label": "Łupy: Widmo Wisielca",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
+    "gold_min": 3,
+    "gold_max": 16
   },
   {
     "key": "loot_wilk_stepowy",
@@ -1430,223 +1793,14 @@
     "gold_max": 6
   },
   {
-    "key": "loot_bezimienna_straz",
-    "label": "Łupy: Bezimienna Straż",
+    "key": "loot_zbir_uliczny",
+    "label": "Łupy: Zbir Uliczny",
     "description": "",
     "is_active": 1,
     "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 8,
-    "gold_max": 30
-  },
-  {
-    "key": "loot_komendant_aschfeld",
-    "label": "Łupy: Popielny Komendant",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 15,
-    "gold_max": 55
-  },
-  {
-    "key": "loot_kosciany_sep",
-    "label": "Łupy: Kościany Sęp",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 0,
-    "gold_max": 3
-  },
-  {
-    "key": "loot_krwawy_hrabia",
-    "label": "Łupy: Krwawy Hrabia",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 40,
-    "gold_max": 120
-  },
-  {
-    "key": "loot_kultysta_pekniecia",
-    "label": "Łupy: Kultysta Pęknięcia",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
+    "created_at": "2026-07-27 16:49:32",
+    "updated_at": "2026-07-27 16:49:32",
     "gold_min": 3,
     "gold_max": 16
-  },
-  {
-    "key": "loot_piaskowy_ghul",
-    "label": "Łupy: Piaskowy Ghul",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 0,
-    "gold_max": 4
-  },
-  {
-    "key": "loot_popielny_rycerz",
-    "label": "Łupy: Popielny Rycerz",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 6,
-    "gold_max": 26
-  },
-  {
-    "key": "loot_solny_umarlak",
-    "label": "Łupy: Solny Umarlak",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 0,
-    "gold_max": 8
-  },
-  {
-    "key": "loot_widmo_kolonisty",
-    "label": "Łupy: Widmo Kolonisty",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 2,
-    "gold_max": 12
-  },
-  {
-    "key": "loot_widmo_studni",
-    "label": "Łupy: Widmo Studni Głosów",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-26 13:20:28",
-    "updated_at": "2026-07-26 13:20:28",
-    "gold_min": 4,
-    "gold_max": 20
-  },
-  {
-    "key": "loot_bosman_herszt",
-    "label": "Łupy: Bosman-Herszt",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 15,
-    "gold_max": 60
-  },
-  {
-    "key": "loot_cos_z_sieci",
-    "label": "Łupy: Coś z Sieci",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 6,
-    "gold_max": 26
-  },
-  {
-    "key": "loot_glebinowy_pomiot",
-    "label": "Łupy: Głębinowy Pomiot",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 6,
-    "gold_max": 24
-  },
-  {
-    "key": "loot_kultysta_glebi",
-    "label": "Łupy: Kultysta Głębi",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 3,
-    "gold_max": 18
-  },
-  {
-    "key": "loot_morski_rozbojnik",
-    "label": "Łupy: Morski Rozbójnik",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 3,
-    "gold_max": 16
-  },
-  {
-    "key": "loot_nieumarly_marynarz",
-    "label": "Łupy: Nieumarły Marynarz",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 2,
-    "gold_max": 14
-  },
-  {
-    "key": "loot_przemytnik_soli",
-    "label": "Łupy: Przemytnik",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 5,
-    "gold_max": 22
-  },
-  {
-    "key": "loot_straznik_klatwy",
-    "label": "Łupy: Strażnik Klątwy",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 35,
-    "gold_max": 110
-  },
-  {
-    "key": "loot_topielec_morski",
-    "label": "Łupy: Topielec Morski",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 0,
-    "gold_max": 8
-  },
-  {
-    "key": "loot_utopiony_kapitan",
-    "label": "Łupy: Utopiony Kapitan",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-27 11:25:04",
-    "updated_at": "2026-07-27 11:25:04",
-    "gold_min": 40,
-    "gold_max": 120
   }
 ]
