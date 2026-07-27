@@ -14104,7 +14104,7 @@
    "r": 75,
    "hex_type": "coast",
    "label": null,
-   "location_key": null,
+   "location_key": "wybrzeze_lez",
    "encounter_chance": 0.12,
    "atmosphere": null
   },
