@@ -1538,5 +1538,115 @@
     "updated_at": "2026-07-26 13:20:28",
     "gold_min": 4,
     "gold_max": 20
+  },
+  {
+    "key": "loot_bosman_herszt",
+    "label": "Łupy: Bosman-Herszt",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 15,
+    "gold_max": 60
+  },
+  {
+    "key": "loot_cos_z_sieci",
+    "label": "Łupy: Coś z Sieci",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 6,
+    "gold_max": 26
+  },
+  {
+    "key": "loot_glebinowy_pomiot",
+    "label": "Łupy: Głębinowy Pomiot",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 6,
+    "gold_max": 24
+  },
+  {
+    "key": "loot_kultysta_glebi",
+    "label": "Łupy: Kultysta Głębi",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 3,
+    "gold_max": 18
+  },
+  {
+    "key": "loot_morski_rozbojnik",
+    "label": "Łupy: Morski Rozbójnik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 3,
+    "gold_max": 16
+  },
+  {
+    "key": "loot_nieumarly_marynarz",
+    "label": "Łupy: Nieumarły Marynarz",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 2,
+    "gold_max": 14
+  },
+  {
+    "key": "loot_przemytnik_soli",
+    "label": "Łupy: Przemytnik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 5,
+    "gold_max": 22
+  },
+  {
+    "key": "loot_straznik_klatwy",
+    "label": "Łupy: Strażnik Klątwy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 35,
+    "gold_max": 110
+  },
+  {
+    "key": "loot_topielec_morski",
+    "label": "Łupy: Topielec Morski",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 0,
+    "gold_max": 8
+  },
+  {
+    "key": "loot_utopiony_kapitan",
+    "label": "Łupy: Utopiony Kapitan",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-27 11:25:04",
+    "updated_at": "2026-07-27 11:25:04",
+    "gold_min": 40,
+    "gold_max": 120
   }
 ]

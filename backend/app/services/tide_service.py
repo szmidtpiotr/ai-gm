@@ -228,6 +228,33 @@ def get_tide_state(
     }
 
 
+# ── Hook 1b: bramka pływowa lochu (WL-7, wołany z enter_dungeon) ─────────────
+#: Lochy dostępne tylko przy ODPŁYWIE — przypływ zakrywa dojście między rafami.
+#: Klucz = kontrakt z seedem (content-as-code #1202): seed tworzy loch pod tym
+#: kluczem, a bramka odwołuje się do niego stąd. Cmentarzysko Wraków (WL-7) leży
+#: na pasie raf odsłanianym wyłącznie przez odpływ — synergia z pływami §6.
+TIDE_GATED_DUNGEON_KEYS = {"cmentarzysko_wrakow"}
+
+
+def dungeon_blocked_by_tide(
+    campaign_id: int, dungeon_key: str, conn: sqlite3.Connection | None = None
+) -> dict | None:
+    """Czy przypływ blokuje teraz wejście do tego lochu.
+
+    Zwraca ``{"hours_to_change": N}`` przy PRZYPŁYWIE dla lochu z bramką pływową
+    (dojście zalane), albo ``None`` gdy loch nie ma bramki lub trwa odpływ (wolna
+    droga). ``hours_to_change`` liczone zawsze — to podpowiedź „wróć za N h",
+    niezależna od Tabliczki (bramka lochu ≠ ukryty licznik mielizny)."""
+    if dungeon_key not in TIDE_GATED_DUNGEON_KEYS:
+        return None
+    from app.services.clock_service import get_clock_state
+
+    ingame_hours = int(get_clock_state(campaign_id, conn=conn).get("ingame_hours", 0))
+    if not is_flood(ingame_hours):
+        return None
+    return {"hours_to_change": hours_to_next_change(ingame_hours)}
+
+
 # ── Hook 1: blokada wejścia (wołany z execute_travel) ────────────────────────
 
 def tide_blocks_entry(

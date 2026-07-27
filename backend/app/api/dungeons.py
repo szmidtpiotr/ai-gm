@@ -215,6 +215,24 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq, authorization: str | N
             },
         )
 
+    # WL-7: bramka pływowa (synergia z WL-5). Cmentarzysko Wraków leży na pasie raf
+    # odsłanianym tylko przy odpływie — przy przypływie dojście zalane → 423.
+    from app.services import tide_service
+    _tide_block = tide_service.dungeon_blocked_by_tide(req.campaign_id, dungeon_key)
+    if _tide_block is not None:
+        raise HTTPException(
+            status_code=423,
+            detail={
+                "error": "tide_high",
+                "message": (
+                    "Przypływ zakrył dojście do „"
+                    + str(dungeon.get("label", dungeon_key))
+                    + f"” — wróć przy odpływie (za ~{_tide_block['hours_to_change']} h)."
+                ),
+                "hours_to_change": _tide_block["hours_to_change"],
+            },
+        )
+
     try:
         instance = enter_dungeon_tiles(
             req.campaign_id, req.character_id, dungeon_key, hero_level,
