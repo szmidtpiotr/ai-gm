@@ -110,6 +110,8 @@ export interface AppState {
   crafting: string | null;
   /** #1192 FAZA TW — otwarty modal Towarzyszy (klucz lokacji) albo null. */
   companions: string | null;
+  /** WL-4 (#1504) — otwarty modal Rejsów (klucz portu) albo null. Deterministyczny. */
+  sail: string | null;
   /** #1292 — po zamknięciu modala Usług: ukryta tura proszona o narrację odbioru
    *  (zakup już opłacony mechanicznie). Game.tsx konsumuje i czyści. */
   servicesReceiptPending: string | null;
@@ -152,6 +154,8 @@ export interface AppState {
   closeCrafting: () => void;
   openCompanions: (locationKey: string) => void;
   closeCompanions: () => void;
+  openSail: (portKey: string) => void;
+  closeSail: () => void;
   setServicesReceiptPending: (text: string | null) => void;
   setCombatEpiloguePending: (text: string | null) => void;
   openPalette: () => void;
@@ -214,6 +218,7 @@ export const useAppStore = create<AppState>((set) => ({
   services: null,
   crafting: null,
   companions: null,
+  sail: null,
   servicesReceiptPending: null,
   combatEpiloguePending: null,
   paletteOpen: false,
@@ -232,7 +237,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", regionBlock: null, shop: null, services: null, crafting: null, companions: null, gameMenuOpen: false, finishFlow: "idle" },
+        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", regionBlock: null, shop: null, services: null, crafting: null, companions: null, sail: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
@@ -248,6 +253,8 @@ export const useAppStore = create<AppState>((set) => ({
   closeCompanions: () => set({ companions: null }),
   openCrafting: (locationKey) => set({ crafting: locationKey }),
   closeCrafting: () => set({ crafting: null }),
+  openSail: (portKey) => set({ sail: portKey }),
+  closeSail: () => set({ sail: null }),
   setServicesReceiptPending: (servicesReceiptPending) => set({ servicesReceiptPending }),
   setCombatEpiloguePending: (combatEpiloguePending) => set({ combatEpiloguePending }),
   openPalette: () => set({ paletteOpen: true }),

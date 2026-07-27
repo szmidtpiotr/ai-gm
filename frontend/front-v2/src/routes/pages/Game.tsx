@@ -53,6 +53,7 @@ import { ShopOverlay } from "@/components/game/ShopOverlay";
 import { ServicesOverlay } from "@/components/game/ServicesOverlay";
 import { CompanionsOverlay } from "@/components/game/CompanionsOverlay";
 import { CraftingOverlay } from "@/components/game/CraftingOverlay";
+import { SailOverlay } from "@/components/game/SailOverlay";
 import { CommandPalette } from "@/components/game/CommandPalette";
 import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
@@ -92,6 +93,7 @@ export default function Game() {
   const openServices = useAppStore((s) => s.openServices);
   const openCrafting = useAppStore((s) => s.openCrafting);
   const openCompanions = useAppStore((s) => s.openCompanions);
+const openSail = useAppStore((s) => s.openSail);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
   const openWait = useAppStore((s) => s.openWait);
   const regionBlock = useAppStore((s) => s.regionBlock);
@@ -535,6 +537,11 @@ const closeWait = useAppStore((s) => s.closeWait);
       openCrafting(act.slice("OPEN_CRAFTING:".length));
       return;
     }
+    // WL-4 (#1504): modal Rejsów — deterministyczny, klucz portu w akcji.
+    if (act.startsWith("OPEN_SAIL:")) {
+      openSail(act.slice("OPEN_SAIL:".length));
+      return;
+    }
     if (act.startsWith("WAIT:")) {
       const target = act.slice(5); // e.g. "dawn", "next_dawn", "hours:6"
       const hoursMatch = target.match(/^hours:(\d+)$/);
@@ -911,6 +918,9 @@ const closeWait = useAppStore((s) => s.closeWait);
 
       {/* #1338 BL-C3: modal Rzemiosła — deterministyczny (chip "Rzemiosło"), omija LLM */}
       <CraftingOverlay />
+
+      {/* WL-4 (#1504): modal Rejsów — deterministyczny (chip "Wypłyń"), omija LLM */}
+      <SailOverlay />
 
       {/* FE14 (#1263): paleta komend (Ctrl+/) · recap przy wejściu · FAB testera */}
       <CommandPalette />

@@ -280,6 +280,19 @@ def _build_narrative_actions(
     if safe and len(actions) < MAX_ACTIONS:
         actions.append(SuggestedAction(label="Odpocznij", action="REST:long", enabled=True))
 
+    # WL-4 (#1504): Wypłyń — deterministyczny modal rejsów, gdy stoisz w porcie
+    # (klucz lokacji jest portem w tabeli tras sea_voyage_service). Wysoki priorytet:
+    # na wyspiarskiej Zatoce Topielców rejs to JEDYNE wyjście, nie może wypaść z capu.
+    if current_loc_key and len(actions) < MAX_ACTIONS:
+        try:
+            from app.services.sea_voyage_service import is_sail_port
+            if is_sail_port(current_loc_key):
+                actions.append(SuggestedAction(
+                    label="Wypłyń", action=f"OPEN_SAIL:{current_loc_key}", enabled=True, icon="⚓",
+                ))
+        except Exception:
+            pass
+
     # #1292: Usługi (nocleg/jedzenie/naprawa/uzdrowienie/stajnia/przewodnik/posłaniec) —
     # deterministyczny modal, bez narratora. Wysoki priorytet (tuż po REST) żeby nie
     # wypadł z capu w karczmie/kuźni pełnej NPC-ów i wyjść.

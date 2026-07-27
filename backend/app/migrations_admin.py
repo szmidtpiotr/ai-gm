@@ -1640,6 +1640,16 @@ ADMIN_SEEDS = [
     VALUES
     ('mapa_kresow', 'Mapa Kresów', 'map', 'Szczegółowa mapa całej krainy Kresów, kreślona ręką doświadczonego kartografa. Odsłania wszystkie znane heksy regionu.', 150, 150, '{"mode":"region","region":"kresy"}', 1, 'rare', datetime('now'), datetime('now'))
     """,
+    # WL-4 (#1504) — Mapa Smolnego. Kanoniczny hak Wybrzeża Łez (NPC kapitan_smolny w bazie).
+    # Podwójne działanie: (1) item_type='map' → „Użyj" odsłania region Wybrzeża Łez (map_reveal);
+    # (2) w silniku rejsów (sea_voyage_service) obecność tego przedmiotu w plecaku OBNIŻA ryzyko rafy
+    # i ODBLOKOWUJE trasy skrótowe. `no_trade` — mapa jest osobista (nie do odsprzedania na targu).
+    """
+    INSERT OR IGNORE INTO game_config_items
+    (key, label, item_type, description, value_gp, price_gp, effect_json, is_active, rarity, no_trade, created_at, updated_at)
+    VALUES
+    ('mapa_smolnego', 'Mapa Smolnego', 'map', 'Wytłuszczona, poplamiona solą mapa każdego ukrytego klifu i zatopionego wraku Wybrzeża Łez — dzieło Kapitana Jacka Smolnego. Kto ją ma, mija rafy bez błądzenia i zna skróty, o których milczą portowe plotki.', 200, 200, '{"mode":"region","region":"wybrzeze_lez"}', 1, 'rare', 1, datetime('now'), datetime('now'))
+    """,
     # S10 (#605) FAZA S — prymityw escalating_dot + kondycja hemorrhage (narastający DOT).
     # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
     # Top-level `cure` = deklaratywne zdjęcie kondycji udanym SKILL_TEST:medicine (DC z zamka).
