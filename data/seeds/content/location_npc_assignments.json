@@ -950,5 +950,85 @@
     "assignment_type": "resident",
     "notes": null,
     "is_active": 1
+  },
+  {
+    "id": 37658,
+    "location_key": "vilnograd_enklawa_krasnoludzka",
+    "npc_key": "gundrik_zlota_waga",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37659,
+    "location_key": "rogatka_wschodnia",
+    "npc_key": "berta_twarda_pieczec",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37669,
+    "location_key": "vilnograd_stolica",
+    "npc_key": "kanclerz_dobrogost",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37670,
+    "location_key": "vilnograd_stolica",
+    "npc_key": "brat_aleksy_zlotnik",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37671,
+    "location_key": "vilnograd_stolica",
+    "npc_key": "nocny_burmistrz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37672,
+    "location_key": "vilnograd_stolica",
+    "npc_key": "gundrik_zlota_waga",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37673,
+    "location_key": "vilnograd_zamek",
+    "npc_key": "kanclerz_dobrogost",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37674,
+    "location_key": "vilnograd_dzielnica_gildii",
+    "npc_key": "brat_aleksy_zlotnik",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37675,
+    "location_key": "vilnograd_dzielnica_gildii",
+    "npc_key": "rachmistrzyni",
+    "assignment_type": "visitor",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37676,
+    "location_key": "vilnograd_dzielnica_zlodziei",
+    "npc_key": "nocny_burmistrz",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
   }
 ]

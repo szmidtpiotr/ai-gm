@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "key": "gildia_kupcow",
+    "name": "Gildia Kupców",
+    "faction_type": "guild",
+    "description": "Sieć kupiecka kontrolująca handel na Kresach. Przychylność = tańsze towary u zrzeszonych kupców.",
+    "is_active": 1,
+    "created_at": "2026-07-02 17:44:50"
+  },
+  {
+    "id": 2,
+    "key": "zakon_straznikow",
+    "name": "Zakon Strażników",
+    "faction_type": "order",
+    "description": "Zakon wojowników strzegących granicznych rubieży. Przychylność = dostęp do misji obronnych.",
+    "is_active": 1,
+    "created_at": "2026-07-02 17:44:50"
+  },
+  {
+    "id": 3,
+    "key": "wolni_najemnicy",
+    "name": "Towarzystwo Wolnych Najemników",
+    "faction_type": "guild",
+    "description": "Luźna federacja najemników i poszukiwaczy przygód. Przychylność = lepsze stawki za kontrakty.",
+    "is_active": 1,
+    "created_at": "2026-07-02 17:44:50"
+  },
+  {
+    "id": 1051,
+    "key": "siwotarczy",
+    "name": "Ród Siwotarczych",
+    "faction_type": "clan",
+    "description": "Starszyzna Grań. Strażnicy zakazów: Linii Soli i zakazu wchodzenia na lodowiec. Uważają, że przetrwanie jest ważniejsze od pamięci — trzeba czekać, aż stukanie ucichnie.",
+    "is_active": 1,
+    "created_at": "2026-07-20 16:00:43"
+  },
+  {
+    "id": 1052,
+    "key": "mlotodzierzcy",
+    "name": "Ród Młotodzierżców",
+    "faction_type": "clan",
+    "description": "Rewizjoniści. Otwarcie mówią o powrocie do Kopalni Czarnego Hutmana i skończeniu tego, co się zaczęło. Po cichu handlują z Wygnańcami Lodu, bo tamci widzieli lodowiec z bliska.",
+    "is_active": 1,
+    "created_at": "2026-07-20 16:00:43"
+  },
+  {
+    "id": 1053,
+    "key": "solnobrodzi",
+    "name": "Ród Solnobrodych",
+    "faction_type": "clan",
+    "description": "Ród solny — sztolnie, karawany i drugi towar eksportowy Grań. To ich woreczki soli wiszą u pasa każdego górnika, bo sól jest obojętna na Rdzeń.",
+    "is_active": 1,
+    "created_at": "2026-07-20 16:00:43"
+  },
+  {
+    "id": 1054,
+    "key": "srebrnozylni",
+    "name": "Ród Srebrnożylnych",
+    "faction_type": "clan",
+    "description": "Ród srebra, gospodarze Wyrobiska Srebrnej Żyły. Kopią wysoko nad Linią Soli i pilnują, by tak zostało — choć stukanie w ich sztolniach słychać coraz wyraźniej.",
+    "is_active": 1,
+    "created_at": "2026-07-20 16:00:43"
+  },
+  {
+    "id": 1055,
+    "key": "wygnancy_lodu",
+    "name": "Wygnańcy Lodu",
+    "faction_type": "clan",
+    "description": "Ród wyklęty za złamanie zakazu lodowca, koczujący w tundrze. Imię rodu wymazano z kronik Sali Rodów. Jako jedyni widzieli lód z bliska — i boją się go bardziej niż wyklęcia.",
+    "is_active": 1,
+    "created_at": "2026-07-20 16:00:43"
+  },
+  {
+    "id": 1191,
+    "key": "krag_starszych",
+    "name": "Krąg Starszych",
+    "faction_type": "order",
+    "description": "Starszyzna Szeptu Koron. Strażnicy strojenia: przetrwać przez cierpliwość, zamknąć bór i śpiewać wardy dalej, aż ucichnie to, co pęka pod korzeniami.",
+    "is_active": 1,
+    "created_at": "2026-07-24 13:44:22"
+  },
+  {
+    "id": 1192,
+    "key": "zwiadowcy_boru",
+    "name": "Zwiadowcy Boru",
+    "faction_type": "order",
+    "description": "Młodsze pokolenie strażników. Uważają, że samo strojenie już nie wystarcza — trzeba otworzyć bór i szukać przyczyny gaśnięcia drzew na zewnątrz.",
+    "is_active": 1,
+    "created_at": "2026-07-24 13:44:22"
+  },
+  {
+    "id": 1202,
+    "key": "starsi_solnego_progu",
+    "name": "Starsi Solnego Progu",
+    "faction_type": "clan",
+    "description": "Rada Piętnowanych — twarz UKRYCIA. Jedyni, którzy umieją żyć na pustkowiach, i wolą, by świat o tym zapomniał: otwarcie ściąga oko Światła i kultów. Stawka to przetrwanie tożsamości pod cudzym okiem.",
+    "is_active": 1,
+    "created_at": "2026-07-26 12:38:31"
+  },
+  {
+    "id": 1203,
+    "key": "przewodnicy_ruin",
+    "name": "Przewodnicy Ruin",
+    "faction_type": "clan",
+    "description": "Młodsi Piętnowani — twarz OTWARCIA. Przewodnictwo po martwych miastach = złoto, a złoto to broń przeciw głodowi i Światłu. Uważają, że ukrywanie się dłużej nie wystarcza — trzeba handlować z obcymi, póki się da.",
+    "is_active": 1,
+    "created_at": "2026-07-26 12:38:31"
+  },
+  {
+    "id": 1204,
+    "key": "misja_swiatla",
+    "name": "Misja Światła",
+    "faction_type": "order",
+    "description": "Placówka Świątyni na skraju pustkowi. Jedni niosą pomoc, inni obserwują, czy piętno to dar, czy skażenie. Trzecia siła ciągnąca enklawę — ku Światłu.",
+    "is_active": 1,
+    "created_at": "2026-07-26 12:38:31"
+  },
+  {
+    "id": 1226,
+    "key": "korona",
+    "name": "Korona",
+    "faction_type": "order",
+    "description": "Prawo Korony kończące się na linii przyboju. W Czarnogrodzie trzyma blokadę portu i celników, marzy o zduszeniu Zatoki Topielców i odzyskaniu kontroli nad handlem, którym faktycznie rządzą kupcy i przemytnicy.",
+    "is_active": 1,
+    "created_at": "2026-07-27 11:03:59"
+  },
+  {
+    "id": 1227,
+    "key": "rada_piracka",
+    "name": "Rada Piracka",
+    "faction_type": "guild",
+    "description": "Pięciu kapitanów (czterech — piąty fotel pusty) rządzących wyspiarską twierdzą Zatoki Topielców. Żyją z abordażu, wraków i handlu niewolnikami; ich słowo jest na wyspie prawem, a chaos u wybrzeży to ich zysk.",
+    "is_active": 1,
+    "created_at": "2026-07-27 11:03:59"
+  },
+  {
+    "id": 1228,
+    "key": "diaspora_wyspiarzy",
+    "name": "Diaspora Wyspiarzy",
+    "faction_type": "clan",
+    "description": "Lud bez domu — wyspiarze odcięci od ojczyzny za Sztormem Wiecznym. Rozeszli się po świecie jako marynarze, przemytnicy i najemnicy; własną dzielnicę mają tylko w porcie Czarnogrodu. Jako jedyni nie mają dokąd wrócić.",
+    "is_active": 1,
+    "created_at": "2026-07-27 11:03:59"
+  },
+  {
+    "id": 1244,
+    "key": "korona_vilnograd",
+    "name": "Korona",
+    "faction_type": "order",
+    "description": "Jawna władza Vilnogradu — tron, gwardia, kanclerz. Uśmiech, marmur i porządek na wierzchu; pod spodem Rada Czterech kupuje ratami to, czego jawnie zdobyć nie może.",
+    "is_active": 1,
+    "created_at": "2026-07-27 16:05:59"
+  },
+  {
+    "id": 1245,
+    "key": "gildie_vilnogradu",
+    "name": "Gildie Vilnogradu",
+    "faction_type": "guild",
+    "description": "Cechy i kantory rachunkowe Dzielnicy Gildii — handlowe serce stolicy, w którego skórze kult ma salony zamiast ruin.",
+    "is_active": 1,
+    "created_at": "2026-07-27 16:05:59"
+  },
+  {
+    "id": 1246,
+    "key": "polswiatek_vilnogradu",
+    "name": "Półświatek",
+    "faction_type": "clan",
+    "description": "Cichy porządek Dzielnicy Złodziei — świat Mizela. Rządzi „Nocny Burmistrz”, pseudonim-urząd, o którym mówi się, że bywa przechodni.",
+    "is_active": 1,
+    "created_at": "2026-07-27 16:05:59"
+  },
+  {
+    "id": 1247,
+    "key": "enklawa_krasnoludzka",
+    "name": "Enklawa Krasnoludzka",
+    "faction_type": "guild",
+    "description": "Krasnoludzki kwartał kantorów i złotników — najbezpieczniejsze skarbce i najczystsza robota jubilerska w świecie.",
+    "is_active": 1,
+    "created_at": "2026-07-27 16:05:59"
+  }
+]
