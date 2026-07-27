@@ -34,7 +34,8 @@ W = H = 50
 
 # ── UKŁAD BLOKÓW: kraina → (col, row) ────────────────────────────────────────
 # col rośnie na wschód (E), row rośnie na południe (S). Kresy = origin (0, 0).
-REGION_BLOCKS: dict[str, tuple[int, int]] = {
+# 6 GRYWALNYCH KRAIN (roster lore = 6; źródło prawdy world_regions.status='live').
+PLAYABLE_BLOCKS: dict[str, tuple[int, int]] = {
     "koronne_niziny":   (-1,  0),   # W  od Kresów
     "kresy":            ( 0,  0),   # origin (live)
     "czarnobor":        ( 1,  0),   # E  od Kresów
@@ -42,6 +43,18 @@ REGION_BLOCKS: dict[str, tuple[int, int]] = {
     "wybrzeze_lez":     (-1,  1),   # SW
     "martwe_pustkowia": ( 1,  1),   # SE
 }
+
+# 3 SLOTY TŁA (#1549) — nie są krainami z rosteru, tylko wypełniają puste bloki
+# siatki, żeby mapa nie miała czarnych dziur. Morze = dekoracja; Ziemie Północy =
+# terra incognita z POI pod Kuźnię (globalnie nieprzechodnie, rysowane bez FOW).
+BACKGROUND_BLOCKS: dict[str, tuple[int, int]] = {
+    "tlo_morze":       ( 0,  1),   # S-środek: morze WL↔MP → offset (0, 50)
+    "tlo_polnoc_nw":   (-1, -1),   # NW: Ziemie Północy zachód  → offset (-50, -25)
+    "tlo_polnoc_ne":   ( 1, -1),   # NE: Ziemie Północy wschód  → offset ( 50, -75)
+}
+
+# Pełny układ bloków kontynentu (grywalne + tło) — JEDNO źródło geometrii.
+REGION_BLOCKS: dict[str, tuple[int, int]] = {**PLAYABLE_BLOCKS, **BACKGROUND_BLOCKS}
 
 
 def block_offsets(col: int, row: int) -> tuple[int, int]:

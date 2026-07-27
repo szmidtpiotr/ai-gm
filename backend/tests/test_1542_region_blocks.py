@@ -26,6 +26,8 @@ region_blocks = pytest.importorskip(
 from region_blocks import (  # noqa: E402
     REGION_BLOCKS,
     REGION_OFFSETS,
+    PLAYABLE_BLOCKS,
+    BACKGROUND_BLOCKS,
     W,
     H,
     block_offsets,
@@ -40,6 +42,7 @@ if not REGIONS_DIR.exists():
 REGION_FILES = sorted(REGIONS_DIR.glob("region_*.json")) if REGIONS_DIR.exists() else []
 
 # Tabela z docs/world/continent_layout.md (nota CB-4) — oczekiwane offsety.
+# 6 grywalnych krain (roster lore).
 EXPECTED_OFFSETS = {
     "koronne_niziny":   (-50,  25),
     "kresy":            (  0,   0),
@@ -47,6 +50,13 @@ EXPECTED_OFFSETS = {
     "siwe_granie":      (  0, -50),
     "wybrzeze_lez":     (-50,  75),
     "martwe_pustkowia": ( 50,  25),
+}
+
+# 3 sloty tła (#1549) — nie krainy z rosteru, tylko wypełnienie pustych bloków.
+EXPECTED_BACKGROUND_OFFSETS = {
+    "tlo_morze":     (  0,  50),
+    "tlo_polnoc_nw": (-50, -25),
+    "tlo_polnoc_ne": ( 50, -75),
 }
 
 # Krainy `coming`, których pliki JSON są STARSZE niż aktualny wzór (offset sprzed

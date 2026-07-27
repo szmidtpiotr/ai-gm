@@ -124,8 +124,10 @@ def _stitch_hexes() -> list[dict]:
         all_hexes: list[dict] = []
         for rf in region_files:
             d = json.load(open(rf, encoding="utf-8"))
-            if d.get("status") != "live":
-                print(f"  Pomijam {rf.name} (status={d.get('status')!r}, nie live)")
+            # 'live' = grywalne krainy; 'background' = sloty tła (#1549, morze/Ziemie
+            # Północy) — też należą do trwałej mapy, więc wchodzą w pełny stitch.
+            if d.get("status") not in ("live", "background"):
+                print(f"  Pomijam {rf.name} (status={d.get('status')!r}, nie live/background)")
                 continue
             hexes = d.get("hexes", [])
             region_key = d.get("region", rf.stem.replace("region_", ""))
