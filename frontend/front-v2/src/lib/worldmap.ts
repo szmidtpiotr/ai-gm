@@ -96,6 +96,12 @@ const TERRAIN_ICONS: Record<string, Icon> = {
   // MP-1 #1495 — Martwe Pustkowia: sol (biała równina → słońce/blask), martwa_ziemia (kości).
   sol: Sun,
   martwa_ziemia: Skull,
+  // WL-1 #1505 — Wybrzeże Łez: morze/rafy woda (fale), plycizna mielizna (fale),
+  // wydmy piaszczyste wały (żaglówka jak coast — teren nadmorski).
+  morze: Waves,
+  plycizna: Waves,
+  rafy: Mountains,
+  wydmy: Sailboat,
 };
 
 export function terrainIcon(hexType: string | null | undefined): Icon {
@@ -138,6 +144,12 @@ const TERRAIN_HOURS: Record<string, number> = {
   // MP-1 #1495 — sol 3.0h → wysoki 7 (żar, blask); martwa_ziemia 2.0h → średni 6 (jak siarka).
   sol: 7,
   martwa_ziemia: 6,
+  // WL-1 #1505 — Wybrzeże Łez. morze/rafy nieprzejezdne pieszo (szacunek jak sea=6,
+  // realnie brak marszu). plycizna 2.0h → 5 (brnięcie); wydmy 1.0h → niski 3 (jak road).
+  morze: 6,
+  plycizna: 5,
+  rafy: 6,
+  wydmy: 3,
 };
 
 const TERRAIN_DIFFICULTY: Record<string, string> = {
@@ -168,6 +180,12 @@ const TERRAIN_DIFFICULTY: Record<string, string> = {
   // MP-1 #1495 — sol trudny (żar/blask, 3.0h); martwa_ziemia umiarkowany (2.0h, średni marsz).
   sol: "trudny",
   martwa_ziemia: "umiarkowany",
+  // WL-1 #1505 — Wybrzeże Łez. morze/rafy nieprzejezdne pieszo → "bardzo trudny";
+  // plycizna "trudny" (mielizna, pływy w WL-5); wydmy "łatwy" (niski koszt).
+  morze: "bardzo trudny",
+  plycizna: "trudny",
+  rafy: "bardzo trudny",
+  wydmy: "łatwy",
 };
 
 // Ryzyko spotkania — high=czerwone ostrzeżenie w panelu.
@@ -191,6 +209,10 @@ const HIGH_RISK = new Set([
   // MP-1 #1495 — martwa_ziemia 0.42 = serce krainy nieumarłych, najwyższe ryzyko.
   // `sol` (0.28) celowo POZA listą — otwarta równina, ryzyko umiarkowane.
   "martwa_ziemia",
+  // WL-1 #1505 — plycizna 0.30 (mielizna + pływy WL-5) = wysokie ryzyko.
+  // morze/rafy/wydmy POZA listą: morze/rafy nieprzejezdne pieszo (0.10/0.15),
+  // wydmy niskie (0.12).
+  "plycizna",
 ]);
 const LOW_RISK = new Set([
   "road",
@@ -202,6 +224,8 @@ const LOW_RISK = new Set([
   "castle",
   // CB-1 #Czarnobór — step otwarty, encounter 0.12: niskie ryzyko (§5 wprost).
   "step",
+  // WL-1 #1505 — wydmy 0.12: niskie ryzyko (piaszczyste wały, niski koszt).
+  "wydmy",
 ]);
 
 export interface TravelEstimate {

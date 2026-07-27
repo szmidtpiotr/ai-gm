@@ -305,6 +305,13 @@ _WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
     # sol = biała solna równina, risen kości; martwa_ziemia = serce krainy, najgęstsi nieumarli.
     "sol": ["skeleton", "unknown_attacker", "ghoul"],
     "martwa_ziemia": ["ghoul", "skeleton", "zombie"],
+    # WL-1 #1505 — Wybrzeże Łez. morze/rafy nieprzejezdne pieszo (pula tylko przy
+    # rejsach WL-4); generyk do czasu wrogów morskich (WL-7). plycizna jak bagno,
+    # wydmy nadmorska dzicz.
+    "morze": ["unknown_attacker"],
+    "rafy": ["unknown_attacker"],
+    "plycizna": ["giant_rat", "unknown_attacker"],
+    "wydmy": ["wolf", "bandit"],
 }
 _WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
 

@@ -4247,6 +4247,34 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('martwa_ziemia', 'Martwa ziemia', 2.0, 0.42, '#6f6a63', '💀', 1, 'biome', 0.10)
     """, "vMP1-martwe-pustkowia-hex-types")
 
+    # WL-1 #1505 — cztery nowe typy terenu Wybrzeża Łez
+    # (docs/world/regions/wybrzeze_lez.md §5). WARTOŚCI STARTOWE (Numbers Policy —
+    # strojone po playtestach, NIE kanon; edytowalne w admin → Mapa → Konfiguracja terenu):
+    #   morze     is_passable=0 → NIEPRZEJEZDNY pieszo; dostęp tylko rejsami (WL-4,
+    #             hex_teleport_connections). travel 0.0 jak `sea`; encounter 0.10 (rzadko,
+    #             ale rejs może wpaść na coś). Głębia jako grób — serce klimatu krainy.
+    #   plycizna  is_passable=1, PRZEJEZDNY ale ryzykowny: travel 2.0h (brnięcie przez
+    #             mielizny), encounter 0.30 (wysoki). PŁYWY (WL-5) dodadzą zabójczy
+    #             przypływ na osobnym hooku zegara — tu tylko baza.
+    #   rafy      is_passable=0 → NIEPRZEJEZDNY pieszo (skały pod wodą, piana); pas grozy
+    #             żeglarskiej przy latarni. travel 0.0; encounter 0.15.
+    #   wydmy     is_passable=1, NISKI koszt: travel 1.0h (jak plains/step), encounter 0.12.
+    #             Piaszczyste wały z trawą na styku lądu i morza.
+    # map_color UNIKALNY (morze #0b2a52 ciemniejszy od `sea` #1a3a6a; plycizna #6fb0c9
+    # blada mielizna; rafy #2e7d7d rafowy turkus; wydmy #d9c48f piach+trawa).
+    # spawn_weight = 0 (domyślne) → NIE generowane proceduralnie; wchodzą seedem krainy
+    # (WL-2/WL-3) z pliku. INSERT OR IGNORE = idempotentne.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
+             is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('morze',    'Morze',    0.0, 0.10, '#0b2a52', '🌊',  0, 'biome', 0.00),
+        ('plycizna', 'Płycizna', 2.0, 0.30, '#6fb0c9', '〰️', 1, 'biome', 0.02),
+        ('rafy',     'Rafy',     0.0, 0.15, '#2e7d7d', '🪨',  0, 'biome', 0.02),
+        ('wydmy',    'Wydmy',    1.0, 0.12, '#d9c48f', '🏖️', 1, 'biome', 0.05)
+    """, "vWL1-wybrzeze-lez-hex-types")
+
     # SG-9 #1481/#1193 — wydarzenia regionalne przypisane do krainy.
     # Bez `region_scope` roll_event losował z całej puli szablonów, więc „Głębokie
     # Bicie" (stukanie w żyle Rdzenia pod Graniami) mogło wypaść w Kresach. Pusty
@@ -4307,6 +4335,13 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         # nieumarli najgęściej (ghoul/szkielet/zombie). Klucze w game_config_enemies.
         ("sol",           '["skeleton", "unknown_attacker", "ghoul"]'),
         ("martwa_ziemia", '["ghoul", "skeleton", "zombie"]'),
+        # WL-1 — Wybrzeże Łez. morze/rafy nieprzejezdne pieszo → pula gra tylko przy
+        # rejsach (WL-4); na razie generyk (WL-7 doda właściwych wrogów morskich:
+        # piraci/topielcy). plycizna jak bagno; wydmy nadmorska dzicz (wilki/zbóje).
+        ("morze",    '["unknown_attacker"]'),
+        ("rafy",     '["unknown_attacker"]'),
+        ("plycizna", '["giant_rat", "unknown_attacker"]'),
+        ("wydmy",    '["wolf", "bandit"]'),
     ):
         _exec(
             "UPDATE hex_type_config SET default_encounter_pool = '%s' "

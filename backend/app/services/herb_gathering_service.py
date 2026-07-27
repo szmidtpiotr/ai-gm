@@ -47,6 +47,10 @@ TERRAIN_DC = {
     "czarny_las": 12, "trzesawisko": 8,
     # MP-1 #1495 — Martwe Pustkowia: jałowizna. Sól i popiół nie rodzą runa (Hard 16).
     "sol": 16, "martwa_ziemia": 16,
+    # WL-1 #1505 — Wybrzeże Łez. morze/rafy = woda/skała, nic nie zbierzesz (Hard 16).
+    # plycizna = mielizna z wodorostami/skorupiakami (Medium 12); wydmy = trawa
+    # wydmowa i skąpe zioła nadmorskie (Medium 12).
+    "morze": 16, "rafy": 16, "plycizna": 12, "wydmy": 12,
 }
 DEFAULT_DC = 12  # Medium — równiny/wzgórza/wrzosowiska/drogi itd.
 

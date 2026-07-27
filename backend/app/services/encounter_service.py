@@ -895,6 +895,15 @@ _HEX_TYPE_TO_TERRAIN = {
     # relaksować do całej puli (off-theme wilki/zbóje na solnej równinie).
     "sol": "ruins",
     "martwa_ziemia": "ruins",
+    # WL-1 #1505 — Wybrzeże Łez. Słownik `terrain_tags` wrogów zna tylko `river`
+    # jako tag wodny, więc morze/rafy (głębia/skały) → `river`; plycizna (mielizna
+    # pływowa, grząska jak bagno) → `swamp`; wydmy (piach z trawą, nadmorska dzicz)
+    # → `plains`. Mapujemy na najbliższy istniejący tag, żeby filtr terenu nie dawał
+    # PUSTKI → relax-to-all (off-theme śmieci).
+    "morze": "river",
+    "rafy": "river",
+    "plycizna": "swamp",
+    "wydmy": "plains",
 }
 
 
