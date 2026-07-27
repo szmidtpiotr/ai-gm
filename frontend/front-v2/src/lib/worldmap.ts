@@ -102,6 +102,8 @@ const TERRAIN_ICONS: Record<string, Icon> = {
   plycizna: Waves,
   rafy: Mountains,
   wydmy: Sailboat,
+  // KN-1 #1483 — Koronne Niziny: pola_uprawne (złote łany zbóż) → roślina jak plains/step.
+  pola_uprawne: Plant,
 };
 
 export function terrainIcon(hexType: string | null | undefined): Icon {
@@ -150,6 +152,8 @@ const TERRAIN_HOURS: Record<string, number> = {
   plycizna: 5,
   rafy: 6,
   wydmy: 3,
+  // KN-1 #1483 — pola_uprawne 1.0h → niski 4 (jak plains/step); teren cywilizowany, drogi wszędzie.
+  pola_uprawne: 4,
 };
 
 const TERRAIN_DIFFICULTY: Record<string, string> = {
@@ -186,6 +190,8 @@ const TERRAIN_DIFFICULTY: Record<string, string> = {
   plycizna: "trudny",
   rafy: "bardzo trudny",
   wydmy: "łatwy",
+  // KN-1 #1483 — pola_uprawne: teren cywilizowany, najbezpieczniejszy ląd → łatwy.
+  pola_uprawne: "łatwy",
 };
 
 // Ryzyko spotkania — high=czerwone ostrzeżenie w panelu.
@@ -226,6 +232,8 @@ const LOW_RISK = new Set([
   "step",
   // WL-1 #1505 — wydmy 0.12: niskie ryzyko (piaszczyste wały, niski koszt).
   "wydmy",
+  // KN-1 #1483 — pola_uprawne 0.10 = najniższy encounter w świecie (najbezpieczniejsza kraina).
+  "pola_uprawne",
 ]);
 
 export interface TravelEstimate {

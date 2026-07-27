@@ -4304,6 +4304,26 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('wydmy',    'Wydmy',    1.0, 0.12, '#d9c48f', '🏖️', 1, 'biome', 0.05)
     """, "vWL1-wybrzeze-lez-hex-types")
 
+    # KN-1 #1483 — nowy typ terenu Koronnych Nizin (docs/world/regions/koronne_niziny.md §5).
+    # WARTOŚCI STARTOWE (Numbers Policy — strojone po playtestach, NIE kanon; edytowalne
+    # w admin → Mapa → Konfiguracja terenu):
+    #   pola_uprawne  travel 1.0h = NISKI (jak plains/step) — teren cywilizowany, drogi
+    #                 wszędzie (§5 „drogi są wszędzie"), łany zbóż i miedze, szybki marsz.
+    #                 encounter 0.10 = NAJNIŻSZY ląd — Niziny to najbezpieczniejsza kraina
+    #                 świata (§1); tożsamość spichlerza, nie dzicz.
+    # map_color UNIKALNY (#d8b14a złoto dojrzałego zboża, cieplejsze od plains #7a9a4a).
+    # BRAK ilustracji-kafla PNG (decyzja: mapa hex = kolor + ikona SVG, kafle PNG są dla
+    # lochów) — hex renderuje map_color + ikona Phosphor `Plant` w ŻAR.
+    # spawn_weight = 0 (domyślne) → NIE generowany proceduralnie; wchodzi seedem krainy
+    # z pliku. INSERT OR IGNORE = idempotentne.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
+             is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('pola_uprawne', 'Pola uprawne', 1.0, 0.10, '#d8b14a', '🌾', 1, 'biome', 0.15)
+    """, "vKN1-koronne-niziny-hex-types")
+
     # SG-9 #1481/#1193 — wydarzenia regionalne przypisane do krainy.
     # Bez `region_scope` roll_event losował z całej puli szablonów, więc „Głębokie
     # Bicie" (stukanie w żyle Rdzenia pod Graniami) mogło wypaść w Kresach. Pusty
@@ -4371,6 +4391,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ("rafy",     '["unknown_attacker"]'),
         ("plycizna", '["giant_rat", "unknown_attacker"]'),
         ("wydmy",    '["wolf", "bandit"]'),
+        # KN-1 #1483 — Koronne Niziny. Teren cywilizowany: zbóje na traktach i wilki
+        # przy miedzach; encounter najniższy w świecie, ale pula nie może być pusta.
+        ("pola_uprawne", '["bandit", "wolf"]'),
     ):
         _exec(
             "UPDATE hex_type_config SET default_encounter_pool = '%s' "

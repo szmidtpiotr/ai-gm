@@ -904,6 +904,9 @@ _HEX_TYPE_TO_TERRAIN = {
     "rafy": "river",
     "plycizna": "swamp",
     "wydmy": "plains",
+    # KN-1 #1483 — Koronne Niziny. Łany zbóż + miedze = odmiana równin; zbóje/wilki
+    # mają terrain_tag `plains`, więc filtr terenu trafia w pulę zamiast relaksować.
+    "pola_uprawne": "plains",
 }
 
 

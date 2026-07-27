@@ -51,6 +51,9 @@ TERRAIN_DC = {
     # plycizna = mielizna z wodorostami/skorupiakami (Medium 12); wydmy = trawa
     # wydmowa i skąpe zioła nadmorskie (Medium 12).
     "morze": 16, "rafy": 16, "plycizna": 12, "wydmy": 12,
+    # KN-1 #1483 — Koronne Niziny. Miedze i skraje pól bogate w zioła (rumianek, chaber,
+    # macierzanka) — łatwy zbiór (Easy 8).
+    "pola_uprawne": 8,
 }
 DEFAULT_DC = 12  # Medium — równiny/wzgórza/wrzosowiska/drogi itd.
 

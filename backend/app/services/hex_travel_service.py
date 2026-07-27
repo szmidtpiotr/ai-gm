@@ -312,6 +312,9 @@ _WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
     "rafy": ["unknown_attacker"],
     "plycizna": ["giant_rat", "unknown_attacker"],
     "wydmy": ["wolf", "bandit"],
+    # KN-1 #1483 — Koronne Niziny (docs/.../koronne_niziny.md §5). Teren cywilizowany:
+    # zbóje na traktach i wilki przy miedzach — najniższy encounter, ale pula niepusta.
+    "pola_uprawne": ["bandit", "wolf"],
 }
 _WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
 
