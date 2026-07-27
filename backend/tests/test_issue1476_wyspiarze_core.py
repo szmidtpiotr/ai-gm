@@ -83,9 +83,13 @@ def test_wyspiarze_have_no_home_region():
     assert RACE_LABELS["wyspiarze"] == "Wyspiarz"
 
 
-def test_wyspiarze_have_no_start_anchor():
-    """Region rodowy nie jest jeszcze wdrożony — brak wpisu RACE_START."""
-    assert "wyspiarze" not in rss.RACE_START
+def test_wyspiarze_start_anchor_added_in_wl9():
+    """WL-9 (#1504 §10) — kampania wyspiarza domyślnie startuje w Czarnogrodzie.
+    Kotwica startu NIE zmienia dostępności rasy (patrz test niżej: home_region None,
+    dostępna wszędzie). Szczegóły whitelisty: tests/test_wl9_wyspiarze_start.py."""
+    assert "wyspiarze" in rss.RACE_START
+    assert rss.RACE_START["wyspiarze"]["region"] == "wybrzeze_lez"
+    assert rss.RACE_START["wyspiarze"]["default"] == "czarnogrod_dzielnica_wyspiarzy"
 
 
 def _regions_conn(status: str) -> sqlite3.Connection:
@@ -116,13 +120,14 @@ def test_wyspiarze_available_for_everyone_diaspora():
         conn.close()
 
 
-def test_wyspiarze_plan_hint_is_diaspora_no_forced_region():
+def test_wyspiarze_plan_hint_anchors_czarnogrod_keeps_diaspora_thread():
+    # WL-9: hint wskazuje start w Czarnogrodzie (key_locations[0]) ORAZ zachowuje
+    # wątek §7 diaspory obecnej wszędzie.
     hint = rss.RACE_PLAN_HINT["wyspiarze"]
-    assert "Wyspiarz" in hint
     assert "Sztormem Wiecznym" in hint
-    # NIE wymusza key_locations[0] jak rasy z kotwicą.
-    assert "key_locations[0]" not in hint
-    assert "NIE wymuszaj krainy startowej" in hint
+    assert "key_locations[0]" in hint
+    assert "Dzielnica Wyspiarzy" in hint
+    assert "WSZĘDZIE" in hint or "wszędzie" in hint
 
 
 # ─── Morska krew — sailing liczone od CHA ────────────────────────────────────

@@ -125,6 +125,23 @@ RACE_START: dict[str, dict] = {
             "oboz_goraczki",
         ),
     },
+    # WL-9 (#1504 §10) — Wyspiarze to diaspora BEZ kotwicy krainy: w
+    # `world_region_service.RACE_HOME_REGION` zostają `None`, więc rasa jest
+    # dostępna WSZĘDZIE (lore §7 — „jedyna rasa obecna wszędzie"). RACE_START
+    # jest OD TEGO NIEZALEŻNE — ustawia tylko *domyślne miejsce startu kampanii*,
+    # nie bramkuje wyboru rasy. Kampania wyspiarza domyślnie zaczyna się u swoich:
+    # Dzielnica Wyspiarzy w Czarnogrodzie (sub huba „Czarnogród, Port", heks
+    # −19,65 — dziedziczy heks rodzica). `default` = Dzielnica Wyspiarzy
+    # (onboarding wśród diaspory); `variant` = Nabrzeże (port, wśród obcych i
+    # Korony — twardszy start, ten sam heks huba). Lore: `wybrzeze_lez.md` §7/§10.
+    "wyspiarze": {
+        "region": "wybrzeze_lez",
+        "default": "czarnogrod_dzielnica_wyspiarzy",
+        "variants": (
+            "czarnogrod_dzielnica_wyspiarzy",
+            "czarnogrod_nabrzeze",
+        ),
+    },
 }
 
 #: Podpowiedź do promptu planu kampanii — lore §9: pierwsze haki to spór rodów
@@ -193,21 +210,35 @@ RACE_PLAN_HINT: dict[str, str] = {
         "w enklawie — patrzy na Piętno z podejrzliwością i szuka pretekstu; jej "
         "obecność zaostrza spór Lejla↔Raszid.\n"
     ),
-    # #1476 — Wyspiarze NIE mają kotwicy krainy (diaspora bez domu). Hint daje
-    # LLM-owi tożsamość rasy do narracji, ale NIE wymusza key_locations[0] — bohater
-    # może zacząć w dowolnej krainie kampanii; wszędzie jest przybłędą znad morza.
+    # WL-9 (#1504 §10) — Wyspiarz startuje u swoich: Dzielnica Wyspiarzy w
+    # Czarnogrodzie (Wybrzeże Łez), wariant Nabrzeże. Haki §10: pusty fotel w
+    # Radzie (Zatoka Topielców), blokada portu przez Koronę (Kapitan Roggen),
+    # Dziadek Florian szuka śmiałka. Zachowany wątek §7: diaspora obecna wszędzie
+    # — wyspiarz jest u siebie tylko tam, gdzie pachnie solą.
     "wyspiarze": (
-        "RASA BOHATERA: Wyspiarz (diaspora znad Wybrzeża Łez).\n"
-        "  Ojczyste wyspy odcięte Sztormem Wiecznym dwa pokolenia temu — nikt nie "
-        "wrócił. Wyspiarze rozeszli się po świecie jako najemnicy, marynarze i "
-        "przemytnicy; są obecni WSZĘDZIE, u siebie tylko tam, gdzie pachnie solą "
-        "(porty, doki, nabrzeża). Krzepcy cwaniacy: potężnie zbudowani, ale "
-        "wygrywają głową, gadką i łokciem — „walczą jak w porcie: głową, łokciem "
-        "i stołkiem\".\n"
-        "  Na lądzie, z dala od portów, patrzą na nich jak na obcych przybłędów.\n"
-        "  NIE wymuszaj krainy startowej — wyspiarz nie ma dokąd wrócić; wpleć jego "
-        "morskie pochodzenie w dowolny start kampanii (obcy w mieście, były marynarz, "
-        "przemytnik szukający fuchy).\n"
+        "KRAINA STARTOWA (bohater jest wyspiarzem z diaspory):\n"
+        "  Wybrzeże Łez — mgliste, deszczowe wybrzeże portów, przemytu i "
+        "topielczych mitów. Czarnogród to gród portowy, w którym wyspiarze mają "
+        "własną Dzielnicę Wyspiarzy — diasporę znad wysp odciętych Sztormem "
+        "Wiecznym dwa pokolenia temu (nikt stamtąd nie wrócił). Wyspiarze "
+        "rozeszli się po świecie jako najemnicy, marynarze i przemytnicy; są "
+        "obecni WSZĘDZIE, u siebie tylko tam, gdzie pachnie solą (porty, doki).\n"
+        "  Pierwsza lokacja planu (key_locations[0]) MUSI być jedną z:\n"
+        "    - \"Czarnogród: Dzielnica Wyspiarzy\" (diaspora — domyślna, zalecana)\n"
+        "    - \"Czarnogród: Nabrzeże\" (port, wśród obcych i Korony — twardszy start)\n"
+        "  Reszta Wybrzeża (Zatoka Topielców, Latarnia, bagna) NIE jest startem.\n"
+        "PIERWSZE HAKI (użyj ich w Akcie 1 — oś diaspora kontra Korona):\n"
+        "  - PUSTY FOTEL W RADZIE: w Radzie Wybrzeża (Zatoka Topielców) jeden "
+        "fotel stoi pusty; diaspora wyspiarzy chce, by zajął go ktoś z ich krwi "
+        "— bohater jest naturalnym kandydatem albo pionkiem w tej rozgrywce.\n"
+        "  - BLOKADA KORONY: Kapitan Roggen (Korona) trzyma port pod kontrolą — "
+        "cła, rewizje i konfiskaty duszą przemyt i handel diaspory; ktoś musi "
+        "coś z tym zrobić.\n"
+        "  - FLORIAN SZUKA ŚMIAŁKA: Dziadek Florian, stary rybak z diaspory, "
+        "szuka śmiałka do roboty, której nikt trzeźwy się nie tknie — pierwsza "
+        "fucha wciąga bohatera w sprawy Wybrzeża.\n"
+        "  Na lądzie, z dala od portów, patrzą na wyspiarza jak na obcego "
+        "przybłędę — wpleć to w ton narracji poza Wybrzeżem.\n"
     ),
 }
 
