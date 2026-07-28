@@ -4,7 +4,7 @@
  "status": "coming",
  "w": 50,
  "h": 50,
- "note": "DLC paczka FAZY RM — Wybrzeże Łez. Kanon = ten plik w git (commit = zgoda Piotra). Seed: scripts/seed_world_map.py --region wybrzeze_lez. Snapshot: scripts/snapshot_world_map.py --region wybrzeze_lez.",
+ "note": "DLC paczka FAZY RM — Wybrzeże Łez. Kanon = ten plik w git.",
  "hexes": [
   {
    "q": -2,
@@ -97,10 +97,10 @@
   {
    "q": -1,
    "r": 53,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -8,
@@ -153,18 +153,18 @@
   {
    "q": -2,
    "r": 54,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -1,
    "r": 54,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -10,
@@ -225,26 +225,26 @@
   {
    "q": -3,
    "r": 55,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -2,
    "r": 55,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -1,
    "r": 55,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -12,
@@ -313,26 +313,26 @@
   {
    "q": -4,
    "r": 56,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -3,
    "r": 56,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -2,
    "r": 56,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -1,
@@ -425,18 +425,18 @@
   {
    "q": -4,
    "r": 57,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -3,
    "r": 57,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -2,
@@ -1025,10 +1025,10 @@
   {
    "q": -5,
    "r": 61,
-   "hex_type": "wydmy",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.05
+   "encounter_chance": 0.15
   },
   {
    "q": -4,
@@ -1617,42 +1617,42 @@
   {
    "q": -9,
    "r": 64,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -8,
    "r": 64,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -7,
    "r": 64,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -6,
    "r": 64,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -5,
    "r": 64,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -4,
@@ -1780,8 +1780,7 @@
    "hex_type": "town",
    "label": "Czarnogród",
    "atmosphere": "Smolisty port rzeczno-morski u ujścia rzeki z Nizin. 8 tysięcy dusz, prawo Korony kończy się na linii przyboju.",
-   "encounter_chance": 0.0,
-   "location_key": "czarnogrod_port"
+   "encounter_chance": 0.0
   },
   {
    "q": -18,
@@ -1850,34 +1849,34 @@
   {
    "q": -10,
    "r": 65,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -9,
    "r": 65,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -8,
    "r": 65,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -7,
    "r": 65,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -6,
@@ -2098,26 +2097,26 @@
   {
    "q": -11,
    "r": 66,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -10,
    "r": 66,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -9,
    "r": 66,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -8,
@@ -2370,18 +2369,18 @@
   {
    "q": -11,
    "r": 67,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -10,
    "r": 67,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -9,
@@ -2426,10 +2425,10 @@
   {
    "q": -4,
    "r": 67,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -3,
@@ -2450,10 +2449,10 @@
   {
    "q": -1,
    "r": 67,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -36,
@@ -2650,26 +2649,26 @@
   {
    "q": -12,
    "r": 68,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -11,
    "r": 68,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -10,
    "r": 68,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -9,
@@ -2722,18 +2721,18 @@
   {
    "q": -3,
    "r": 68,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -2,
    "r": 68,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -1,
@@ -2954,18 +2953,18 @@
   {
    "q": -12,
    "r": 69,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -11,
    "r": 69,
-   "hex_type": "plycizna",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.15
   },
   {
    "q": -10,
@@ -3018,10 +3017,10 @@
   {
    "q": -4,
    "r": 69,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -3,
@@ -5061,8 +5060,7 @@
    "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12,
-   "location_key": "wybrzeze_lez"
+   "encounter_chance": 0.12
   },
   {
    "q": -18,
@@ -6307,10 +6305,10 @@
   {
    "q": -13,
    "r": 78,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -12,
@@ -6691,18 +6689,18 @@
   {
    "q": -15,
    "r": 79,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -14,
    "r": 79,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -13,
@@ -6926,8 +6924,7 @@
    "hex_type": "village",
    "label": "Rolne Sioło",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "osada_rolna"
+   "encounter_chance": 0.0
   },
   {
    "q": -35,
@@ -7092,10 +7089,10 @@
   {
    "q": -15,
    "r": 80,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -14,
@@ -7484,10 +7481,10 @@
   {
    "q": -16,
    "r": 81,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -15,
@@ -7884,10 +7881,10 @@
   {
    "q": -16,
    "r": 82,
-   "hex_type": "rafy",
+   "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02
+   "encounter_chance": 0.3
   },
   {
    "q": -15,
@@ -8191,8 +8188,7 @@
    "hex_type": "ruins",
    "label": "Mokradła Ujścia",
    "atmosphere": null,
-   "encounter_chance": 0.35,
-   "location_key": "mokradla_ujscia"
+   "encounter_chance": 0.35
   },
   {
    "q": -27,
@@ -11296,8 +11292,7 @@
    "hex_type": "village",
    "label": "Rybacka Przystań",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "osada_rybacka"
+   "encounter_chance": 0.0
   },
   {
    "q": -39,
@@ -12185,8 +12180,7 @@
    "hex_type": "village",
    "label": "Wsie na Palach",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "wsie_na_palach"
+   "encounter_chance": 0.0
   },
   {
    "q": -28,
@@ -12354,8 +12348,7 @@
    "hex_type": "ruins",
    "label": "Kryjówka Przemytników",
    "atmosphere": null,
-   "encounter_chance": 0.35,
-   "location_key": "kryjowka_przemytnikow"
+   "encounter_chance": 0.35
   },
   {
    "q": -7,
@@ -12939,8 +12932,7 @@
    "hex_type": "village",
    "label": "Port Łez",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "wybrzeze_lez_port"
+   "encounter_chance": 0.0
   },
   {
    "q": -34,
@@ -13020,8 +13012,7 @@
    "hex_type": "ruins",
    "label": "Warzelnie Soli",
    "atmosphere": null,
-   "encounter_chance": 0.35,
-   "location_key": "warzelnie_solne"
+   "encounter_chance": 0.35
   },
   {
    "q": -24,
@@ -15845,8 +15836,7 @@
    "hex_type": "town",
    "label": "Zatoka Topielców",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "zatoka_topielcow"
+   "encounter_chance": 0.0
   },
   {
    "q": -19,
@@ -16318,8 +16308,7 @@
    "hex_type": "ruins",
    "label": "Opuszczona Latarnia",
    "atmosphere": null,
-   "encounter_chance": 0.35,
-   "location_key": "opuszczona_latarnia"
+   "encounter_chance": 0.35
   },
   {
    "q": -50,
@@ -17343,8 +17332,7 @@
    "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]"
+   "encounter_chance": 0.12
   },
   {
    "q": -42,
@@ -17352,8 +17340,7 @@
    "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]"
+   "encounter_chance": 0.12
   },
   {
    "q": -41,
@@ -17625,8 +17612,7 @@
    "hex_type": "coast",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.12,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]"
+   "encounter_chance": 0.12
   },
   {
    "q": -43,
@@ -17634,9 +17620,7 @@
    "hex_type": "ruins",
    "label": "Latarnia Topielców",
    "atmosphere": "Opuszczona, lecz nocą zapala się sama i wciąga statki na rafy. Kto stoi na niej z ogniem?",
-   "encounter_chance": 0.35,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]",
-   "location_key": "latarnia_topielcow"
+   "encounter_chance": 0.35
   },
   {
    "q": -42,
@@ -17644,8 +17628,7 @@
    "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]"
+   "encounter_chance": 0.02
   },
   {
    "q": -41,
@@ -17901,8 +17884,7 @@
    "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]"
+   "encounter_chance": 0.02
   },
   {
    "q": -43,
@@ -17910,8 +17892,7 @@
    "hex_type": "plycizna",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.02,
-   "encounter_pool": "[\"cos_z_sieci\", \"glebinowy_pomiot\"]"
+   "encounter_chance": 0.02
   },
   {
    "q": -42,
@@ -19143,8 +19124,7 @@
    "hex_type": "village",
    "label": "Wysepka Diaspory",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "wysepka_diaspory"
+   "encounter_chance": 0.0
   },
   {
    "q": -50,
@@ -20026,14 +20006,5 @@
    "atmosphere": null,
    "encounter_chance": 0.02
   }
- ],
- "q_offset": -50,
- "r_offset": 75,
- "bounds": {
-  "q_min": -50,
-  "q_max": -1,
-  "r_min": 51,
-  "r_max": 124
- },
- "terrain_plan_seed": 1588
+ ]
 }

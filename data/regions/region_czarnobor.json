@@ -4,7 +4,7 @@
  "status": "coming",
  "w": 50,
  "h": 50,
- "note": "DLC paczka FAZY RM — Czarnobór. Kanon = ten plik w git (commit = zgoda Piotra). Seed: scripts/seed_world_map.py --region czarnobor. Snapshot: scripts/snapshot_world_map.py --region czarnobor.",
+ "note": "DLC paczka FAZY RM — Czarnobór. Kanon = ten plik w git.",
  "hexes": [
   {
    "q": 98,
@@ -2644,8 +2644,7 @@
    "hex_type": "step",
    "label": "Step Wilków",
    "atmosphere": null,
-   "encounter_chance": 0.55,
-   "location_key": "step_wilkow"
+   "encounter_chance": 0.55
   },
   {
    "q": 88,
@@ -3941,8 +3940,7 @@
    "hex_type": "step",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "stanica_wilcza"
+   "encounter_chance": 0.25
   },
   {
    "q": 86,
@@ -4350,8 +4348,7 @@
    "hex_type": "step",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "kurhan_wilczego_krola"
+   "encounter_chance": 0.25
   },
   {
    "q": 91,
@@ -5295,8 +5292,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "obozowisko_erethila"
+   "encounter_chance": 0.25
   },
   {
    "q": 61,
@@ -7280,8 +7276,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "milczace_drzewo_3"
+   "encounter_chance": 0.25
   },
   {
    "q": 59,
@@ -8137,8 +8132,7 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "czarne_serce"
+   "encounter_chance": 0.25
   },
   {
    "q": 66,
@@ -8170,8 +8164,7 @@
    "hex_type": "czarny_las",
    "label": "Bór Zmarłych",
    "atmosphere": "Pnie czarne jak smoła, żadne ptaki nie śpiewają. Cień porusza się wbrew wiatrowi.",
-   "encounter_chance": 0.55,
-   "location_key": "bor_zmarlych"
+   "encounter_chance": 0.55
   },
   {
    "q": 70,
@@ -8947,8 +8940,7 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "stare_gniazdo"
+   "encounter_chance": 0.25
   },
   {
    "q": 67,
@@ -10212,8 +10204,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "szept_koron"
+   "encounter_chance": 0.0
   },
   {
    "q": 75,
@@ -10517,8 +10508,7 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "milczace_drzewo_1"
+   "encounter_chance": 0.25
   },
   {
    "q": 63,
@@ -11342,8 +11332,7 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "polana_schizmy"
+   "encounter_chance": 0.25
   },
   {
    "q": 66,
@@ -11863,8 +11852,7 @@
    "hex_type": "trzesawisko",
    "label": "Bagienna Knieja",
    "atmosphere": "Gęsta mgła nie opada nawet w południe. Ziemia ssie buty przy każdym kroku.",
-   "encounter_chance": 0.15,
-   "location_key": "bagienna_knieja"
+   "encounter_chance": 0.15
   },
   {
    "q": 81,
@@ -12064,8 +12052,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "oboz_drwali"
+   "encounter_chance": 0.25
   },
   {
    "q": 56,
@@ -12553,8 +12540,7 @@
    "hex_type": "czarny_las",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "temp_camp_77779950_1784907078"
+   "encounter_chance": 0.25
   },
   {
    "q": 67,
@@ -12570,8 +12556,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "zloty_las"
+   "encounter_chance": 0.25
   },
   {
    "q": 69,
@@ -12915,8 +12900,7 @@
    "hex_type": "czarny_las",
    "label": "Knieja Czarnych Drzew",
    "atmosphere": null,
-   "encounter_chance": 0.55,
-   "location_key": "las_czarnych_drzew"
+   "encounter_chance": 0.55
   },
   {
    "q": 62,
@@ -13764,8 +13748,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "milczace_drzewo_2"
+   "encounter_chance": 0.25
   },
   {
    "q": 68,
@@ -15037,8 +15020,7 @@
    "hex_type": "swamp",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.3,
-   "location_key": "utopiona_wies"
+   "encounter_chance": 0.3
   },
   {
    "q": 77,
@@ -16494,8 +16476,7 @@
    "hex_type": "trzesawisko",
    "label": "Trzęsawiska Mgieł",
    "atmosphere": "Mgła pożera wędrowców. Utopce wołają głosami umarłych znajomych.",
-   "encounter_chance": 0.55,
-   "location_key": "trzesawiska_mgiel"
+   "encounter_chance": 0.55
   },
   {
    "q": 71,
@@ -17175,8 +17156,7 @@
    "hex_type": "trzesawisko",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "smolarnia_na_palach"
+   "encounter_chance": 0.25
   },
   {
    "q": 74,
@@ -17776,8 +17756,7 @@
    "hex_type": "village",
    "label": "Ostęp Graniczny",
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "location_key": "ostep_graniczny"
+   "encounter_chance": 0.15
   },
   {
    "q": 75,
@@ -18769,8 +18748,7 @@
    "hex_type": "forest",
    "label": "ku Martwym Pustkowiu",
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "location_key": "zarosniety_trakt"
+   "encounter_chance": 0.25
   },
   {
    "q": 75,
@@ -20028,14 +20006,5 @@
    "atmosphere": null,
    "encounter_chance": 0.25
   }
- ],
- "q_offset": 50,
- "r_offset": -25,
- "bounds": {
-  "q_min": 50,
-  "q_max": 99,
-  "r_min": -49,
-  "r_max": 24
- },
- "terrain_plan_seed": 2020
+ ]
 }

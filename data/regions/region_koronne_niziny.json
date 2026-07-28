@@ -4,7 +4,7 @@
  "status": "coming",
  "w": 50,
  "h": 50,
- "note": "DLC paczka FAZY RM — Koronne Niziny. Kanon = ten plik w git (commit = zgoda Piotra). Seed: scripts/seed_world_map.py --region koronne_niziny. Snapshot: scripts/snapshot_world_map.py --region koronne_niziny.",
+ "note": "DLC paczka FAZY RM — Koronne Niziny. Kanon = ten plik w git.",
  "hexes": [
   {
    "q": -2,
@@ -1676,8 +1676,7 @@
    "hex_type": "road",
    "label": "Rogatka Wschodnia",
    "atmosphere": "Komora celna na trakcie z Kresów: glejty, myto, kontrola papierów. Berta Twarda Pieczęć nie mruga.",
-   "encounter_chance": 0.05,
-   "location_key": "rogatka_wschodnia"
+   "encounter_chance": 0.05
   },
   {
    "q": -1,
@@ -2829,8 +2828,7 @@
    "hex_type": "village",
    "label": "Osada Kupiecka",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "muhlfeld"
+   "encounter_chance": 0.0
   },
   {
    "q": -27,
@@ -3878,8 +3876,7 @@
    "hex_type": "city",
    "label": "Vilnograd",
    "atmosphere": "Stolica Korony u Portu Rzecznego. Gildie, katedra Światła, dzielnica złodziei — i cień Rady Czterech. Latarnia świeci na kredyt.",
-   "encounter_chance": 0.0,
-   "location_key": "vilnograd_stolica"
+   "encounter_chance": 0.0
   },
   {
    "q": -22,
@@ -3887,8 +3884,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "katakumby_vilnogradu"
+   "encounter_chance": 0.0
   },
   {
    "q": -21,
@@ -5496,8 +5492,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.05,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
+   "encounter_chance": 0.05
   },
   {
    "q": -14,
@@ -5505,8 +5500,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -13,
@@ -5890,8 +5884,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.05,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
+   "encounter_chance": 0.05
   },
   {
    "q": -15,
@@ -5899,9 +5892,7 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]",
-   "location_key": "szubieniczne_wzgorze"
+   "encounter_chance": 0.15
   },
   {
    "q": -14,
@@ -5909,8 +5900,7 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
+   "encounter_chance": 0.15
   },
   {
    "q": -13,
@@ -6294,8 +6284,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
+   "encounter_chance": 0.25
   },
   {
    "q": -15,
@@ -6303,8 +6292,7 @@
    "hex_type": "forest",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25,
-   "encounter_pool": "[\"widmo_wisielca\", \"herold_umarlych\"]"
+   "encounter_chance": 0.25
   },
   {
    "q": -14,
@@ -6624,8 +6612,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "location_key": "ahrenau"
+   "encounter_chance": 0.1
   },
   {
    "q": -24,
@@ -6945,8 +6932,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.05,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.05
   },
   {
    "q": -34,
@@ -6954,8 +6940,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -33,
@@ -7339,8 +7324,7 @@
    "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.05,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.05
   },
   {
    "q": -35,
@@ -7348,9 +7332,7 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]",
-   "location_key": "pierwszy_tron"
+   "encounter_chance": 0.15
   },
   {
    "q": -34,
@@ -7358,8 +7340,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -33,
@@ -7383,8 +7364,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -30,
@@ -7392,8 +7372,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -29,
@@ -7745,8 +7724,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -35,
@@ -7754,8 +7732,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -34,
@@ -7779,8 +7756,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -31,
@@ -7788,9 +7764,7 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]",
-   "location_key": "dwor_czwartego"
+   "encounter_chance": 0.15
   },
   {
    "q": -30,
@@ -7798,8 +7772,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -29,
@@ -7879,8 +7852,7 @@
    "hex_type": "town",
    "label": "Volhynia",
    "atmosphere": "Skrzyżowanie czterech traktów. Aukcje, karawany, plotki z całego świata; sufit ekonomii gry.",
-   "encounter_chance": 0.0,
-   "location_key": "volhynia_kupiecka"
+   "encounter_chance": 0.0
   },
   {
    "q": -19,
@@ -8128,8 +8100,7 @@
    "hex_type": "village",
    "label": "Klasztor Iskry",
    "atmosphere": "Centrum wiary w Światło. Matka Urszula, Brat Kazimierz uzdrawia, Brat Tomasz skupuje relikty (łącznik z Pustkowiami).",
-   "encounter_chance": 0.0,
-   "location_key": "klasztor_iskry_centrum"
+   "encounter_chance": 0.0
   },
   {
    "q": -38,
@@ -8185,8 +8156,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -31,
@@ -8194,8 +8164,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"kultysta_w_kaftanie\", \"arcykultysta_salonu\", \"widmo_wisielca\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -30,
@@ -8579,8 +8548,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -32,
@@ -8588,9 +8556,7 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]",
-   "location_key": "wieza_heroldow"
+   "encounter_chance": 0.15
   },
   {
    "q": -31,
@@ -8598,8 +8564,7 @@
    "hex_type": "pola_uprawne",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -30,
@@ -8983,8 +8948,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -32,
@@ -8992,8 +8956,7 @@
    "hex_type": "hills",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.15,
-   "encounter_pool": "[\"widmo_wisielca\", \"kultysta_w_kaftanie\"]"
+   "encounter_chance": 0.15
   },
   {
    "q": -31,
@@ -9985,8 +9948,7 @@
    "hex_type": "village",
    "label": "Nowe Dobra",
    "atmosphere": null,
-   "encounter_chance": 0.0,
-   "location_key": "kornbruck"
+   "encounter_chance": 0.0
   },
   {
    "q": -7,
@@ -11442,8 +11404,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -25,
@@ -11451,8 +11412,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -24,
@@ -11836,8 +11796,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -26,
@@ -11845,9 +11804,7 @@
    "hex_type": "lake",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.08,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]",
-   "location_key": "zatopione_opactwo"
+   "encounter_chance": 0.08
   },
   {
    "q": -25,
@@ -11855,8 +11812,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -24,
@@ -12045,10 +12001,10 @@
   {
    "q": -1,
    "r": 42,
-   "hex_type": "forest",
+   "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.15
   },
   {
    "q": -50,
@@ -12240,8 +12196,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -26,
@@ -12249,8 +12204,7 @@
    "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.1,
-   "encounter_pool": "[\"utopiec_stawowy\", \"topielica_opactwa\"]"
+   "encounter_chance": 0.1
   },
   {
    "q": -25,
@@ -12447,10 +12401,10 @@
   {
    "q": -1,
    "r": 43,
-   "hex_type": "forest",
+   "hex_type": "plains",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.15
   },
   {
    "q": -50,
@@ -14047,7 +14001,7 @@
   {
    "q": -1,
    "r": 47,
-   "hex_type": "hills",
+   "hex_type": "plains",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -20052,14 +20006,5 @@
    "atmosphere": null,
    "encounter_chance": 0.15
   }
- ],
- "q_offset": -50,
- "r_offset": 25,
- "bounds": {
-  "q_min": -50,
-  "q_max": -1,
-  "r_min": 1,
-  "r_max": 74
- },
- "terrain_plan_seed": 1612
+ ]
 }
