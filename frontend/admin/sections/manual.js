@@ -236,6 +236,40 @@ zostanie odpięta.</p>
 w niej być. Traci tylko znacznik na mapie świata.</p>`,
       },
       {
+        id: 'warsztat-mapy',
+        title: 'Warsztat mapy — malowanie, lokacje, kanon (Mapa 2.1)',
+        body: `
+<p>Zakładka <b>Mapa → Mapa</b> to teraz pełnoekranowy warsztat: mapa wypełnia cały kadr, a narzędzia
+<b>pływają</b> nad nią. Trzy tryby przełączasz przyciskami u góry lewego panelu albo klawiszami:</p>
+<ul>
+  <li><b>⬡ Wybierz (V)</b> — klik hexa otwiera panel edycji (szuflada z prawej). Zmieniasz teren, etykietę, atmosferę.</li>
+  <li><b>🖌 Maluj (B)</b> — wybierz teren w legendzie i <b>przeciągnij</b> po mapie, żeby malować.</li>
+  <li><b>★ Lokacje (L)</b> — klik hexa otwiera okno: przypisz istniejącą lokację, <b>➕ utwórz nową tutaj</b>,
+      albo odepnij. Panel „lokacje w kadrze" (lewy dół) listuje widoczne miejsca — klik centruje mapę.</li>
+</ul>
+<h4>Skróty, które oszczędzają czas</h4>
+<ul>
+  <li><b>Przeciągnij</b> mapę zwykłym palcem/myszą (bez Alt) — przesuwasz kadr. <b>Scroll</b> = zoom.</li>
+  <li><b>Shift/Ctrl+klik</b> na hex = <b>próbnik</b>: pobiera teren tego hexa jako pędzel i włącza malowanie.</li>
+  <li><b>Alt+klik</b> na teren w legendzie (albo ikona <b>✎</b>) = edycja tego typu terenu bez zmiany zakładki.</li>
+  <li><b>Ctrl+Z</b> cofnij, <b>Ctrl+Shift+Z</b> ponów.</li>
+  <li><b>⛶</b> (róg mapy) = pełny ekran; <b>minimapa</b> (róg prawy-dolny) — klik = skok w to miejsce.</li>
+</ul>
+<h4>Legenda terenu = rodziny</h4>
+<p>Tereny są pogrupowane w <b>rodziny</b> (Lasy, Góry, Woda, Pustkowia…) z nazwami i próbką koloru.
+Szukajka filtruje po nazwie, a rozwijana lista <b>krainy</b> pokazuje tylko tereny występujące w danej
+krainie — wygodne, gdy malujesz konkretny region.</p>
+<h4>Pieczętowanie kanonu (i dlaczego jest ważne)</h4>
+<p>Twoje malowanie zapisuje się od razu do roboczej bazy, ale to <b>nie</b> czyni go trwałym. Nad
+przyciskiem widnieje status: <b>✓ kanon zgodny</b> albo <b>● N zmian od pieczęci</b>. Klik <b>🖋 Pieczętuj
+kanon</b> utrwala mapę — przeżyje reset i wipe bazy. <b>Dobra wiadomość:</b> od teraz pieczęć
+<b>sama się zapisuje w historii</b> (auto-commit), więc nie musisz o to nikogo prosić.</p>
+<h4>Na telefonie</h4>
+<p>Wersja mobilna to <b>przegląd i korekty</b>: przesuwasz mapę palcem, dwoma palcami zoom, a
+<b>tapnięcie hexa</b> wysuwa od dołu panel edycji — zmieniasz teren z listy i zapisujesz. Malowanie
+dużych obszarów rób na dużym ekranie.</p>`,
+      },
+      {
         id: 'kontrola-swiata',
         title: '🩺 Kontrola świata (lampka zamiast cichej samonaprawy)',
         body: `
