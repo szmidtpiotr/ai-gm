@@ -1676,6 +1676,7 @@ const _ROW_REGISTRY = {
   let _wbPainting = false;        // mid drag-stroke
   let _wbStroke = null;           // Map<"q,r", priorHexCloneOrNull> for current stroke
   let _wbUndoStack = [];          // [{kind:'paint'|'full', items:[{q,r,before}]}]
+  let _wbRedoStack = [];          // MU-6c: symetryczny stos ponów (czyszczony przy nowej edycji)
   let _wbRenderRAF = null;
   let _wbZoom = 1.0;
   let _wbPan = { x: 400, y: 280 };
@@ -2450,14 +2451,17 @@ const _ROW_REGISTRY = {
     if (!items || !items.length) return;
     _wbUndoStack.push({ kind, items });
     if (_wbUndoStack.length > 50) _wbUndoStack.shift();
+    _wbRedoStack = [];          // MU-6c: nowa edycja zrywa gałąź ponów
     _wbUpdateUndoBtn();
   }
 
   function _wbUpdateUndoBtn() {
     const b = document.getElementById('wb-undo');
-    if (!b) return;
-    b.disabled = _wbUndoStack.length === 0;
-    b.textContent = _wbUndoStack.length ? `↶ Cofnij (${_wbUndoStack.length})` : '↶ Cofnij';
+    if (b) { b.disabled = _wbUndoStack.length === 0;
+      b.textContent = _wbUndoStack.length ? `↶ Cofnij (${_wbUndoStack.length})` : '↶ Cofnij'; }
+    const rb = document.getElementById('wb-redo');
+    if (rb) { rb.disabled = _wbRedoStack.length === 0;
+      rb.textContent = _wbRedoStack.length ? `↷ Ponów (${_wbRedoStack.length})` : '↷ Ponów'; }
   }
 
   // Recreate or update a hex so it fully matches `h` (used to undo delete/save).
@@ -2475,29 +2479,54 @@ const _ROW_REGISTRY = {
     _wbTouch();
   }
 
+  // MU-6c: nałóż zestaw stanów `items` (każdy hex → `before` albo usuń gdy before=null),
+  // zwracając ODWROTNOŚĆ (stan sprzed nałożenia) do przeciwnego stosu. Symetryczne dla undo/redo.
+  async function _wbApplyItems(kind, items) {
+    const inverse = items.map(i => { const cur = _wbHexes[_wbKey(i.q, i.r)];
+      return { q: i.q, r: i.r, before: cur ? JSON.parse(JSON.stringify(cur)) : null }; });
+    const restore = items.filter(i => i.before);
+    const remove = items.filter(i => !i.before);
+    if (restore.length && kind === 'paint') {
+      const payload = restore.map(i => ({ q: i.before.q, r: i.before.r, hex_type: i.before.hex_type, encounter_chance: i.before.encounter_chance ?? 0.15 }));
+      const res = await apiFetch('/api/admin/world/hexes/bulk-paint', { method: 'POST', body: JSON.stringify({ hexes: payload }) });
+      for (const h of (res.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
+    } else {
+      for (const i of restore) await _wbRestoreFull(i.before);
+    }
+    for (const i of remove) {
+      await apiFetch(`/api/admin/world/hexes/${i.q}/${i.r}`, { method: 'DELETE' }).catch(() => {});
+      delete _wbHexes[_wbKey(i.q, i.r)];
+    }
+    return inverse;
+  }
+
   async function _wbUndo() {
     const entry = _wbUndoStack.pop();
     _wbUpdateUndoBtn();
     if (!entry) { _showToast('Brak czego cofnąć.', 'info'); return; }
-    const restore = entry.items.filter(i => i.before);
-    const remove = entry.items.filter(i => !i.before);
     try {
-      if (restore.length && entry.kind === 'paint') {
-        const payload = restore.map(i => ({ q: i.before.q, r: i.before.r, hex_type: i.before.hex_type, encounter_chance: i.before.encounter_chance ?? 0.15 }));
-        const res = await apiFetch('/api/admin/world/hexes/bulk-paint', { method: 'POST', body: JSON.stringify({ hexes: payload }) });
-        for (const h of (res.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
-      } else {
-        for (const i of restore) await _wbRestoreFull(i.before);
-      }
-      for (const i of remove) {
-        await apiFetch(`/api/admin/world/hexes/${i.q}/${i.r}`, { method: 'DELETE' }).catch(() => {});
-        delete _wbHexes[_wbKey(i.q, i.r)];
-      }
+      const inverse = await _wbApplyItems(entry.kind, entry.items);
+      _wbRedoStack.push({ kind: entry.kind, items: inverse });
       _wbSelected = null; _wbTouch(); _wbBumpUnsaved(entry.items.length); _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
       _showToast('Cofnięto ostatnią edycję.', 'success');
     } catch(e) {
       _wbUndoStack.push(entry); _wbUpdateUndoBtn();
       _showToast(e.message || 'Błąd cofania', 'error');
+    }
+  }
+
+  async function _wbRedo() {
+    const entry = _wbRedoStack.pop();
+    _wbUpdateUndoBtn();
+    if (!entry) { _showToast('Brak czego ponowić.', 'info'); return; }
+    try {
+      const inverse = await _wbApplyItems(entry.kind, entry.items);
+      _wbUndoStack.push({ kind: entry.kind, items: inverse });
+      _wbSelected = null; _wbTouch(); _wbBumpUnsaved(entry.items.length); _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
+      _showToast('Ponowiono edycję.', 'success');
+    } catch(e) {
+      _wbRedoStack.push(entry); _wbUpdateUndoBtn();
+      _showToast(e.message || 'Błąd ponawiania', 'error');
     }
   }
 
@@ -2762,7 +2791,10 @@ const _ROW_REGISTRY = {
       _wbRender();
     };
     const undoBtn = document.getElementById('wb-undo');
-    if (undoBtn) { undoBtn.onclick = _wbUndo; _wbUpdateUndoBtn(); }
+    if (undoBtn) { undoBtn.onclick = _wbUndo; }
+    const redoBtn = document.getElementById('wb-redo');
+    if (redoBtn) { redoBtn.onclick = _wbRedo; }
+    _wbUpdateUndoBtn();
     _wbUpdateCanonStatus();
     const saveBtn = document.getElementById('wb-save-canon');
     if (saveBtn) saveBtn.onclick = async () => {
@@ -2922,15 +2954,18 @@ const _ROW_REGISTRY = {
         _wbDs = null;
         if (_wbPainting) { _wbPainting = false; _wbCommitStroke(); }
       });
-      // Ctrl/Cmd+Z → undo last edit (only while builder tab is visible, not while typing)
+      // Ctrl/Cmd+Z → cofnij; Ctrl/Cmd+Shift+Z lub Ctrl+Y → ponów (MU-6c).
+      // Tylko gdy zakładka budowniczego widoczna i nie piszemy w polu.
       window.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
-          const root = document.getElementById('wb-root');
-          if (!root || !root.offsetParent) return;          // builder tab not visible
-          const tag = (document.activeElement?.tagName || '').toLowerCase();
-          if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-          e.preventDefault(); _wbUndo();
-        }
+        const isZ = (e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z');
+        const isY = (e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y');
+        if (!isZ && !isY) return;
+        const root = document.getElementById('wb-root');
+        if (!root || !root.offsetParent) return;          // builder tab not visible
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        e.preventDefault();
+        (isY || (isZ && e.shiftKey)) ? _wbRedo() : _wbUndo();
       });
       // Touch: pinch-zoom + 1-finger pan + tap-to-edit (M5)
       let _wbTs = null;
@@ -3556,8 +3591,9 @@ function _sectionHtml() {
                 <button id="wb-mode-select" class="btn btn-sm btn-primary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Zaznacz heks">⬡ Wybierz</button>
                 <button id="wb-mode-paint" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Maluj heksy (przeciągnij)">🖌 Maluj</button>
               </div>
-              <div style="padding:2px 6px 2px">
-                <button id="wb-undo" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
+              <div style="display:flex;gap:3px;padding:2px 6px 2px">
+                <button id="wb-undo" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
+                <button id="wb-redo" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Ponów cofniętą edycję (Ctrl+Shift+Z / Ctrl+Y)" disabled>↷ Ponów</button>
               </div>
               <div style="padding:0 6px 2px">
                 <button id="wb-loc-overlay" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Podświetl heksy z przypiętymi lokacjami (zielone = ma lokację)">📍 Lokacje na mapie</button>
