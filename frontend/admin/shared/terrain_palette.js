@@ -20,6 +20,10 @@ export const TERRAIN_FAMILIES = {
   stepy:       { label: 'Stepy',         base: '#9ca863', icon: '🌾' },
   woda:        { label: 'Woda',          base: '#2f5f88', icon: '🌊' },
   drogi_osady: { label: 'Drogi i osady', base: '#b0863a', icon: '🏘' },
+  // #1551 MU-5 — rodziny terenów specyficznych dla krain (wcześniej „inne”).
+  pustynia:    { label: 'Pustynia',      base: '#c2a86a', icon: '🏜' },
+  pustkowia:   { label: 'Pustkowia',     base: '#6b5f52', icon: '☠' },
+  obiekty:     { label: 'Obiekty',       base: '#8a6a8a', icon: '⚑' },
 };
 
 // ── Typ terenu → { rodzina, jasność, ikona } ─────────────────────────────────
@@ -52,11 +56,14 @@ const TYPE_MAP = {
 
   // — woda —
   water:       { fam: 'woda',  l:  0.00, icon: '🌊' },
-  sea:         { fam: 'woda',  l: -0.10, icon: '🌊' },
+  morze:       { fam: 'woda',  l: -0.18, icon: '🌊' },   // #1551 MU-4/5: kanoniczne morze Kresów
+  sea:         { fam: 'woda',  l: -0.10, icon: '🌊' },   // legacy (0 hexów po MU-4), zostawione dla zgodności
   lake:        { fam: 'woda',  l:  0.12, icon: '💧' },
   river:       { fam: 'woda',  l:  0.08, icon: '💧' },
   brod:        { fam: 'woda',  l:  0.22, icon: '🏞' },
   coast:       { fam: 'woda',  l:  0.20, icon: '🏖' },
+  plycizna:    { fam: 'woda',  l:  0.26, icon: '🌊' },
+  rafy:        { fam: 'woda',  l:  0.05, icon: '🪸' },
 
   // — drogi i osady —
   road:        { fam: 'drogi_osady', l:  0.04, icon: '🛤' },
@@ -65,6 +72,25 @@ const TYPE_MAP = {
   village:     { fam: 'drogi_osady', l:  0.06, icon: '🏠' },
   town:        { fam: 'drogi_osady', l:  0.14, icon: '🏘' },
   city:        { fam: 'drogi_osady', l:  0.22, icon: '🏰' },
+  castle:      { fam: 'drogi_osady', l:  0.28, icon: '🏰' },
+
+  // — stepy: pola uprawne —
+  pola_uprawne:{ fam: 'stepy', l:  0.10, icon: '🌾' },
+
+  // — pustynia (Wybrzeże/pustynne) —
+  desert:      { fam: 'pustynia', l:  0.00, icon: '🏜' },
+  wydmy:       { fam: 'pustynia', l:  0.12, icon: '🏜' },
+
+  // — pustkowia (Martwe Pustkowia) —
+  sol:           { fam: 'pustkowia', l:  0.38, icon: '🧂' },
+  martwa_ziemia: { fam: 'pustkowia', l: -0.10, icon: '☠' },
+
+  // — obiekty / POI (nie-biomy) —
+  cave:        { fam: 'obiekty', l: -0.18, icon: '🕳' },
+  dungeon:     { fam: 'obiekty', l: -0.30, icon: '⚔' },
+
+  // — góry: wulkan —
+  volcanic:    { fam: 'gory',  l: -0.28, icon: '🌋', tint: '#7a2a1a', tintMix: 0.45 },
 };
 
 // ── Helpery kolorów ──────────────────────────────────────────────────────────

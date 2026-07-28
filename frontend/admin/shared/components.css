@@ -1418,11 +1418,31 @@
     .wb-lbl { display: block; font-size: 0.68rem; font-weight: 600; color: var(--t3); letter-spacing: 0.08em; margin: 8px 0 3px; }
     .wb-detail input, .wb-detail select, .wb-detail textarea { width: 100%; box-sizing: border-box; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--t1); padding: 5px 7px; font-size: 0.75rem; }
     .wb-detail textarea { resize: vertical; }
-    .wb-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 4px 6px; }
-    .wb-pb { border: 2px solid transparent; border-radius: 5px; cursor: pointer; padding: 5px 3px; font-size: 1rem; text-align: center; transition: border-color 0.12s; }
-    .wb-pb:hover { border-color: #888; }
-    .wb-pb.active { border-color: #f0c040; }
+    /* #1551 MU-5: paleta = legenda blokowa (rodziny), już nie siatka 2-kol ikon. */
+    .wb-palette { display: block; padding: 2px 0 4px; }
     .wb-hint { font-size: 0.68rem; color: var(--t3); padding: 6px 8px; line-height: 1.6; }
+    /* ── #1551 MU-5: legenda terenu (rodziny + filtr krainy) ─────────────────── */
+    .wb-leg-search { width: calc(100% - 12px); box-sizing: border-box; margin: 2px 6px 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--t1); padding: 4px 7px; font-size: 0.7rem; }
+    .wb-leg-toggle { font-size: 0.62rem; color: var(--t3); padding: 3px 8px 5px; cursor: pointer; user-select: none; }
+    .wb-leg-toggle:hover { color: #f0c040; }
+    .wb-leg-cap { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; color: var(--t3); padding: 2px 2px 3px; }
+    .wb-leg-recent { padding: 0 6px 4px; }
+    .wb-leg-recent-row { display: flex; gap: 3px; flex-wrap: wrap; }
+    .wb-leg-rb { width: 27px; height: 24px; border-radius: 5px; border: 2px solid transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; }
+    .wb-leg-rb:hover { border-color: #888; }
+    .wb-leg-rb.active { border-color: #f0c040; }
+    .wb-leg-fam { margin-top: 1px; }
+    .wb-leg-fam-h { display: flex; align-items: center; gap: 5px; padding: 4px 8px; cursor: pointer; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: var(--t2); text-transform: uppercase; user-select: none; }
+    .wb-leg-fam-h:hover { color: var(--t1); }
+    .wb-leg-fam-h .caret { font-size: 0.58rem; color: var(--t3); width: 8px; flex-shrink: 0; }
+    .wb-leg-fam-h .fcount { margin-left: auto; font-size: 0.6rem; color: var(--t3); font-weight: 600; }
+    .wb-leg-item { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 14px; cursor: pointer; border-left: 2px solid transparent; }
+    .wb-leg-item:hover { background: rgba(255,255,255,0.04); }
+    .wb-leg-item.active { border-left-color: #f0c040; background: rgba(240,192,64,0.10); }
+    .wb-leg-sw { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.45); }
+    .wb-leg-ico { font-size: 0.85rem; width: 15px; text-align: center; flex-shrink: 0; }
+    .wb-leg-name { font-size: 0.68rem; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wb-leg-empty { font-size: 0.64rem; color: var(--t3); padding: 6px 8px; }
     /* ── #834 Mobile hex map ──────────────────────────────────────────────── */
     .mobile-edit-notice {
       display: none;

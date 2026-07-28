@@ -6,7 +6,7 @@
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
 import { confirmDialog, openModal, closeModal } from '../shared/modal.js';
-import { terrainStyle } from '../shared/terrain_palette.js?v=1';
+import { terrainStyle } from '../shared/terrain_palette.js?v=2';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 // Monolit używał _worldLoaded jako cache zakładek mapy — zachowane 1:1 (lokalne dla modułu).
@@ -2633,16 +2633,81 @@ const _ROW_REGISTRY = {
     if (p) p.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować lub puste miejsce aby pomalować.</div>';
   }
 
+  // MU-5 (#1551): legenda terenu — grupy wg RODZIN (terrain_palette.js) z nazwami,
+  // szukajką, filtrem krainy i rzędem „ostatnie”. Zastępuje płaską siatkę 40 ikon.
+  const _WB_FAM_ORDER = ['lasy', 'bagna', 'gory', 'stepy', 'pustynia', 'pustkowia',
+    'woda', 'drogi_osady', 'obiekty', 'inne'];
+  const _WB_FAM_LABEL = { lasy: 'Lasy', bagna: 'Bagna', gory: 'Góry', stepy: 'Stepy',
+    pustynia: 'Pustynia', pustkowia: 'Pustkowia', woda: 'Woda',
+    drogi_osady: 'Drogi i osady', obiekty: 'Obiekty', inne: 'Inne' };
+  let _wbPaletteSearch = '';
+  let _wbPaletteShowAll = false;
+  const _wbPaletteCollapsed = new Set();
+  let _wbRecentTypes = [];
+  try { _wbRecentTypes = JSON.parse(localStorage.getItem('wbRecentTerrain') || '[]') || []; } catch (e) {}
+  function _wbPushRecent(type) {
+    _wbRecentTypes = [type, ..._wbRecentTypes.filter(t => t !== type)].slice(0, 8);
+    try { localStorage.setItem('wbRecentTerrain', JSON.stringify(_wbRecentTypes)); } catch (e) {}
+  }
+  function _wbPaletteStyleFor(type) {
+    const st = terrainStyle(type); const cfg = _wbHexTypes[type] || {};
+    return { color: st ? st.color : (cfg.map_color || '#4a6a4a'),
+             icon: st ? st.icon : (cfg.map_icon || '⬡'),
+             family: st ? st.family : 'inne', label: cfg.label || type };
+  }
+
   function _wbRenderPalette() {
     const pal = document.getElementById('wb-palette');
     if (!pal) return;
-    pal.innerHTML = Object.entries(_wbHexTypes).map(([k,v]) =>
-      `<button class="wb-pb${_wbPaintType === k ? ' active' : ''}" data-type="${k}"
-        style="background:${v.map_color};color:#e8e4dc" title="${_esc(v.label)}">${v.map_icon || '⬡'}</button>`
-    ).join('');
-    pal.querySelectorAll('.wb-pb').forEach(b => b.onclick = () => {
-      _wbPaintType = b.dataset.type === _wbPaintType ? null : b.dataset.type; _wbDrawingTp = null; _wbRenderPalette(); _wbRender();
+    const regionActive = !!_wbActiveRegion;
+    const restrict = regionActive && !_wbPaletteShowAll;
+    const inView = restrict ? new Set(Object.values(_wbHexes).map(h => h.hex_type)) : null;
+    const q = _wbPaletteSearch.trim().toLowerCase();
+    // grupowanie wg rodzin
+    const fams = {};
+    for (const [type, cfg] of Object.entries(_wbHexTypes)) {
+      if (restrict && !inView.has(type)) continue;
+      const s = _wbPaletteStyleFor(type);
+      if (q && !s.label.toLowerCase().includes(q) && !type.toLowerCase().includes(q)) continue;
+      (fams[s.family] ||= []).push({ type, ...s });
+    }
+    let html = '';
+    html += `<input id="wb-leg-search" class="wb-leg-search" placeholder="🔍 Szukaj terenu…" value="${_esc(_wbPaletteSearch)}">`;
+    if (regionActive)
+      html += `<div class="wb-leg-toggle" id="wb-leg-showall">${_wbPaletteShowAll ? '● wszystkie typy — pokaż tylko z krainy' : '○ tylko z tej krainy — pokaż wszystkie'}</div>`;
+    // ostatnio używane
+    const recent = _wbRecentTypes.filter(t => _wbHexTypes[t]).slice(0, 6);
+    if (recent.length && !q) {
+      html += `<div class="wb-leg-recent"><div class="wb-leg-cap">OSTATNIE</div><div class="wb-leg-recent-row">`;
+      for (const t of recent) { const s = _wbPaletteStyleFor(t);
+        html += `<div class="wb-leg-rb${_wbPaintType === t ? ' active' : ''}" data-type="${_esc(t)}" title="${_esc(s.label)}" style="background:${s.color}">${s.icon}</div>`; }
+      html += `</div></div>`;
+    }
+    let any = false;
+    for (const fam of _WB_FAM_ORDER) {
+      const items = fams[fam]; if (!items || !items.length) continue;
+      any = true;
+      items.sort((a, b) => a.label.localeCompare(b.label, 'pl'));
+      const collapsed = _wbPaletteCollapsed.has(fam);
+      html += `<div class="wb-leg-fam"><div class="wb-leg-fam-h" data-fam="${fam}"><span class="caret">${collapsed ? '▸' : '▾'}</span><span>${_WB_FAM_LABEL[fam]}</span><span class="fcount">${items.length}</span></div>`;
+      if (!collapsed) for (const it of items)
+        html += `<div class="wb-leg-item${_wbPaintType === it.type ? ' active' : ''}" data-type="${_esc(it.type)}" title="${_esc(it.label)} — ${_esc(it.type)}"><span class="wb-leg-sw" style="background:${it.color}"></span><span class="wb-leg-ico">${it.icon}</span><span class="wb-leg-name">${_esc(it.label)}</span></div>`;
+      html += `</div>`;
+    }
+    if (!any) html += `<div class="wb-leg-empty">Brak terenów pasujących do filtra.</div>`;
+    pal.innerHTML = html;
+    // wiring legendy
+    const searchEl = document.getElementById('wb-leg-search');
+    if (searchEl) searchEl.oninput = () => { _wbPaletteSearch = searchEl.value; _wbRenderPalette();
+      const s2 = document.getElementById('wb-leg-search'); if (s2) { s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length); } };
+    const showAll = document.getElementById('wb-leg-showall');
+    if (showAll) showAll.onclick = () => { _wbPaletteShowAll = !_wbPaletteShowAll; _wbRenderPalette(); };
+    pal.querySelectorAll('.wb-leg-fam-h').forEach(h => h.onclick = () => {
+      const f = h.dataset.fam; _wbPaletteCollapsed.has(f) ? _wbPaletteCollapsed.delete(f) : _wbPaletteCollapsed.add(f); _wbRenderPalette();
     });
+    const pick = (t) => { _wbPaintType = (t === _wbPaintType ? null : t); if (_wbPaintType) _wbPushRecent(_wbPaintType);
+      _wbDrawingTp = null; _wbRenderPalette(); _wbRender(); };
+    pal.querySelectorAll('.wb-leg-item, .wb-leg-rb').forEach(el => el.onclick = () => pick(el.dataset.type));
     const mSelect = document.getElementById('wb-mode-select');
     const mPaint = document.getElementById('wb-mode-paint');
     if (mSelect && mPaint) {
