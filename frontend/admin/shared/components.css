@@ -1415,8 +1415,8 @@
     /* Lewy pływający panel: narzędzia + legenda terenu */
     .wb-sidebar { position: absolute; top: 10px; left: 10px; z-index: 5; width: 152px;
       max-height: calc(100% - 20px); overflow-y: auto; display: flex; flex-direction: column;
-      background: rgba(20,20,27,0.86); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
-      border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 22px rgba(0,0,0,0.4); }
+      background: rgba(26,29,38,0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; box-shadow: 0 8px 26px rgba(0,0,0,0.55); }
     /* Górny pływający pasek krainy (wyśrodkowany) */
     .wb-region-float { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
       border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.4); max-width: calc(100% - 340px); }
@@ -1424,8 +1424,8 @@
     /* Prawa wysuwana szuflada inspektora hexa */
     .wb-detail { position: absolute; top: 10px; right: 10px; bottom: 10px; z-index: 6; width: 244px;
       overflow-y: auto; padding: 10px 10px; font-size: 0.78rem;
-      background: rgba(20,20,27,0.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+      background: rgba(26,29,38,0.95); backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px);
+      border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; box-shadow: 0 8px 26px rgba(0,0,0,0.55);
       transform: translateX(calc(100% + 24px)); transition: transform 0.18s ease; }
     .wb-detail.open { transform: translateX(0); }
     /* MU-6e: pływający przycisk pełnego ekranu w rogu mapy (zawsze widoczny) */
@@ -1442,6 +1442,24 @@
     .wb-lbl { display: block; font-size: 0.68rem; font-weight: 600; color: var(--t3); letter-spacing: 0.08em; margin: 8px 0 3px; }
     .wb-detail input, .wb-detail select, .wb-detail textarea { width: 100%; box-sizing: border-box; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--t1); padding: 5px 7px; font-size: 0.75rem; }
     .wb-detail textarea { resize: vertical; }
+    /* #1551 MU-6e: panele pływają nad CIEMNĄ mapą, a admin ma JASNY motyw (--t1 ≈ czarny).
+       Wymuszamy JASNY tekst / ciemne pola w panelach — inaczej nazwy terenów znikają. */
+    .wb-sidebar, .wb-detail { color: #e4e0d8; }
+    .wb-sidebar .wb-leg-name { color: #ece8e0; }
+    .wb-sidebar .wb-leg-fam-h { color: #c8c2b4; }
+    .wb-sidebar .wb-leg-fam-h .caret, .wb-sidebar .wb-leg-fam-h .fcount,
+    .wb-sidebar .wb-leg-cap, .wb-sidebar .wb-hint, .wb-sidebar .wb-leg-toggle,
+    .wb-detail .wb-lbl { color: #94907f; }
+    .wb-sidebar .wb-leg-search, .wb-sidebar .wb-leg-region,
+    .wb-detail input, .wb-detail select, .wb-detail textarea {
+      color: #ece8e0; background: rgba(0,0,0,0.34); border-color: rgba(255,255,255,0.14); }
+    .wb-sidebar .wb-leg-search::placeholder { color: #7a756a; }
+    .wb-detail .wb-dh { color: #ece8e0; }
+    /* Edycja typu terenu wprost z legendy (ikona ✎ na hover / Alt+klik) */
+    .wb-leg-item { position: relative; }
+    .wb-leg-edit { margin-left: auto; opacity: 0; font-size: 0.72rem; color: #94907f; padding: 0 2px; flex-shrink: 0; }
+    .wb-leg-item:hover .wb-leg-edit { opacity: 1; }
+    .wb-leg-edit:hover { color: #f0c040; }
     /* #1551 MU-5: paleta = legenda blokowa (rodziny), już nie siatka 2-kol ikon. */
     .wb-palette { display: block; padding: 2px 0 4px; }
     .wb-hint { font-size: 0.68rem; color: var(--t3); padding: 6px 8px; line-height: 1.6; }

@@ -2739,6 +2739,17 @@ const _ROW_REGISTRY = {
     _wbRecentTypes = [type, ..._wbRecentTypes.filter(t => t !== type)].slice(0, 8);
     try { localStorage.setItem('wbRecentTerrain', JSON.stringify(_wbRecentTypes)); } catch (e) {}
   }
+  // MU-6e (#1551): edytuj typ terenu wprost z legendy (Alt+klik / ✎), bez zmiany
+  // zakładki. Dociągamy PEŁNY rekord z hex-terrain-config (jak zakładka Teren),
+  // żeby zapis modala nie nadpisał brakujących pól defaultami (ochrona game config).
+  async function _wbEditTerrain(type) {
+    try {
+      const rows = await apiFetch('/api/admin/world/hex-terrain-config');
+      const items = Array.isArray(rows) ? rows : (rows.items || []);
+      const row = items.find(r => r.hex_type === type);
+      openTerrainFormModal(row || _wbHexTypes[type] || { hex_type: type });
+    } catch (e) { openTerrainFormModal(_wbHexTypes[type] || { hex_type: type }); }
+  }
   function _wbPaletteStyleFor(type) {
     const st = terrainStyle(type); const cfg = _wbHexTypes[type] || {};
     return { color: st ? st.color : (cfg.map_color || '#4a6a4a'),
@@ -2787,7 +2798,7 @@ const _ROW_REGISTRY = {
       const collapsed = _wbPaletteCollapsed.has(fam);
       html += `<div class="wb-leg-fam"><div class="wb-leg-fam-h" data-fam="${fam}"><span class="caret">${collapsed ? '▸' : '▾'}</span><span>${_WB_FAM_LABEL[fam]}</span><span class="fcount">${items.length}</span></div>`;
       if (!collapsed) for (const it of items)
-        html += `<div class="wb-leg-item${_wbPaintType === it.type ? ' active' : ''}" data-type="${_esc(it.type)}" title="${_esc(it.label)} — ${_esc(it.type)}"><span class="wb-leg-sw" style="background:${it.color}"></span><span class="wb-leg-ico">${it.icon}</span><span class="wb-leg-name">${_esc(it.label)}</span></div>`;
+        html += `<div class="wb-leg-item${_wbPaintType === it.type ? ' active' : ''}" data-type="${_esc(it.type)}" title="${_esc(it.label)} — ${_esc(it.type)} · Alt+klik = edytuj teren"><span class="wb-leg-sw" style="background:${it.color}"></span><span class="wb-leg-ico">${it.icon}</span><span class="wb-leg-name">${_esc(it.label)}</span><span class="wb-leg-edit" title="Edytuj typ terenu (Alt+klik)">✎</span></div>`;
       html += `</div>`;
     }
     if (!any) html += `<div class="wb-leg-empty">Brak terenów pasujących do filtra.</div>`;
@@ -2814,7 +2825,11 @@ const _ROW_REGISTRY = {
     });
     const pick = (t) => { _wbPaintType = (t === _wbPaintType ? null : t); if (_wbPaintType) _wbPushRecent(_wbPaintType);
       _wbDrawingTp = null; _wbRenderPalette(); _wbRender(); };
-    pal.querySelectorAll('.wb-leg-item, .wb-leg-rb').forEach(el => el.onclick = () => pick(el.dataset.type));
+    pal.querySelectorAll('.wb-leg-item, .wb-leg-rb').forEach(el => el.onclick = (e) => {
+      // Alt+klik lub ikona ✎ = edytuj typ terenu bez zmiany zakładki (#1551)
+      if ((e.target.classList && e.target.classList.contains('wb-leg-edit')) || e.altKey) { _wbEditTerrain(el.dataset.type); return; }
+      pick(el.dataset.type);
+    });
     const mSelect = document.getElementById('wb-mode-select');
     const mPaint = document.getElementById('wb-mode-paint');
     if (mSelect && mPaint) {
@@ -3647,7 +3662,7 @@ function _sectionHtml() {
               </div>
               <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>
-              <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń mapę<br>Kliknij hex → edytuj<br>Maluj: wybierz typ + przeciągnij<br>Ctrl+Z → cofnij · Scroll → zoom</div>
+              <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń mapę<br>Kliknij hex → edytuj · Scroll → zoom<br>Maluj: wybierz typ + przeciągnij<br>Alt+klik teren (✎) → edytuj typ<br>Ctrl+Z cofnij · Ctrl+Shift+Z ponów</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
               <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
