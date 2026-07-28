@@ -1788,6 +1788,24 @@ const _ROW_REGISTRY = {
   let _wbHexG = null, _wbGhostG = null, _wbTpG = null, _wbIconLayer = null;
   let _wbPixiReady = false, _wbPixiBooting = false, _wbPixiSig = '', _wbPixiRAF = null, _wbKickT = null;
   let _wbDownPt = null;
+  // MU-1 (#1551): licznik wersji danych — bumpowany przy KAŻDEJ mutacji hexów/
+  // lokacji/teleportów. Dzięki temu _wbFlatSig() jest O(1) (nie iteruje 22k hexów
+  // przy każdym mousemove), a pan/zoom nie przebudowuje sceny — tylko kamerę.
+  let _wbDataVersion = 0;
+  function _wbTouch() { _wbDataVersion++; }
+  // MU-1: cache tekstur ikon terenu (emoji). Zamiast tworzyć ~22k PIXI.Text co
+  // przebudowę (każdy rasteryzuje własny canvas = wielosekundowa zwiecha), rasterujemy
+  // każdy glif RAZ do tekstury i klonujemy jako tani Sprite. Reset przy (re)init Pixi.
+  let _wbIconTex = {};
+  const _WB_ICON_BASE = 48;
+  function _wbGetIconTex(char) {
+    if (!_wbIconTex[char] && _wbPixiApp) {
+      const t = new _wbPIXI.Text({ text: char, style: { fontSize: _WB_ICON_BASE } });
+      _wbIconTex[char] = _wbPixiApp.renderer.generateTexture(t);
+      t.destroy();
+    }
+    return _wbIconTex[char] || null;
+  }
 
   function _wbCol(hex) { return parseInt((hex || '#4a6a4a').slice(1), 16); }
   function _wbHexPathG(g, x, y, s) {
@@ -1839,6 +1857,7 @@ const _ROW_REGISTRY = {
         antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1,
         preserveDrawingBuffer: true });   // bez tego canvas WebGL bywa czarny po przebudowie
       _wbPixiApp = app;
+      _wbIconTex = {};   // MU-1: tekstury należą do renderera — świeży app = świeży cache
       _wbPixiRoot = new PIXI.Container(); app.stage.addChild(_wbPixiRoot);
       _wbHexG = new PIXI.Graphics(); _wbGhostG = new PIXI.Graphics();
       _wbTpG = new PIXI.Graphics(); _wbIconLayer = new PIXI.Container();
@@ -1857,15 +1876,14 @@ const _ROW_REGISTRY = {
   }
 
   function _wbFlatSig() {
-    let s = 0; for (const k in _wbHexes) { const h = _wbHexes[k];
-      s = (s * 31 + k.length + (h.hex_type ? h.hex_type.charCodeAt(0) : 0) + (h.label ? 7 : 0)) | 0; }
+    // MU-1: O(1) — treść hexów reprezentuje _wbDataVersion (bump przy mutacji),
+    // więc pan/zoom bez edycji NIE iteruje 22k hexów i nie wyzwala przebudowy.
     const sel = _wbSelected ? _wbSelected.q + ',' + _wbSelected.r : '-';
     const Z = _wbZoom;  // przebudowa tylko przy przekroczeniu progu ODSŁONIĘCIA
     const zb = (Z >= 0.3 ? 1 : 0) + (Z >= 0.35 ? 1 : 0) + (Z >= 0.45 ? 1 : 0)
       + (Z >= 0.5 ? 1 : 0) + (Z >= 0.55 ? 1 : 0) + (Z >= 0.6 ? 1 : 0);
-    return Object.keys(_wbHexes).length + '|' + s + '|' + sel + '|' + _wbPaintType + '|'
-      + (_wbPaintMode ? 1 : 0) + '|' + (_wbShowLocOverlay ? 1 : 0) + '|'
-      + Object.keys(_wbLocations).length + '|' + _wbTeleports.length + '|' + zb;
+    return _wbDataVersion + '|' + sel + '|' + _wbPaintType + '|'
+      + (_wbPaintMode ? 1 : 0) + '|' + (_wbShowLocOverlay ? 1 : 0) + '|' + zb;
   }
 
   function _wbFlatBuild() {
@@ -1898,8 +1916,10 @@ const _ROW_REGISTRY = {
     for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
       const pal = terrainStyle(h.hex_type); const cfg = _wbHexTypes[h.hex_type] || {};
       const icon = pal ? pal.icon : (cfg.map_icon || '');
-      if (Z >= 0.45 && icon) { const t = new PIXI.Text({ text: icon, style: { fontSize: Math.max(9, 13 * Z) / Z } });
-        t.anchor.set(0.5); t.position.set(x, y - S * 0.05); _wbIconLayer.addChild(t); }
+      if (Z >= 0.45 && icon) { const tex = _wbGetIconTex(icon);
+        if (tex) { const sp = new PIXI.Sprite(tex); sp.anchor.set(0.5);
+          sp.scale.set((Math.max(9, 13 * Z) / Z) / _WB_ICON_BASE);
+          sp.position.set(x, y - S * 0.05); _wbIconLayer.addChild(sp); } }
       if (Z >= 0.5 && h.label) { const t = new PIXI.Text({ text: h.label.slice(0, 14), style: { fontSize: Math.max(7, 9 * Z) / Z, fill: 0xc8c0a8 } });
         t.anchor.set(0.5, 0); t.position.set(x, y + S * 0.30); _wbIconLayer.addChild(t); }
     }
@@ -1932,6 +1952,7 @@ const _ROW_REGISTRY = {
     if (sig !== _wbPixiSig && !_wbPixiRAF) {
       _wbPixiRAF = requestAnimationFrame(() => {
         _wbPixiRAF = null; _wbFlatBuild(); _wbPixiSig = _wbFlatSig();
+        if (_wbPixiApp) _wbPixiApp.render();   // MU-1: pokaż od razu, nie czekaj na kick
         clearTimeout(_wbKickT); _wbKickT = setTimeout(_wbPixiKick, 180);
       });
     }
@@ -1963,14 +1984,40 @@ const _ROW_REGISTRY = {
     if (cell) _wbHexClickAt(cell.q, cell.r);
   }
 
+  // MU-1: trwała, przezroczysta powierzchnia zdarzeń (jeden rect skaluje się do 20k).
+  // Utrzymywana zamiast przepisywania svg.innerHTML co klatkę — pan już nie wymusza layoutu.
+  function _wbEnsureEventRect() {
+    const svg = document.getElementById('wb-svg');
+    if (!svg) return;
+    const W = svg.clientWidth || 900, H = svg.clientHeight || 600;
+    const cursor = _wbPaintMode ? 'crosshair' : 'pointer';
+    let rect = svg.firstElementChild;
+    if (!rect || rect.tagName.toLowerCase() !== 'rect') {
+      svg.innerHTML = `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent" style="pointer-events:all;cursor:${cursor}"/>`;
+      return;
+    }
+    if (+rect.getAttribute('width') !== W) rect.setAttribute('width', W);
+    if (+rect.getAttribute('height') !== H) rect.setAttribute('height', H);
+    if (rect.style.cursor !== cursor) rect.style.cursor = cursor;
+  }
+
+  // MU-1: szybka ścieżka pan/zoom — Pixi rusza TYLKO kamerą; scenę przebudowuje
+  // wyłącznie gdy zmieni się sygnatura (próg zoomu / edycja), nie na każdy mousemove.
+  function _wbRenderCamera() {
+    if (_wbEngine !== 'pixi') { _wbRender(); return; }
+    _wbApplyCamera();
+    if (_wbFlatSig() !== _wbPixiSig) _wbRenderPixi();
+    else if (_wbPixiApp) _wbPixiApp.render();
+    const zl = document.getElementById('wb-zoom-label');
+    if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
+  }
+
   function _wbRender() {
     const svg = document.getElementById('wb-svg');
     if (!svg) return;
     if (_wbEngine === 'pixi') {
       _wbRenderPixi();
-      // pusta przezroczysta powierzchnia zdarzeń (jeden rect → skaluje się do 20k)
-      const W = svg.clientWidth || 900, H = svg.clientHeight || 600;
-      svg.innerHTML = `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent" style="pointer-events:all;cursor:${_wbPaintMode ? 'crosshair' : 'pointer'}"/>`;
+      _wbEnsureEventRect();
       const zl = document.getElementById('wb-zoom-label'); if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
       return;
     }
@@ -2233,6 +2280,7 @@ const _ROW_REGISTRY = {
       const lm = await apiFetch('/api/admin/world/locations-map').catch(() => ({ locations: [], pending_count: 0 }));
       _wbLocations = {};
       for (const loc of (lm.locations || [])) _wbLocations[_wbKey(loc.q, loc.r)] = loc;
+      _wbTouch();
       const badge = document.getElementById('map-pending-badge');
       if (badge) { const cnt = lm.pending_count || 0; badge.textContent = cnt ? `${cnt} oczekujące` : ''; badge.style.display = cnt ? '' : 'none'; }
       _wbRender();
@@ -2249,6 +2297,7 @@ const _ROW_REGISTRY = {
       _showToast('Odrzucona.', 'success');
       const k = Object.keys(_wbLocations).find(k2 => _wbLocations[k2].key === key);
       if (k) delete _wbLocations[k];
+      _wbTouch();
       const cnt = Object.values(_wbLocations).filter(l => l.pending).length;
       const badge = document.getElementById('map-pending-badge');
       if (badge) { badge.textContent = cnt ? `${cnt} oczekujące` : ''; badge.style.display = cnt ? '' : 'none'; }
@@ -2297,6 +2346,7 @@ const _ROW_REGISTRY = {
               : (prev ? prev.encounter_chance : 0.15);
     _wbHexes[key] = { ...(prev || { q, r, label: null, atmosphere: null, encounter_pool: [] }),
                       q, r, hex_type: _wbPaintType, encounter_chance: enc };
+    _wbTouch();
     _wbRenderThrottled();
   }
 
@@ -2316,11 +2366,13 @@ const _ROW_REGISTRY = {
     try {
       const res = await apiFetch('/api/admin/world/hexes/bulk-paint', { method: 'POST', body: JSON.stringify({ hexes: payload }) });
       for (const h of (res.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
+      _wbTouch();
       _wbPushUndo('paint', items);
       _wbRender();
       _showToast(`Pomalowano ${payload.length} ${payload.length === 1 ? 'hex' : 'heksów'}.`, 'success');
     } catch(e) {
       for (const it of items) { const k = _wbKey(it.q, it.r); if (it.before) _wbHexes[k] = it.before; else delete _wbHexes[k]; }
+      _wbTouch();
       _wbRender();
       _showToast(e.message || 'Błąd malowania', 'error');
     }
@@ -2362,6 +2414,7 @@ const _ROW_REGISTRY = {
       const res = await apiFetch('/api/admin/world/hexes', { method: 'POST', body: JSON.stringify({ q: h.q, r: h.r, ...body }) });
       _wbHexes[key] = res.hex;
     }
+    _wbTouch();
   }
 
   async function _wbUndo() {
@@ -2382,7 +2435,7 @@ const _ROW_REGISTRY = {
         await apiFetch(`/api/admin/world/hexes/${i.q}/${i.r}`, { method: 'DELETE' }).catch(() => {});
         delete _wbHexes[_wbKey(i.q, i.r)];
       }
-      _wbSelected = null; _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
+      _wbSelected = null; _wbTouch(); _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
       _showToast('Cofnięto ostatnią edycję.', 'success');
     } catch(e) {
       _wbUndoStack.push(entry); _wbUpdateUndoBtn();
@@ -2395,7 +2448,7 @@ const _ROW_REGISTRY = {
     const before = _wbHexes[_wbKey(q, r)] ? JSON.parse(JSON.stringify(_wbHexes[_wbKey(q, r)])) : null;
     try {
       await apiFetch(`/api/admin/world/hexes/${q}/${r}`, { method: 'DELETE' });
-      delete _wbHexes[_wbKey(q, r)]; _wbSelected = null; _wbRender(); _wbClearDetail();
+      delete _wbHexes[_wbKey(q, r)]; _wbSelected = null; _wbTouch(); _wbRender(); _wbClearDetail();
       if (before) _wbPushUndo('full', [{ q, r, before }]);
       _showToast('Hex usunięty.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
@@ -2405,7 +2458,7 @@ const _ROW_REGISTRY = {
     const before = _wbHexes[_wbKey(q, r)] ? JSON.parse(JSON.stringify(_wbHexes[_wbKey(q, r)])) : null;
     try {
       const res = await apiFetch(`/api/admin/world/hexes/${q}/${r}`, { method: 'PATCH', body: JSON.stringify(updates) });
-      _wbHexes[_wbKey(q, r)] = res.hex; _wbRender(); _wbRenderDetail(res.hex);
+      _wbHexes[_wbKey(q, r)] = res.hex; _wbTouch(); _wbRender(); _wbRenderDetail(res.hex);
       if (before) _wbPushUndo('full', [{ q, r, before }]);
       _showToast('Zapisano.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
@@ -2419,7 +2472,7 @@ const _ROW_REGISTRY = {
       const res = await apiFetch('/api/admin/world/teleport-connections', {
         method: 'POST', body: JSON.stringify({ from_q: fq, from_r: fr, to_q: tq, to_r: tr, travel_type: type, travel_hours: hours, label })
       });
-      _wbTeleports.push(res.connection); _wbRender();
+      _wbTeleports.push(res.connection); _wbTouch(); _wbRender();
       _showToast(`Połączenie ${type} dodane.`, 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
   }
@@ -2513,7 +2566,7 @@ const _ROW_REGISTRY = {
       try {
         await apiFetch(`/api/admin/world/teleport-connections/${id}`, { method: 'DELETE' });
         _wbTeleports = _wbTeleports.filter(t => t.id !== id);
-        _wbRender(); _wbRenderDetail(_wbHexes[_wbKey(hex.q, hex.r)]);
+        _wbTouch(); _wbRender(); _wbRenderDetail(_wbHexes[_wbKey(hex.q, hex.r)]);
         _showToast('Połączenie usunięte.', 'success');
       } catch(e) { _showToast(e.message, 'error'); }
     });
@@ -2612,6 +2665,7 @@ const _ROW_REGISTRY = {
     for (const h of (m.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
     _wbTeleports = m.teleport_connections || [];
     if (m.regions && m.regions.length) _wbRegions = m.regions;
+    _wbTouch();
     _wbUndoStack = [];
     _wbUpdateUndoBtn();
     const svg = document.getElementById('wb-svg');
@@ -2663,6 +2717,7 @@ const _ROW_REGISTRY = {
       for (const ht of (t.hex_types || [])) _wbHexTypes[ht.hex_type] = ht;
       _wbLocations = {};
       for (const loc of (lm.locations || [])) _wbLocations[_wbKey(loc.q, loc.r)] = loc;
+      _wbTouch();
       const badge = document.getElementById('map-pending-badge');
       if (badge) {
         const cnt = lm.pending_count || 0;
@@ -2687,7 +2742,7 @@ const _ROW_REGISTRY = {
       const nz = Math.max(0.12, Math.min(5, _wbZoom * f));
       _wbPan.x = mx - (mx - _wbPan.x) * (nz / _wbZoom);
       _wbPan.y = my - (my - _wbPan.y) * (nz / _wbZoom);
-      _wbZoom = nz; _wbRender();
+      _wbZoom = nz; _wbRenderCamera();
     }, { passive: false });
 
     // Pan drag (alt/middle) + paint drag (left button in paint mode). Wired once per svg.
@@ -2707,7 +2762,7 @@ const _ROW_REGISTRY = {
         }
       });
       window.addEventListener('mousemove', (e) => {
-        if (_wbDs) { _wbPan = { x: e.clientX - _wbDs.x, y: e.clientY - _wbDs.y }; _wbRender(); return; }
+        if (_wbDs) { _wbPan = { x: e.clientX - _wbDs.x, y: e.clientY - _wbDs.y }; _wbRenderCamera(); return; }
         if (_wbPainting) { const c = _wbHexUnderPoint(e.clientX, e.clientY); if (c) _wbPaintCell(c.q, c.r); }
       });
       window.addEventListener('mouseup', () => {
@@ -2749,7 +2804,7 @@ const _ROW_REGISTRY = {
           const dy = e.touches[0].clientY - _wbTs.y;
           if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _wbTs.moved = true;
           _wbPan = { x: _wbTs.px + dx, y: _wbTs.py + dy };
-          _wbRender();
+          _wbRenderCamera();
         } else if (_wbTs.type === 'pinch' && e.touches.length === 2) {
           const dx = e.touches[1].clientX - e.touches[0].clientX;
           const dy = e.touches[1].clientY - e.touches[0].clientY;
@@ -2758,7 +2813,7 @@ const _ROW_REGISTRY = {
           _wbPan.x = _wbTs.midX - (_wbTs.midX - _wbTs.px) * (nz / _wbTs.zoom);
           _wbPan.y = _wbTs.midY - (_wbTs.midY - _wbTs.py) * (nz / _wbTs.zoom);
           _wbZoom = nz;
-          _wbRender();
+          _wbRenderCamera();
         }
       }, { passive: false });
       svg.addEventListener('touchend', (e) => {
