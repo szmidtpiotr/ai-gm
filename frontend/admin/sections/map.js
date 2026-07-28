@@ -2088,6 +2088,7 @@ const _ROW_REGISTRY = {
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
     if (_wbLocateMode) { clearTimeout(_wbLvpT); _wbLvpT = setTimeout(_wbRenderViewportLocs, 130); }  // MU-7d: odśwież po panie
+    _wbRenderMinimap();   // MU-8: prostokąt viewportu (baza gated wersją — pan nie przerysowuje kropek)
   }
 
   function _wbRender() {
@@ -2097,7 +2098,7 @@ const _ROW_REGISTRY = {
       _wbRenderPixi(_wbNeedsCullRebuild());   // MU-2: wymuś rebuild gdy viewport wyszedł poza zbudowany obszar
       _wbEnsureEventRect();
       const zl = document.getElementById('wb-zoom-label'); if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
-      _wbRenderViewportLocs();
+      _wbRenderViewportLocs(); _wbRenderMinimap();
       return;
     }
     let html = '';
@@ -2195,7 +2196,7 @@ const _ROW_REGISTRY = {
     svg.querySelectorAll('.wloc-marker').forEach(el => el.addEventListener('click', _wbOnLocMarkerClick));
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
-    _wbRenderViewportLocs();
+    _wbRenderViewportLocs(); _wbRenderMinimap();
   }
 
   async function _wbOnHexClick(e) {
@@ -2223,6 +2224,51 @@ const _ROW_REGISTRY = {
     _wbLocateMode = mode === 'locate';
     if (_wbLocateMode) _wbShowLocOverlay = true;   // pokaż heksy z lokacjami
     _wbRenderPalette(); _wbRender(); _wbRenderViewportLocs();
+  }
+
+  // MU-8: minimapa świata. Baza (kropki hexów) rysowana RAZ i przerysowywana tylko
+  // przy zmianie danych (_wbDataVersion); prostokąt viewportu updatowany co pan (tanie).
+  let _wbMmVersion = -1, _wbMmBox = null;
+  function _wbRenderMinimap() {
+    const wrap = document.getElementById('wb-minimap');
+    const cv = document.getElementById('wb-mm-canvas');
+    const view = document.getElementById('wb-mm-view');
+    if (!wrap || !cv || !view) return;
+    const hexes = Object.values(_wbHexes);
+    if (!hexes.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    const cw = cv.width, ch = cv.height;
+    if (_wbMmVersion !== _wbDataVersion || !_wbMmBox) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const h of hexes) { const p = _wbHexToPixel(h.q, h.r);
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+      const wW = (maxX - minX) || 1, wH = (maxY - minY) || 1;
+      const scale = Math.min(cw / (wW + 40), ch / (wH + 40));
+      const ox = (cw - wW * scale) / 2 - minX * scale, oy = (ch - wH * scale) / 2 - minY * scale;
+      _wbMmBox = { scale, ox, oy, cw, ch };
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#0e1a26'; ctx.fillRect(0, 0, cw, ch);
+      for (const h of hexes) { const p = _wbHexToPixel(h.q, h.r); const st = terrainStyle(h.hex_type);
+        ctx.fillStyle = st ? st.color : ((_wbHexTypes[h.hex_type] || {}).map_color || '#4a6a4a');
+        ctx.fillRect((p.x * scale + ox) | 0, (p.y * scale + oy) | 0, 2, 2); }
+      _wbMmVersion = _wbDataVersion;
+    }
+    const b = _wbMmBox, v = _wbVisibleWorldRect();
+    const rx = v.minX * b.scale + b.ox, ry = v.minY * b.scale + b.oy;
+    const rw = (v.maxX - v.minX) * b.scale, rh = (v.maxY - v.minY) * b.scale;
+    view.style.left = Math.max(0, Math.min(cw, rx)) + 'px';
+    view.style.top = Math.max(0, Math.min(ch, ry)) + 'px';
+    view.style.width = Math.max(3, Math.min(cw, rw)) + 'px';
+    view.style.height = Math.max(3, Math.min(ch, rh)) + 'px';
+    cv.onclick = (e) => {
+      const r = cv.getBoundingClientRect();
+      const wx = ((e.clientX - r.left) * (cw / r.width) - b.ox) / b.scale;
+      const wy = ((e.clientY - r.top) * (ch / r.height) - b.oy) / b.scale;
+      const svg = document.getElementById('wb-svg');
+      const W = (svg && svg.clientWidth) || 900, H = (svg && svg.clientHeight) || 600;
+      _wbPan = { x: W / 2 - wx * _wbZoom, y: H / 2 - wy * _wbZoom }; _wbRender();
+    };
   }
 
   // MU-7d: panel lokacji widocznych w kadrze (tylko tryb Lokacje). Klik = wyśrodkuj.
@@ -3849,6 +3895,11 @@ function _sectionHtml() {
             <button id="wb-fullscreen" class="wb-fs-float" onclick="wbToggleFullscreen()" title="Pełny ekran — mapa na cały monitor (Esc wychodzi)">⛶</button>
             <!-- MU-7d: panel „lokacje w kadrze" (tylko w trybie Lokacje) -->
             <div id="wb-loc-viewport" class="wb-loc-viewport" style="display:none"></div>
+            <!-- MU-8: minimapa świata (prawy-dolny róg) — klik = skok -->
+            <div id="wb-minimap" class="wb-minimap" style="display:none" title="Minimapa — kliknij aby skoczyć">
+              <canvas id="wb-mm-canvas" width="184" height="136"></canvas>
+              <div id="wb-mm-view" class="wb-mm-view"></div>
+            </div>
             <div class="wb-detail" id="wb-detail">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować.</div>
             </div>

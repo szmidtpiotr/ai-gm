@@ -1443,6 +1443,13 @@
     .wb-lvp-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; cursor: pointer; border-radius: 6px; color: #e4e0d8; font-size: 0.72rem; }
     .wb-lvp-item:hover { background: rgba(240,192,64,0.12); }
     .wb-lvp-empty { font-size: 0.66rem; color: #94907f; padding: 6px 8px; }
+    /* MU-8: minimapa świata (prawy-dolny róg) */
+    .wb-minimap { position: absolute; right: 10px; bottom: 10px; z-index: 5; padding: 0; line-height: 0;
+      background: rgba(26,29,38,0.94); border: 1px solid rgba(255,255,255,0.10); border-radius: 8px;
+      box-shadow: 0 8px 26px rgba(0,0,0,0.55); overflow: hidden; }
+    .wb-minimap canvas { display: block; cursor: crosshair; }
+    .wb-mm-view { position: absolute; border: 1.5px solid #f0c040; background: rgba(240,192,64,0.12);
+      pointer-events: none; border-radius: 2px; box-sizing: border-box; }
     /* MU-6e: pełny ekran — mapa na cały monitor, bez chromu admina */
     .wb-layout:fullscreen { height: 100vh; border-radius: 0; background: #0e1a26; }
     .wb-layout:-webkit-full-screen { height: 100vh; border-radius: 0; background: #0e1a26; }
