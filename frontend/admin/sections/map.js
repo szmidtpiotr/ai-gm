@@ -1798,6 +1798,24 @@ const _ROW_REGISTRY = {
   // każdy glif RAZ do tekstury i klonujemy jako tani Sprite. Reset przy (re)init Pixi.
   let _wbIconTex = {};
   const _WB_ICON_BASE = 48;
+  // MU-2 (#1551): culling do viewportu. Scena buduje TYLKO hexy w widocznym
+  // prostokącie powiększonym o margines (pad = 1 viewport z każdej strony), więc
+  // przy zoomie na krainę rysujemy setki zamiast 22,5k. Przebudowa dopiero gdy pan
+  // wyjedzie poza zbudowany obszar — drobny pan zostaje camera-only (MU-1).
+  let _wbBuiltBounds = null;   // {minX,maxX,minY,maxY} w świecie — realnie zbudowany (padded) obszar
+  function _wbVisibleWorldRect() {
+    const svg = document.getElementById('wb-svg');
+    const W = (svg && svg.clientWidth) || 900, H = (svg && svg.clientHeight) || 600;
+    return {
+      minX: (0 - _wbPan.x) / _wbZoom, maxX: (W - _wbPan.x) / _wbZoom,
+      minY: (0 - _wbPan.y) / _wbZoom, maxY: (H - _wbPan.y) / _wbZoom, W, H,
+    };
+  }
+  function _wbNeedsCullRebuild() {
+    if (!_wbBuiltBounds) return true;
+    const v = _wbVisibleWorldRect(), b = _wbBuiltBounds;
+    return v.minX < b.minX || v.maxX > b.maxX || v.minY < b.minY || v.maxY > b.maxY;
+  }
   function _wbGetIconTex(char) {
     if (!_wbIconTex[char] && _wbPixiApp) {
       const t = new _wbPIXI.Text({ text: char, style: { fontSize: _WB_ICON_BASE } });
@@ -1891,12 +1909,20 @@ const _ROW_REGISTRY = {
     const PIXI = _wbPIXI, S = _WB_SIZE, Z = _wbZoom;
     _wbHexG.clear(); _wbGhostG.clear(); _wbTpG.clear(); _wbIconLayer.removeChildren();
     const hexes = Object.values(_wbHexes);
+    // MU-2: padded viewport (pad = 1 viewport z każdej strony) → zbudowany obszar.
+    const v = _wbVisibleWorldRect();
+    const padX = (v.maxX - v.minX) || S, padY = (v.maxY - v.minY) || S;
+    const bMinX = v.minX - padX, bMaxX = v.maxX + padX, bMinY = v.minY - padY, bMaxY = v.maxY + padY;
+    _wbBuiltBounds = { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY };
+    const inView = (x, y) => x >= bMinX && x <= bMaxX && y >= bMinY && y <= bMaxY;
     // fills
     for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      if (!inView(x, y)) continue;
       const pal = terrainStyle(h.hex_type); const cfg = _wbHexTypes[h.hex_type] || {};
       _wbHexPathG(_wbHexG, x, y, S - 1); _wbHexG.fill(_wbCol(pal ? pal.color : (cfg.map_color || '#4a6a4a'))); }
     // strokes + loc overlay (per hex — sel/loc/paint-type/default, jak w SVG)
     for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      if (!inView(x, y)) continue;
       const sel = _wbSelected && _wbSelected.q === h.q && _wbSelected.r === h.r;
       const hl = !sel && _wbPaintType && h.hex_type === _wbPaintType;
       const hasLoc = _wbShowLocOverlay && !!_wbLocations[_wbKey(h.q, h.r)];
@@ -1909,11 +1935,12 @@ const _ROW_REGISTRY = {
     if (Z >= 0.3) {
       const placed = new Set(Object.keys(_wbHexes)); const ghosts = new Set();
       for (const h of hexes) for (const n of _wbNeighbors(h.q, h.r)) { const kk = _wbKey(n.q, n.r); if (!placed.has(kk)) ghosts.add(kk); }
-      for (const k of ghosts) { const [q, r] = k.split(',').map(Number); const { x, y } = _wbHexToPixel(q, r); _wbHexPathG(_wbGhostG, x, y, S - 1); }
+      for (const k of ghosts) { const [q, r] = k.split(',').map(Number); const { x, y } = _wbHexToPixel(q, r); if (!inView(x, y)) continue; _wbHexPathG(_wbGhostG, x, y, S - 1); }
       _wbGhostG.stroke({ width: 0.6 / Z, color: 0x2a2a3a, alpha: 0.7 });
     }
     // ikony + etykiety terenu (rozmiar świata dobrany tak, by ekran ≈ SVG)
     for (const h of hexes) { const { x, y } = _wbHexToPixel(h.q, h.r);
+      if (!inView(x, y)) continue;
       const pal = terrainStyle(h.hex_type); const cfg = _wbHexTypes[h.hex_type] || {};
       const icon = pal ? pal.icon : (cfg.map_icon || '');
       if (Z >= 0.45 && icon) { const tex = _wbGetIconTex(icon);
@@ -1937,6 +1964,7 @@ const _ROW_REGISTRY = {
     // znaczniki lokacji ★ / ◈
     if (Z >= 0.35) {
       for (const loc of Object.values(_wbLocations)) { const { x, y } = _wbHexToPixel(loc.q, loc.r);
+        if (!inView(x, y)) continue;
         const pending = loc.pending; const col = pending ? 0x888888 : 0xf0c040;
         const t = new PIXI.Text({ text: pending ? '◈' : '★', style: { fontSize: Math.max(8, 14 * Z) / Z, fill: col } });
         t.anchor.set(0.5); t.alpha = pending ? 0.55 : 1; t.position.set(x, y - S * 0.25); _wbIconLayer.addChild(t);
@@ -1945,11 +1973,12 @@ const _ROW_REGISTRY = {
     }
   }
 
-  function _wbRenderPixi() {
+  function _wbRenderPixi(force) {
     if (!_wbPixiReady) { _wbPixiInit(); return; }
     _wbApplyCamera();
     const sig = _wbFlatSig();
-    if (sig !== _wbPixiSig && !_wbPixiRAF) {
+    // MU-2: force = pan wyjechał poza zbudowany (padded) obszar → przebuduj cull.
+    if ((force || sig !== _wbPixiSig) && !_wbPixiRAF) {
       _wbPixiRAF = requestAnimationFrame(() => {
         _wbPixiRAF = null; _wbFlatBuild(); _wbPixiSig = _wbFlatSig();
         if (_wbPixiApp) _wbPixiApp.render();   // MU-1: pokaż od razu, nie czekaj na kick
@@ -2007,6 +2036,7 @@ const _ROW_REGISTRY = {
     if (_wbEngine !== 'pixi') { _wbRender(); return; }
     _wbApplyCamera();
     if (_wbFlatSig() !== _wbPixiSig) _wbRenderPixi();
+    else if (_wbNeedsCullRebuild()) _wbRenderPixi(true);   // MU-2: pan wyjechał za margines
     else if (_wbPixiApp) _wbPixiApp.render();
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
@@ -2016,16 +2046,21 @@ const _ROW_REGISTRY = {
     const svg = document.getElementById('wb-svg');
     if (!svg) return;
     if (_wbEngine === 'pixi') {
-      _wbRenderPixi();
+      _wbRenderPixi(_wbNeedsCullRebuild());   // MU-2: wymuś rebuild gdy viewport wyszedł poza zbudowany obszar
       _wbEnsureEventRect();
       const zl = document.getElementById('wb-zoom-label'); if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
       return;
     }
     let html = '';
+    // MU-2: cull ekranowy (SVG rebuduje pełne DOM co pan → pomijamy hexy poza viewportem).
+    const _svgW = svg.clientWidth || 900, _svgH = svg.clientHeight || 600;
+    const _cm = _WB_SIZE * _wbZoom * 2;
+    const _inScr = (sx, sy) => sx >= -_cm && sx <= _svgW + _cm && sy >= -_cm && sy <= _svgH + _cm;
 
     for (const hex of Object.values(_wbHexes)) {
       const { x, y } = _wbHexToPixel(hex.q, hex.r);
       const { x:sx, y:sy } = _wbWs(x, y);
+      if (!_inScr(sx, sy)) continue;
       const rz = _WB_SIZE * _wbZoom;
       const cfg = _wbHexTypes[hex.hex_type] || { map_color:'#4a6a4a', map_icon:'' };
       // M-2a (#1542): kolor/ikona z palety RODZIN terenu; fallback = baza z DB.
@@ -2061,6 +2096,7 @@ const _ROW_REGISTRY = {
         const [q, r] = k.split(',').map(Number);
         const { x, y } = _wbHexToPixel(q, r);
         const { x:sx, y:sy } = _wbWs(x, y);
+        if (!_inScr(sx, sy)) continue;
         html += `<polygon class="whg" data-q="${q}" data-r="${r}"
           points="${_wbHexCorners(sx, sy, _WB_SIZE * _wbZoom - 1)}"
           fill="transparent" stroke="#2a2a3a" stroke-width="0.5" stroke-dasharray="3,3"
@@ -2087,6 +2123,7 @@ const _ROW_REGISTRY = {
       for (const loc of Object.values(_wbLocations)) {
         const { x, y } = _wbHexToPixel(loc.q, loc.r);
         const { x:sx, y:sy } = _wbWs(x, y);
+        if (!_inScr(sx, sy)) continue;
         const rz = _WB_SIZE * _wbZoom;
         const pending = loc.pending;
         const markerColor = pending ? '#888' : '#f0c040';
