@@ -1671,6 +1671,7 @@ const _ROW_REGISTRY = {
   let _wbSelected = null;
   let _wbPaintType = 'forest';
   let _wbPaintMode = false;
+  let _wbLocateMode = false;     // MU-7b: tryb Lokacje — klik hexa przypisuje/tworzy lokację
   let _wbShowLocOverlay = false; // toggle: highlight hexes with locations
   let _wbDrawingTp = null;
   let _wbPainting = false;        // mid drag-stroke
@@ -2213,7 +2214,82 @@ const _ROW_REGISTRY = {
     return true;
   }
 
+  // MU-7b (#1551): przełącznik trybu Wybierz / Maluj / Lokacje.
+  function _wbSetMode(mode) {
+    _wbPaintMode = mode === 'paint';
+    _wbLocateMode = mode === 'locate';
+    if (_wbLocateMode) _wbShowLocOverlay = true;   // pokaż heksy z lokacjami
+    _wbRenderPalette(); _wbRender();
+  }
+
+  async function _wbReloadLocations() {
+    const lm = await apiFetch('/api/admin/world/locations-map').catch(() => ({ locations: [] }));
+    _wbLocations = {};
+    for (const loc of (lm.locations || [])) _wbLocations[_wbKey(loc.q, loc.r)] = loc;
+    _wbTouch();
+  }
+  async function _wbAssignLoc(key, q, r, overlay) {
+    try {
+      await apiFetch('/api/locations/admin/locations/' + encodeURIComponent(key),
+        { method: 'PATCH', body: JSON.stringify({ world_hex_q: q, world_hex_r: r }) });
+      await _wbReloadLocations();
+      if (overlay) overlay.remove();
+      _wbRender();
+      _showToast('Lokacja przypisana do hexa.', 'success');
+    } catch (e) { _showToast(e.message || 'Błąd przypisania', 'error'); }
+  }
+  async function _wbUnpinLoc(key, overlay) {
+    try {
+      await apiFetch('/api/locations/admin/locations/' + encodeURIComponent(key),
+        { method: 'PATCH', body: JSON.stringify({ world_hex_q: null, world_hex_r: null }) });
+      await _wbReloadLocations();
+      if (overlay) overlay.remove();
+      _wbRender();
+      _showToast('Lokacja odpięta od hexa.', 'success');
+    } catch (e) { _showToast(e.message || 'Błąd odpięcia', 'error'); }
+  }
+  // Modal przypisania: obecna lokacja + odpnij + szukajka istniejących → „Tutaj”.
+  async function _wbOpenAssignModal(q, r) {
+    const current = _wbLocations[_wbKey(q, r)];
+    let all = [];
+    try { const d = await apiFetch('/api/locations'); all = Array.isArray(d) ? d : (d.locations || d.items || []); } catch (e) {}
+    const placedByKey = {};
+    for (const k in _wbLocations) placedByKey[_wbLocations[k].key] = _wbLocations[k];
+    const rows = all.map(l => {
+      const pl = placedByKey[l.key];
+      const where = pl ? ` <span style="color:#f0c040;font-size:0.62rem">★ (${pl.q},${pl.r})</span>` : '';
+      return `<div class="wb-assign-row" data-label="${_esc((l.label || l.key).toLowerCase())}"
+        style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-bottom:1px solid var(--border)">
+        <span style="flex:1;font-size:0.8rem">${_esc(l.label || l.key)}${where}</span>
+        <button class="btn btn-sm btn-primary wb-assign-btn" data-key="${_esc(l.key)}" style="font-size:0.68rem;padding:3px 8px">Tutaj</button></div>`;
+    }).join('');
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:460px;max-height:82vh;display:flex;flex-direction:column">
+      <div class="modal-head"><span>★ Lokacja na hexie (${q},${r})</span><button onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body" style="overflow:auto;flex:1">
+        ${current ? `<div style="padding:8px;border:1px solid #4a7a4a;border-radius:6px;margin-bottom:10px;background:rgba(74,222,128,0.08)">
+          <div style="font-weight:600">${_esc(current.label || current.key)}</div>
+          <div style="font-size:0.72rem;color:var(--t3)">Przypisana tutaj</div>
+          <button class="btn btn-sm btn-danger" id="wb-unpin" style="margin-top:6px;font-size:0.68rem">✕ Odepnij od hexa</button>
+        </div>` : '<div style="font-size:0.78rem;color:var(--t3);margin-bottom:8px">Brak lokacji na tym hexie. Wybierz z listy → „Tutaj”.</div>'}
+        <input id="wb-assign-search" class="field-input" placeholder="🔍 Szukaj lokacji…" style="width:100%;box-sizing:border-box;margin-bottom:8px"/>
+        <div id="wb-assign-list">${rows}</div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Zamknij</button></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const search = overlay.querySelector('#wb-assign-search');
+    search.oninput = () => { const s = search.value.toLowerCase();
+      overlay.querySelectorAll('.wb-assign-row').forEach(row => { row.style.display = row.dataset.label.includes(s) ? '' : 'none'; }); };
+    overlay.querySelectorAll('.wb-assign-btn').forEach(b => b.onclick = () => _wbAssignLoc(b.dataset.key, q, r, overlay));
+    const unpin = overlay.querySelector('#wb-unpin');
+    if (unpin && current) unpin.onclick = () => _wbUnpinLoc(current.key, overlay);
+    setTimeout(() => search.focus(), 50);
+  }
+
   async function _wbHexClickAt(q, r) {
+    if (_wbLocateMode) { _wbOpenAssignModal(q, r); return; }   // MU-7b: tryb Lokacje
     if (_wbDrawingTp) {
       if (_wbDrawingTp.q === q && _wbDrawingTp.r === r) {
         _wbDrawingTp = null; _showToast('Anulowano.', 'info'); return;
@@ -2846,11 +2922,15 @@ const _ROW_REGISTRY = {
     });
     const mSelect = document.getElementById('wb-mode-select');
     const mPaint = document.getElementById('wb-mode-paint');
-    if (mSelect && mPaint) {
-      mSelect.className = `btn btn-sm ${!_wbPaintMode ? 'btn-primary' : 'btn-secondary'}`;
-      mPaint.className = `btn btn-sm ${_wbPaintMode ? 'btn-primary' : 'btn-secondary'}`;
-      mSelect.onclick = () => { _wbPaintMode = false; _wbRenderPalette(); _wbRender(); };
-      mPaint.onclick = () => { _wbPaintMode = true; _wbRenderPalette(); _wbRender(); };
+    const mLocate = document.getElementById('wb-mode-locate');
+    if (mSelect && mPaint && mLocate) {
+      const cur = _wbPaintMode ? 'paint' : (_wbLocateMode ? 'locate' : 'select');
+      mSelect.className = `btn btn-sm ${cur === 'select' ? 'btn-primary' : 'btn-secondary'}`;
+      mPaint.className = `btn btn-sm ${cur === 'paint' ? 'btn-primary' : 'btn-secondary'}`;
+      mLocate.className = `btn btn-sm ${cur === 'locate' ? 'btn-primary' : 'btn-secondary'}`;
+      mSelect.onclick = () => _wbSetMode('select');
+      mPaint.onclick = () => _wbSetMode('paint');
+      mLocate.onclick = () => _wbSetMode('locate');
     }
     const locOverlayBtn = document.getElementById('wb-loc-overlay');
     if (locOverlayBtn) locOverlayBtn.onclick = () => {
@@ -3040,6 +3120,18 @@ const _ROW_REGISTRY = {
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         e.preventDefault();
         (isY || (isZ && e.shiftKey)) ? _wbRedo() : _wbUndo();
+      });
+      // MU-7b: skróty trybów V=Wybierz / B=Maluj / L=Lokacje (poza polami tekstowymi).
+      window.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const k = (e.key || '').toLowerCase();
+        if (k !== 'v' && k !== 'b' && k !== 'l') return;
+        const root = document.getElementById('wb-root');
+        if (!root || !root.offsetParent) return;
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        e.preventDefault();
+        _wbSetMode(k === 'b' ? 'paint' : (k === 'l' ? 'locate' : 'select'));
       });
       // Touch: pinch-zoom + 1-finger pan + tap-to-edit (M5)
       let _wbTs = null;
@@ -3662,8 +3754,9 @@ function _sectionHtml() {
           <div class="wb-layout" id="wb-root">
             <div class="wb-sidebar" id="wb-sidebar">
               <div style="display:flex;gap:3px;padding:6px 6px 2px">
-                <button id="wb-mode-select" class="btn btn-sm btn-primary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Zaznacz heks">⬡ Wybierz</button>
-                <button id="wb-mode-paint" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Maluj heksy (przeciągnij)">🖌 Maluj</button>
+                <button id="wb-mode-select" class="btn btn-sm btn-primary" style="flex:1;font-size:0.66rem;padding:4px 2px" title="Zaznacz heks (V)">⬡ Wybierz</button>
+                <button id="wb-mode-paint" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.66rem;padding:4px 2px" title="Maluj heksy — przeciągnij (B)">🖌 Maluj</button>
+                <button id="wb-mode-locate" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.66rem;padding:4px 2px" title="Przypisz/utwórz lokację na hexie (L)">★ Lokacje</button>
               </div>
               <div style="display:flex;gap:3px;padding:2px 6px 2px">
                 <button id="wb-undo" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
