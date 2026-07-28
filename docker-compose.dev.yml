@@ -86,7 +86,7 @@ services:
       # Game mechanics documentation
       - ./game_mechanics.md:/app/game_mechanics.md:ro
       # Pliki DLC krain (region_*.json) — RM5 FAZA RM; read-only, git-tracked
-      - ./data/regions:/data/regions:ro
+      - ./data/regions:/data/regions:rw   # #1551: „Pieczętuj kanon" musi pisać region_*.json (było :ro → HTTP 500)
       # Dungeon tile images — shared with frontend nginx (served at /images/tiles/)
       - ./frontend/images/tiles:/app/tiles:rw
       # Showcase CMS data — backend writes here, nginx serves from frontend mount (#920 W15)

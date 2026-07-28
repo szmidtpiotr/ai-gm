@@ -2199,6 +2199,20 @@ const _ROW_REGISTRY = {
     _wbHexClickAt(parseInt(e.target.dataset.q), parseInt(e.target.dataset.r));
   }
 
+  // MU-6f (#1551): próbnik terenu — Shift/Ctrl+klik na hex pobiera jego typ terenu
+  // jako pędzel i przełącza w tryb malowania. Działa niezależnie od silnika.
+  function _wbEyedrop(q, r) {
+    const h = _wbHexes[_wbKey(q, r)];
+    if (!h || !h.hex_type) return false;
+    _wbPaintType = h.hex_type;
+    _wbPaintMode = true;
+    _wbPushRecent(h.hex_type);
+    _wbRenderPalette();
+    _wbRender();
+    _showToast(`Pobrano teren: ${_wbHexTypes[h.hex_type]?.label || h.hex_type} — malowanie`, 'info');
+    return true;
+  }
+
   async function _wbHexClickAt(q, r) {
     if (_wbDrawingTp) {
       if (_wbDrawingTp.q === q && _wbDrawingTp.r === r) {
@@ -2980,6 +2994,11 @@ const _ROW_REGISTRY = {
       let _wbDs = null;
       svg.addEventListener('mousedown', (e) => {
         _wbPanMoved = false;
+        // MU-6f: próbnik terenu — Shift/Ctrl+klik pobiera teren hexa i włącza malowanie
+        if (e.button === 0 && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+          const cell = _wbHexUnderPoint(e.clientX, e.clientY);
+          if (cell && _wbEyedrop(cell.q, cell.r)) { e.preventDefault(); return; }
+        }
         if (e.button === 1 || (e.button === 0 && e.altKey)) {
           _wbDs = { x: e.clientX - _wbPan.x, y: e.clientY - _wbPan.y }; e.preventDefault();
           return;
@@ -3662,7 +3681,7 @@ function _sectionHtml() {
               </div>
               <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>
-              <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń mapę<br>Kliknij hex → edytuj · Scroll → zoom<br>Maluj: wybierz typ + przeciągnij<br>Alt+klik teren (✎) → edytuj typ<br>Ctrl+Z cofnij · Ctrl+Shift+Z ponów</div>
+              <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń · Scroll → zoom<br>Kliknij hex → edytuj<br>Maluj: wybierz typ + przeciągnij<br>Shift/Ctrl+klik hex → pobierz teren (próbnik)<br>Alt+klik teren (✎) → edytuj typ<br>Ctrl+Z cofnij · Ctrl+Shift+Z ponów</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
               <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
