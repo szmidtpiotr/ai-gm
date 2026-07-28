@@ -2087,6 +2087,7 @@ const _ROW_REGISTRY = {
     else if (_wbPixiApp) _wbPixiApp.render();
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
+    if (_wbLocateMode) { clearTimeout(_wbLvpT); _wbLvpT = setTimeout(_wbRenderViewportLocs, 130); }  // MU-7d: odśwież po panie
   }
 
   function _wbRender() {
@@ -2096,6 +2097,7 @@ const _ROW_REGISTRY = {
       _wbRenderPixi(_wbNeedsCullRebuild());   // MU-2: wymuś rebuild gdy viewport wyszedł poza zbudowany obszar
       _wbEnsureEventRect();
       const zl = document.getElementById('wb-zoom-label'); if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
+      _wbRenderViewportLocs();
       return;
     }
     let html = '';
@@ -2193,6 +2195,7 @@ const _ROW_REGISTRY = {
     svg.querySelectorAll('.wloc-marker').forEach(el => el.addEventListener('click', _wbOnLocMarkerClick));
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
+    _wbRenderViewportLocs();
   }
 
   async function _wbOnHexClick(e) {
@@ -2219,7 +2222,38 @@ const _ROW_REGISTRY = {
     _wbPaintMode = mode === 'paint';
     _wbLocateMode = mode === 'locate';
     if (_wbLocateMode) _wbShowLocOverlay = true;   // pokaż heksy z lokacjami
-    _wbRenderPalette(); _wbRender();
+    _wbRenderPalette(); _wbRender(); _wbRenderViewportLocs();
+  }
+
+  // MU-7d: panel lokacji widocznych w kadrze (tylko tryb Lokacje). Klik = wyśrodkuj.
+  let _wbLvpT = null;
+  function _wbCenterOnHex(q, r) {
+    const svg = document.getElementById('wb-svg');
+    const W = (svg && svg.clientWidth) || 900, H = (svg && svg.clientHeight) || 600;
+    const p = _wbHexToPixel(q, r);
+    _wbPan = { x: W / 2 - p.x * _wbZoom, y: H / 2 - p.y * _wbZoom };
+    _wbRender();
+  }
+  function _wbRenderViewportLocs() {
+    const el = document.getElementById('wb-loc-viewport');
+    if (!el) return;
+    if (!_wbLocateMode) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const v = _wbVisibleWorldRect();
+    const inView = [];
+    for (const k in _wbLocations) { const l = _wbLocations[k]; const p = _wbHexToPixel(l.q, l.r);
+      if (p.x >= v.minX && p.x <= v.maxX && p.y >= v.minY && p.y <= v.maxY) inView.push(l); }
+    inView.sort((a, b) => (a.label || a.key).localeCompare(b.label || b.key, 'pl'));
+    const rows = inView.map(l => `<div class="wb-lvp-item" data-q="${l.q}" data-r="${l.r}">
+      <span>${l.pending ? '◈' : '★'}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(l.label || l.key)}</span>
+      <span style="color:#94907f;font-size:0.62rem">${l.q},${l.r}</span></div>`).join('');
+    el.innerHTML = `<div class="wb-lvp-cap">★ LOKACJE W KADRZE (${inView.length})</div>${rows || '<div class="wb-lvp-empty">Brak lokacji w widoku — przesuń mapę.</div>'}`;
+    el.querySelectorAll('.wb-lvp-item').forEach(it => it.onclick = () => {
+      const q = +it.dataset.q, r = +it.dataset.r;
+      _wbSelected = { q, r }; _wbCenterOnHex(q, r);
+      const loc = _wbLocations[_wbKey(q, r)]; if (loc) _wbShowLocationDetail(loc);
+    });
   }
 
   async function _wbReloadLocations() {
@@ -3813,6 +3847,8 @@ function _sectionHtml() {
             <div id="wb-region-bar" class="wb-region-float"></div>
             <!-- MU-6e: pływający przycisk pełnego ekranu (zawsze widoczny, róg mapy) -->
             <button id="wb-fullscreen" class="wb-fs-float" onclick="wbToggleFullscreen()" title="Pełny ekran — mapa na cały monitor (Esc wychodzi)">⛶</button>
+            <!-- MU-7d: panel „lokacje w kadrze" (tylko w trybie Lokacje) -->
+            <div id="wb-loc-viewport" class="wb-loc-viewport" style="display:none"></div>
             <div class="wb-detail" id="wb-detail">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować.</div>
             </div>
