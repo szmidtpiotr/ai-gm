@@ -1890,7 +1890,7 @@ const _ROW_REGISTRY = {
       }
       const PIXI = await import('/vendor/pixi.min.mjs'); _wbPIXI = PIXI;
       const app = new PIXI.Application();
-      await app.init({ canvas, resizeTo: wrap, background: '#080608',
+      await app.init({ canvas, resizeTo: wrap, background: '#0e1a26',   // MU-6e: themed „poza mapą” zamiast czerni
         antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1,
         preserveDrawingBuffer: true });   // bez tego canvas WebGL bywa czarny po przebudowie
       _wbPixiApp = app;
@@ -2010,13 +2010,39 @@ const _ROW_REGISTRY = {
     const cv = document.getElementById('wb-pixi'); const svg = document.getElementById('wb-svg');
     const btn = document.getElementById('wb-engine-toggle'); const pixi = _wbEngine === 'pixi';
     if (cv) cv.style.display = pixi ? 'block' : 'none';
-    if (svg) svg.style.background = pixi ? 'transparent' : '#080608';
+    if (svg) svg.style.background = pixi ? 'transparent' : '#0e1a26';
     if (btn) { btn.textContent = pixi ? '🗺 Silnik: PixiJS' : '🗺 Silnik: SVG';
       btn.style.background = pixi ? '#16281c' : '#1e2a3a';
       btn.style.borderColor = pixi ? '#2f6b3d' : '#2f4a6b';
       btn.style.color = pixi ? '#8de89f' : '#8fb8e8'; }
     _wbRender();
   }
+  // MU-6e: pełny ekran warsztatu mapy (Fullscreen API na #wb-root).
+  let _wbFsWired = false;
+  function wbToggleFullscreen() {
+    const root = document.getElementById('wb-root');
+    if (!root) return;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) {
+      const req = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (req) { const p = req.call(root); if (p && p.catch) p.catch(() => {}); }
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  }
+  function _wbWireFullscreen() {
+    if (_wbFsWired) return; _wbFsWired = true;
+    const onChange = () => {
+      const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      const btn = document.getElementById('wb-fullscreen');
+      if (btn) btn.textContent = fs ? '⛶ Wyjdź (Esc)' : '⛶ Pełny ekran';
+      setTimeout(() => { _wbCenter(); _wbRender(); }, 120);   // przelicz fit pod nowy rozmiar
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+  }
+
   function wbToggleEngine() {
     _wbEngine = _wbEngine === 'pixi' ? 'svg' : 'pixi';
     try { localStorage.setItem('wbMapEngine', _wbEngine); } catch (e) {}
@@ -2858,7 +2884,7 @@ const _ROW_REGISTRY = {
     const svg = document.getElementById('wb-svg');
     if (svg) {
       const active = _wbActiveRegion ? _wbRegions.find(r => r.key === _wbActiveRegion) : null;
-      svg.style.background = active ? `color-mix(in srgb, ${active.color} 8%, #080608)` : '#080608';
+      svg.style.background = active ? `color-mix(in srgb, ${active.color} 8%, #0e1a26)` : '#0e1a26';
     }
   }
 
@@ -2919,6 +2945,7 @@ const _ROW_REGISTRY = {
 
     _wbRenderPalette();
     _wbRenderRegionBar();
+    _wbWireFullscreen();
 
     // Wheel zoom
     svg.addEventListener('wheel', (e) => {
@@ -3621,13 +3648,16 @@ function _sectionHtml() {
               <div class="wb-palette" id="wb-palette"></div>
               <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń mapę<br>Kliknij hex → edytuj<br>Maluj: wybierz typ + przeciągnij<br>Ctrl+Z → cofnij · Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
-              <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
+              <div style="display:flex;gap:4px;margin:6px 8px;width:calc(100% - 16px)">
+                <button onclick="wbCenter()" style="flex:1;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer">⊡ Dopasuj</button>
+                <button id="wb-fullscreen" onclick="wbToggleFullscreen()" title="Pełny ekran — mapa na cały monitor (Esc wychodzi)" style="flex:1;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer">⛶ Pełny ekran</button>
+              </div>
               <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
             </div>
             <!-- MU-6d: mapa full-bleed (baza), panele pływają nad nią (z-index w CSS) -->
             <div class="wb-canvas-wrap">
               <canvas id="wb-pixi" style="position:absolute;inset:0;width:100%;height:100%;display:none"></canvas>
-              <svg id="wb-svg" style="position:absolute;inset:0;background:#080608"></svg>
+              <svg id="wb-svg" style="position:absolute;inset:0;background:#0e1a26"></svg>
             </div>
             <div id="wb-region-bar" class="wb-region-float"></div>
             <div class="wb-detail" id="wb-detail">
@@ -3651,7 +3681,7 @@ export async function init(panel) {
   Object.assign(window, {
     filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal,
     saveKnowledgeBubble,
-    wbCenter, wbToggleEngine, openLocNpcModal, openLocImageModal, reviewEntity,
+    wbCenter, wbToggleEngine, wbToggleFullscreen, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
     openLocDetailModal, wbFilterRegion, wbToggleRegionStatus,

@@ -6,7 +6,7 @@
   <title>AI-GM — Admin (modular)</title>
   <!-- Wygląd dziedziczony z admin3 (light theme, komponenty). Link PRZED inline <style>,
        żeby drobne reguły skorupy (placeholder/banner) mogły nadpisać kolizje. -->
-  <link rel="stylesheet" href="./shared/components.css?v=10">
+  <link rel="stylesheet" href="./shared/components.css?v=11">
   <link rel="stylesheet" href="./shared/command_palette.css?v=1">
   <style>
     /* Skorupa-specyficzne — reszta z components.css (.shell/.sidebar/.topbar/.main/.nav-item). */
@@ -229,7 +229,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=159`);
+        const mod = await import(`./sections/${key}.js?v=160`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)
