@@ -1796,6 +1796,7 @@ const _ROW_REGISTRY = {
   let _wbHexG = null, _wbGhostG = null, _wbTpG = null, _wbIconLayer = null;
   let _wbPixiReady = false, _wbPixiBooting = false, _wbPixiSig = '', _wbPixiRAF = null, _wbKickT = null;
   let _wbDownPt = null;
+  let _wbPanMoved = false;   // MU-6a: czy trwający lewy-drag przesunął mapę (odróżnia pan od kliku-selekcji)
   // MU-1 (#1551): licznik wersji danych — bumpowany przy KAŻDEJ mutacji hexów/
   // lokacji/teleportów. Dzięki temu _wbFlatSig() jest O(1) (nie iteruje 22k hexów
   // przy każdym mousemove), a pan/zoom nie przebudowuje sceny — tylko kamerę.
@@ -2157,6 +2158,7 @@ const _ROW_REGISTRY = {
   }
 
   async function _wbOnHexClick(e) {
+    if (_wbPanMoved) { _wbPanMoved = false; return; }   // MU-6a: to był pan, nie klik
     _wbHexClickAt(parseInt(e.target.dataset.q), parseInt(e.target.dataset.r));
   }
 
@@ -2179,6 +2181,7 @@ const _ROW_REGISTRY = {
   }
 
   function _wbOnLocMarkerClick(e) {
+    if (_wbPanMoved) { _wbPanMoved = false; return; }   // MU-6a: to był pan, nie klik
     e.stopPropagation();
     const q = parseInt(e.target.dataset.locq), r = parseInt(e.target.dataset.locr);
     const loc = _wbLocations[_wbKey(q, r)];
@@ -2877,6 +2880,7 @@ const _ROW_REGISTRY = {
     if (!svg._wbDragWired) {
       let _wbDs = null;
       svg.addEventListener('mousedown', (e) => {
+        _wbPanMoved = false;
         if (e.button === 1 || (e.button === 0 && e.altKey)) {
           _wbDs = { x: e.clientX - _wbPan.x, y: e.clientY - _wbPan.y }; e.preventDefault();
           return;
@@ -2887,10 +2891,19 @@ const _ROW_REGISTRY = {
           e.preventDefault();
           _wbPainting = true; _wbStroke = new Map();
           _wbPaintCell(cell.q, cell.r);
+          return;
+        }
+        // MU-6a: zwykły lewy drag = pan (tryb Wybierz, bez Alt). BEZ preventDefault →
+        // klik-bez-ruchu nadal zaznacza (guard _wbDownPt w Pixi, _wbPanMoved w SVG).
+        if (e.button === 0 && !_wbPaintMode) {
+          _wbDs = { x: e.clientX - _wbPan.x, y: e.clientY - _wbPan.y };
         }
       });
       window.addEventListener('mousemove', (e) => {
-        if (_wbDs) { _wbPan = { x: e.clientX - _wbDs.x, y: e.clientY - _wbDs.y }; _wbRenderCamera(); return; }
+        if (_wbDs) {
+          if (_wbDownPt && (Math.abs(e.clientX - _wbDownPt.x) > 4 || Math.abs(e.clientY - _wbDownPt.y) > 4)) _wbPanMoved = true;
+          _wbPan = { x: e.clientX - _wbDs.x, y: e.clientY - _wbDs.y }; _wbRenderCamera(); return;
+        }
         if (_wbPainting) { const c = _wbHexUnderPoint(e.clientX, e.clientY); if (c) _wbPaintCell(c.q, c.r); }
       });
       window.addEventListener('mouseup', () => {
@@ -3545,7 +3558,7 @@ function _sectionHtml() {
               </div>
               <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>
-              <div class="wb-hint" id="wb-hint">Maluj: wybierz typ + przeciągnij<br>Kliknij hex → edytuj<br>Ctrl+Z → cofnij<br>Alt+drag → przesuń · Scroll → zoom</div>
+              <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń mapę<br>Kliknij hex → edytuj<br>Maluj: wybierz typ + przeciągnij<br>Ctrl+Z → cofnij · Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
               <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
