@@ -737,6 +737,21 @@ async def patch_location(
         if "approved" in data:
             updates.append("approved = ?")
             params.append(1 if data["approved"] else 0)
+        # #1551 MU-7: przypisanie / przeniesienie / odpięcie lokacji na hex overworld
+        # (map_level=0). Oba pola razem, albo oba null (= odpięcie od hexa).
+        if "world_hex_q" in data or "world_hex_r" in data:
+            wq = data.get("world_hex_q")
+            wr = data.get("world_hex_r")
+            if wq is None and wr is None:
+                updates.append("world_hex_q = ?"); params.append(None)
+                updates.append("world_hex_r = ?"); params.append(None)
+            else:
+                try:
+                    wq, wr = int(wq), int(wr)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=422, detail="world_hex_q/r muszą być liczbami całkowitymi (albo oba null)")
+                updates.append("world_hex_q = ?"); params.append(wq)
+                updates.append("world_hex_r = ?"); params.append(wr)
 
         # #1064 — manual label/description edit is an override: lock the text so
         # later lazy-enrichment (on player entry) skips it instead of silently
