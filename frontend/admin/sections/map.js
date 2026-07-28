@@ -2238,6 +2238,23 @@ const _ROW_REGISTRY = {
       _showToast('Lokacja przypisana do hexa.', 'success');
     } catch (e) { _showToast(e.message || 'Błąd przypisania', 'error'); }
   }
+  // MU-7c: utwórz nową lokację i od razu przypnij do hexa (POST + PATCH world_hex).
+  async function _wbCreateLocHere(q, r, label, overlay) {
+    label = (label || '').trim();
+    if (!label) { _showToast('Podaj nazwę lokacji.', 'info'); return; }
+    try {
+      const res = await apiFetch('/api/locations', { method: 'POST',
+        body: JSON.stringify({ label, location_type: 'macro', created_by: 'admin_manual' }) });
+      const key = res.key || (res.data && res.data.key);
+      if (!key) throw new Error('Brak klucza lokacji w odpowiedzi');
+      await apiFetch('/api/locations/admin/locations/' + encodeURIComponent(key),
+        { method: 'PATCH', body: JSON.stringify({ world_hex_q: q, world_hex_r: r }) });
+      await _wbReloadLocations();
+      if (overlay) overlay.remove();
+      _wbRender();
+      _showToast(`Utworzono „${label}" na hexie (${q},${r}).`, 'success');
+    } catch (e) { _showToast(e.message || 'Błąd tworzenia lokacji', 'error'); }
+  }
   async function _wbUnpinLoc(key, overlay) {
     try {
       await apiFetch('/api/locations/admin/locations/' + encodeURIComponent(key),
@@ -2273,6 +2290,11 @@ const _ROW_REGISTRY = {
           <div style="font-size:0.72rem;color:var(--t3)">Przypisana tutaj</div>
           <button class="btn btn-sm btn-danger" id="wb-unpin" style="margin-top:6px;font-size:0.68rem">✕ Odepnij od hexa</button>
         </div>` : '<div style="font-size:0.78rem;color:var(--t3);margin-bottom:8px">Brak lokacji na tym hexie. Wybierz z listy → „Tutaj”.</div>'}
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <input id="wb-new-loc-label" class="field-input" placeholder="Nazwa nowej lokacji…" style="flex:1;box-sizing:border-box"/>
+          <button class="btn btn-sm btn-primary" id="wb-new-loc-btn" style="font-size:0.68rem;white-space:nowrap">➕ Utwórz tutaj</button>
+        </div>
+        <div style="font-size:0.65rem;color:var(--t3);font-weight:700;letter-spacing:0.06em;margin-bottom:4px">LUB PRZYPISZ ISTNIEJĄCĄ</div>
         <input id="wb-assign-search" class="field-input" placeholder="🔍 Szukaj lokacji…" style="width:100%;box-sizing:border-box;margin-bottom:8px"/>
         <div id="wb-assign-list">${rows}</div>
       </div>
@@ -2285,6 +2307,10 @@ const _ROW_REGISTRY = {
     overlay.querySelectorAll('.wb-assign-btn').forEach(b => b.onclick = () => _wbAssignLoc(b.dataset.key, q, r, overlay));
     const unpin = overlay.querySelector('#wb-unpin');
     if (unpin && current) unpin.onclick = () => _wbUnpinLoc(current.key, overlay);
+    const newBtn = overlay.querySelector('#wb-new-loc-btn');
+    const newLbl = overlay.querySelector('#wb-new-loc-label');
+    if (newBtn) newBtn.onclick = () => _wbCreateLocHere(q, r, newLbl.value, overlay);
+    if (newLbl) newLbl.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); _wbCreateLocHere(q, r, newLbl.value, overlay); } };
     setTimeout(() => search.focus(), 50);
   }
 
