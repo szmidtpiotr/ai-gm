@@ -2203,6 +2203,7 @@ const _ROW_REGISTRY = {
   function _wbShowLocationDetail(loc) {
     const p = document.getElementById('wb-detail');
     if (!p) return;
+    _wbDrawerOpen(true);   // MU-6d: wysuń szufladę inspektora
     const isPending = loc.pending;
     const statusBadge = isPending
       ? `<span class="badge badge-amber">⏳ Oczekuje</span>`
@@ -2213,6 +2214,7 @@ const _ROW_REGISTRY = {
       <div class="wb-dh" style="gap:6px">
         <span>⊕ Lokacja</span>
         ${statusBadge}
+        <button class="btn-icon" id="wbd-close" title="Zamknij panel" style="margin-left:auto">✕</button>
       </div>
       <div style="font-weight:600;font-size:0.9rem;margin:8px 0 2px">${_esc(loc.label || loc.key)}</div>
       <div style="font-size:0.72rem;color:var(--t3);font-family:monospace;margin-bottom:6px">${_esc(loc.key)}</div>
@@ -2227,6 +2229,7 @@ const _ROW_REGISTRY = {
         <button class="btn btn-sm btn-secondary" onclick="_wbEnrichSublocs('${_esc(loc.key)}', this)">🪄 Nadaj nazwy LLM (sub-lokacje)</button>
       </div>`}
     `;
+    const cb = p.querySelector('#wbd-close'); if (cb) cb.onclick = () => _wbCloseDrawer();
   }
 
   // #995 — Settlement subloc checklist modal before approving a location
@@ -2567,6 +2570,7 @@ const _ROW_REGISTRY = {
   function _wbRenderDetail(hex) {
     const p = document.getElementById('wb-detail');
     if (!p) return;
+    _wbDrawerOpen(true);   // MU-6d: wysuń szufladę inspektora
     const cfg = _wbHexTypes[hex.hex_type] || {};
     const _palDetail = terrainStyle(hex.hex_type);       // M-2a: spójna ikona rodziny
     const pool = (Array.isArray(hex.encounter_pool) ? hex.encounter_pool : []).join(',');
@@ -2576,7 +2580,10 @@ const _ROW_REGISTRY = {
     p.innerHTML = `
       <div class="wb-dh">
         <span>${(_palDetail ? _palDetail.icon : cfg.map_icon) || '⬡'} (${hex.q},${hex.r})</span>
-        <button class="btn-icon danger" id="wbd-del">✕</button>
+        <span style="display:flex;gap:4px">
+          <button class="btn-icon danger" id="wbd-del" title="Usuń hex">🗑</button>
+          <button class="btn-icon" id="wbd-close" title="Zamknij panel">✕</button>
+        </span>
       </div>
       <div id="wbd-safe" style="font-size:0.68rem;margin:2px 0 6px 0;color:var(--t3)">🛏 Sprawdzam…</div>
       <label class="wb-lbl">Typ terenu</label>
@@ -2607,6 +2614,7 @@ const _ROW_REGISTRY = {
 
     _wbSafeRestBadge(p.querySelector('#wbd-safe'), hex.q, hex.r);
     p.querySelector('#wbd-del').onclick = () => _wbDeleteHex(hex.q, hex.r);
+    p.querySelector('#wbd-close').onclick = () => _wbCloseDrawer();
     p.querySelector('#wbd-save').onclick = () => _wbSaveHex(hex.q, hex.r, {
       hex_type: p.querySelector('#wbd-type').value,
       label: p.querySelector('#wbd-label').value.trim() || null,
@@ -2680,8 +2688,12 @@ const _ROW_REGISTRY = {
 
   function _wbClearDetail() {
     const p = document.getElementById('wb-detail');
-    if (p) p.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować lub puste miejsce aby pomalować.</div>';
+    if (p) { p.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować lub puste miejsce aby pomalować.</div>';
+      p.classList.remove('open'); }   // MU-6d: chowamy szufladę inspektora
   }
+  // MU-6d: pokaż/ukryj szufladę inspektora (prawa strona mapy)
+  function _wbDrawerOpen(on) { const p = document.getElementById('wb-detail'); if (p) p.classList.toggle('open', on !== false); }
+  function _wbCloseDrawer() { _wbSelected = null; _wbClearDetail(); _wbRender(); }
 
   // MU-5 (#1551): legenda terenu — grupy wg RODZIN (terrain_palette.js) z nazwami,
   // szukajką, filtrem krainy i rzędem „ostatnie”. Zastępuje płaską siatkę 40 ikon.
@@ -3612,13 +3624,12 @@ function _sectionHtml() {
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
               <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
             </div>
-            <div style="display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden">
-              <div id="wb-region-bar"></div>
-              <div class="wb-canvas-wrap" style="flex:1;position:relative">
-                <canvas id="wb-pixi" style="position:absolute;inset:0;width:100%;height:100%;display:none"></canvas>
-                <svg id="wb-svg" style="position:absolute;inset:0;background:#080608"></svg>
-              </div>
+            <!-- MU-6d: mapa full-bleed (baza), panele pływają nad nią (z-index w CSS) -->
+            <div class="wb-canvas-wrap">
+              <canvas id="wb-pixi" style="position:absolute;inset:0;width:100%;height:100%;display:none"></canvas>
+              <svg id="wb-svg" style="position:absolute;inset:0;background:#080608"></svg>
             </div>
+            <div id="wb-region-bar" class="wb-region-float"></div>
             <div class="wb-detail" id="wb-detail">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować.</div>
             </div>
