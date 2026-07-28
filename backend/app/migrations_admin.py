@@ -4111,7 +4111,7 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('plains',    'Równiny',   1.0, 0.15, '#7a9a4a', '🌾'),
         ('forest',    'Las',       1.0, 0.30, '#2d5a2d', '🌲'),
         ('hills',     'Wzgórza',   1.0, 0.20, '#8a7a5a', '⛰️'),
-        ('mountains', 'Góry',      1.0, 0.25, '#6a6a6a', '🏔️'),
+        -- #1551 MU-4: 'mountains' usunięte (0 hexów, duplikat 'mountain')
         ('swamp',     'Bagno',     1.0, 0.40, '#4a5a3a', '🌿'),
         ('river',     'Rzeka',     1.0, 0.10, '#3a6a8a', '🌊'),
         ('town',      'Miasto',    0.0, 0.00, '#c8a44a', '🏘️'),
@@ -4172,7 +4172,7 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         VALUES
         ('heath',   'Wrzosowisko', 1.0, 0.20, '#9a8a5a', '🌾', 1, 'biome',   0.10),
         ('snow',    'Śnieg',       1.5, 0.15, '#d8e8e8', '❄',  1, 'biome',   0.05),
-        ('sea',     'Morze',       0.0, 0.10, '#1a3a6a', '🌊', 0, 'biome',   0.00),
+        -- #1551 MU-4: 'sea' scalone w 'morze' (duplikat 1:1) — patrz world_map_seed.json
         ('mountain','Góra',        2.0, 0.25, '#7a7a7a', '🏔️', 1, 'biome',   0.05),
         ('village', 'Wioska',      0.0, 0.00, '#c49a3a', '🏡', 1, 'scatter', 0.00),
         ('lake',    'Jezioro',     0.0, 0.05, '#3a6a9a', '🏞️', 0, 'biome',   0.00),

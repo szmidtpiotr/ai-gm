@@ -90,7 +90,7 @@ def test_coming_regions_have_correct_status():
     ("siwe_granie",      {"snow", "mountain", "tundra"}),
     ("czarnobor",        {"forest", "swamp"}),
     ("koronne_niziny",   {"plains"}),
-    ("wybrzeze_lez",     {"sea", "coast", "swamp"}),
+    ("wybrzeze_lez",     {"morze", "coast", "swamp"}),  # #1551 MU-4: sea→morze
     ("martwe_pustkowia", {"heath", "ruins"}),
 ])
 def test_biome_profile_present(expected_region, expected_biomes):

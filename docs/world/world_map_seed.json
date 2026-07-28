@@ -15911,7 +15911,7 @@
   {
    "q": 44,
    "r": 27,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -17751,7 +17751,7 @@
   {
    "q": 28,
    "r": 33,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -17759,7 +17759,7 @@
   {
    "q": 29,
    "r": 33,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -17767,7 +17767,7 @@
   {
    "q": 30,
    "r": 33,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18007,7 +18007,7 @@
   {
    "q": 26,
    "r": 34,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18015,7 +18015,7 @@
   {
    "q": 27,
    "r": 34,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18023,7 +18023,7 @@
   {
    "q": 28,
    "r": 34,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18031,7 +18031,7 @@
   {
    "q": 29,
    "r": 34,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18039,7 +18039,7 @@
   {
    "q": 30,
    "r": 34,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18263,7 +18263,7 @@
   {
    "q": 26,
    "r": 35,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18271,7 +18271,7 @@
   {
    "q": 27,
    "r": 35,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18279,7 +18279,7 @@
   {
    "q": 28,
    "r": 35,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18287,7 +18287,7 @@
   {
    "q": 29,
    "r": 35,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18487,7 +18487,7 @@
   {
    "q": 24,
    "r": 36,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18495,7 +18495,7 @@
   {
    "q": 25,
    "r": 36,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18503,7 +18503,7 @@
   {
    "q": 26,
    "r": 36,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18511,7 +18511,7 @@
   {
    "q": 27,
    "r": 36,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18711,7 +18711,7 @@
   {
    "q": 24,
    "r": 37,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18719,7 +18719,7 @@
   {
    "q": 25,
    "r": 37,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18759,7 +18759,7 @@
   {
    "q": 4,
    "r": 38,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18767,7 +18767,7 @@
   {
    "q": 5,
    "r": 38,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18775,7 +18775,7 @@
   {
    "q": 6,
    "r": 38,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18903,7 +18903,7 @@
   {
    "q": 22,
    "r": 38,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18911,7 +18911,7 @@
   {
    "q": 23,
    "r": 38,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18935,7 +18935,7 @@
   {
    "q": 2,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18943,7 +18943,7 @@
   {
    "q": 3,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18951,7 +18951,7 @@
   {
    "q": 4,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18959,7 +18959,7 @@
   {
    "q": 5,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18967,7 +18967,7 @@
   {
    "q": 6,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18975,7 +18975,7 @@
   {
    "q": 7,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -18983,7 +18983,7 @@
   {
    "q": 8,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19079,7 +19079,7 @@
   {
    "q": 20,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19087,7 +19087,7 @@
   {
    "q": 21,
    "r": 39,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19095,7 +19095,7 @@
   {
    "q": 0,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19103,7 +19103,7 @@
   {
    "q": 1,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19111,7 +19111,7 @@
   {
    "q": 2,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19119,7 +19119,7 @@
   {
    "q": 3,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19127,7 +19127,7 @@
   {
    "q": 4,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19135,7 +19135,7 @@
   {
    "q": 5,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19143,7 +19143,7 @@
   {
    "q": 6,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19151,7 +19151,7 @@
   {
    "q": 7,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19159,7 +19159,7 @@
   {
    "q": 8,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19247,7 +19247,7 @@
   {
    "q": 19,
    "r": 40,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19255,7 +19255,7 @@
   {
    "q": 0,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19263,7 +19263,7 @@
   {
    "q": 1,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19271,7 +19271,7 @@
   {
    "q": 2,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19279,7 +19279,7 @@
   {
    "q": 3,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19287,7 +19287,7 @@
   {
    "q": 4,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19295,7 +19295,7 @@
   {
    "q": 5,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19303,7 +19303,7 @@
   {
    "q": 6,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19311,7 +19311,7 @@
   {
    "q": 7,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19319,7 +19319,7 @@
   {
    "q": 8,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19327,7 +19327,7 @@
   {
    "q": 9,
    "r": 41,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19399,7 +19399,7 @@
   {
    "q": 0,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19407,7 +19407,7 @@
   {
    "q": 1,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19415,7 +19415,7 @@
   {
    "q": 2,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19423,7 +19423,7 @@
   {
    "q": 3,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19431,7 +19431,7 @@
   {
    "q": 4,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19439,7 +19439,7 @@
   {
    "q": 5,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19447,7 +19447,7 @@
   {
    "q": 6,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19455,7 +19455,7 @@
   {
    "q": 7,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19463,7 +19463,7 @@
   {
    "q": 8,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19471,7 +19471,7 @@
   {
    "q": 9,
    "r": 42,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19527,7 +19527,7 @@
   {
    "q": 0,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19535,7 +19535,7 @@
   {
    "q": 1,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19543,7 +19543,7 @@
   {
    "q": 2,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19551,7 +19551,7 @@
   {
    "q": 3,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19559,7 +19559,7 @@
   {
    "q": 4,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19567,7 +19567,7 @@
   {
    "q": 5,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19575,7 +19575,7 @@
   {
    "q": 6,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19583,7 +19583,7 @@
   {
    "q": 7,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19591,7 +19591,7 @@
   {
    "q": 8,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19599,7 +19599,7 @@
   {
    "q": 9,
    "r": 43,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19639,7 +19639,7 @@
   {
    "q": 0,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19647,7 +19647,7 @@
   {
    "q": 1,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19655,7 +19655,7 @@
   {
    "q": 2,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19663,7 +19663,7 @@
   {
    "q": 3,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19671,7 +19671,7 @@
   {
    "q": 4,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19679,7 +19679,7 @@
   {
    "q": 5,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19687,7 +19687,7 @@
   {
    "q": 6,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19695,7 +19695,7 @@
   {
    "q": 7,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19703,7 +19703,7 @@
   {
    "q": 8,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19711,7 +19711,7 @@
   {
    "q": 9,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19719,7 +19719,7 @@
   {
    "q": 10,
    "r": 44,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19735,7 +19735,7 @@
   {
    "q": 0,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19743,7 +19743,7 @@
   {
    "q": 1,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19751,7 +19751,7 @@
   {
    "q": 2,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19759,7 +19759,7 @@
   {
    "q": 3,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19767,7 +19767,7 @@
   {
    "q": 4,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19775,7 +19775,7 @@
   {
    "q": 5,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19783,7 +19783,7 @@
   {
    "q": 6,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19791,7 +19791,7 @@
   {
    "q": 7,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19799,7 +19799,7 @@
   {
    "q": 8,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19807,7 +19807,7 @@
   {
    "q": 9,
    "r": 45,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19815,7 +19815,7 @@
   {
    "q": 0,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19823,7 +19823,7 @@
   {
    "q": 1,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19831,7 +19831,7 @@
   {
    "q": 2,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19839,7 +19839,7 @@
   {
    "q": 3,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19847,7 +19847,7 @@
   {
    "q": 4,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19855,7 +19855,7 @@
   {
    "q": 5,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19863,7 +19863,7 @@
   {
    "q": 6,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19871,7 +19871,7 @@
   {
    "q": 7,
    "r": 46,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19879,7 +19879,7 @@
   {
    "q": 0,
    "r": 47,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19887,7 +19887,7 @@
   {
    "q": 1,
    "r": 47,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19895,7 +19895,7 @@
   {
    "q": 2,
    "r": 47,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19903,7 +19903,7 @@
   {
    "q": 3,
    "r": 47,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19911,7 +19911,7 @@
   {
    "q": 4,
    "r": 47,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19919,7 +19919,7 @@
   {
    "q": 5,
    "r": 47,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19927,7 +19927,7 @@
   {
    "q": 0,
    "r": 48,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19935,7 +19935,7 @@
   {
    "q": 1,
    "r": 48,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19943,7 +19943,7 @@
   {
    "q": 2,
    "r": 48,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19951,7 +19951,7 @@
   {
    "q": 3,
    "r": 48,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19959,7 +19959,7 @@
   {
    "q": 0,
    "r": 49,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -19967,7 +19967,7 @@
   {
    "q": 1,
    "r": 49,
-   "hex_type": "sea",
+   "hex_type": "morze",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15

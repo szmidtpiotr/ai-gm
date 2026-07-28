@@ -4,7 +4,8 @@ import unittest
 
 DB_PATH = "/data/ai_gm.db"
 
-KRESY_TYPES_REQUIRED = {"heath", "snow", "sea", "mountain", "village", "lake", "bridge"}
+# #1551 MU-4: 'sea' scalone w 'morze' (duplikat 1:1)
+KRESY_TYPES_REQUIRED = {"heath", "snow", "morze", "mountain", "village", "lake", "bridge"}
 
 # Known settlement hexes from Kresy 50x50 import → expected game_location keys
 SETTLEMENT_LINKS = [
@@ -69,14 +70,15 @@ class TestKresyHexTypeConfig(unittest.TestCase):
         )
 
     def test_sea_and_lake_not_passable(self):
-        """Sea and lake must be is_passable=0 (water — cannot travel through)."""
+        """Sea (morze) and lake must be is_passable=0 (water — cannot travel through)."""
         conn = self._conn()
         cur = conn.cursor()
-        cur.execute("SELECT hex_type, is_passable FROM hex_type_config WHERE hex_type IN ('sea','lake')")
+        # #1551 MU-4: 'sea' scalone w 'morze'
+        cur.execute("SELECT hex_type, is_passable FROM hex_type_config WHERE hex_type IN ('morze','lake')")
         rows = {row["hex_type"]: row["is_passable"] for row in cur.fetchall()}
         conn.close()
 
-        for ht in ("sea", "lake"):
+        for ht in ("morze", "lake"):
             self.assertIn(ht, rows, f"{ht} missing from hex_type_config")
             self.assertEqual(rows[ht], 0, f"{ht} should be is_passable=0, got {rows[ht]}")
 
@@ -124,7 +126,7 @@ class TestKresyHexTypeConfig(unittest.TestCase):
             "plains": "#7a9a4a",
             "forest": "#2d5a2d",
             "hills": "#8a7a5a",
-            "mountains": "#6a6a6a",
+            # #1551 MU-4: 'mountains' usunięte (0 hexów, duplikat 'mountain')
             "swamp": "#4a5a3a",
             "river": "#3a6a8a",
             "town": "#c8a44a",
