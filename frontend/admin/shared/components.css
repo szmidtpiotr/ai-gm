@@ -1445,6 +1445,10 @@
     .wb-leg-ico { font-size: 0.85rem; width: 15px; text-align: center; flex-shrink: 0; }
     .wb-leg-name { font-size: 0.68rem; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wb-leg-empty { font-size: 0.64rem; color: var(--t3); padding: 6px 8px; }
+    /* #1551 MU-6b: status pieczęci kanonu */
+    .wb-canon-status { font-size: 0.63rem; text-align: center; }
+    .wb-canon-dirty { color: #f0c040; font-weight: 600; }
+    .wb-canon-clean { color: #6a9a6a; }
     /* ── #834 Mobile hex map ──────────────────────────────────────────────── */
     .mobile-edit-notice {
       display: none;

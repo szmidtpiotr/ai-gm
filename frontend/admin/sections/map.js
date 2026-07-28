@@ -1797,6 +1797,15 @@ const _ROW_REGISTRY = {
   let _wbPixiReady = false, _wbPixiBooting = false, _wbPixiSig = '', _wbPixiRAF = null, _wbKickT = null;
   let _wbDownPt = null;
   let _wbPanMoved = false;   // MU-6a: czy trwający lewy-drag przesunął mapę (odróżnia pan od kliku-selekcji)
+  let _wbUnsavedCount = 0;   // MU-6b: liczba zmian hexów od ostatniej pieczęci (snapshotu kanonu)
+  function _wbUpdateCanonStatus() {
+    const el = document.getElementById('wb-canon-status');
+    if (!el) return;
+    el.innerHTML = _wbUnsavedCount > 0
+      ? `<span class="wb-canon-dirty">● ${_wbUnsavedCount} ${_wbUnsavedCount === 1 ? 'zmiana' : 'zmian'} od pieczęci</span>`
+      : `<span class="wb-canon-clean">✓ kanon zgodny</span>`;
+  }
+  function _wbBumpUnsaved(n) { _wbUnsavedCount += (n || 1); _wbUpdateCanonStatus(); }
   // MU-1 (#1551): licznik wersji danych — bumpowany przy KAŻDEJ mutacji hexów/
   // lokacji/teleportów. Dzięki temu _wbFlatSig() jest O(1) (nie iteruje 22k hexów
   // przy każdym mousemove), a pan/zoom nie przebudowuje sceny — tylko kamerę.
@@ -2416,6 +2425,7 @@ const _ROW_REGISTRY = {
       for (const h of (res.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
       _wbTouch();
       _wbPushUndo('paint', items);
+      _wbBumpUnsaved(payload.length);
       _wbRender();
       _showToast(`Pomalowano ${payload.length} ${payload.length === 1 ? 'hex' : 'heksów'}.`, 'success');
     } catch(e) {
@@ -2483,7 +2493,7 @@ const _ROW_REGISTRY = {
         await apiFetch(`/api/admin/world/hexes/${i.q}/${i.r}`, { method: 'DELETE' }).catch(() => {});
         delete _wbHexes[_wbKey(i.q, i.r)];
       }
-      _wbSelected = null; _wbTouch(); _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
+      _wbSelected = null; _wbTouch(); _wbBumpUnsaved(entry.items.length); _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
       _showToast('Cofnięto ostatnią edycję.', 'success');
     } catch(e) {
       _wbUndoStack.push(entry); _wbUpdateUndoBtn();
@@ -2496,7 +2506,7 @@ const _ROW_REGISTRY = {
     const before = _wbHexes[_wbKey(q, r)] ? JSON.parse(JSON.stringify(_wbHexes[_wbKey(q, r)])) : null;
     try {
       await apiFetch(`/api/admin/world/hexes/${q}/${r}`, { method: 'DELETE' });
-      delete _wbHexes[_wbKey(q, r)]; _wbSelected = null; _wbTouch(); _wbRender(); _wbClearDetail();
+      delete _wbHexes[_wbKey(q, r)]; _wbSelected = null; _wbTouch(); _wbBumpUnsaved(1); _wbRender(); _wbClearDetail();
       if (before) _wbPushUndo('full', [{ q, r, before }]);
       _showToast('Hex usunięty.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
@@ -2506,7 +2516,7 @@ const _ROW_REGISTRY = {
     const before = _wbHexes[_wbKey(q, r)] ? JSON.parse(JSON.stringify(_wbHexes[_wbKey(q, r)])) : null;
     try {
       const res = await apiFetch(`/api/admin/world/hexes/${q}/${r}`, { method: 'PATCH', body: JSON.stringify(updates) });
-      _wbHexes[_wbKey(q, r)] = res.hex; _wbTouch(); _wbRender(); _wbRenderDetail(res.hex);
+      _wbHexes[_wbKey(q, r)] = res.hex; _wbTouch(); _wbBumpUnsaved(1); _wbRender(); _wbRenderDetail(res.hex);
       if (before) _wbPushUndo('full', [{ q, r, before }]);
       _showToast('Zapisano.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
@@ -2753,6 +2763,7 @@ const _ROW_REGISTRY = {
     };
     const undoBtn = document.getElementById('wb-undo');
     if (undoBtn) { undoBtn.onclick = _wbUndo; _wbUpdateUndoBtn(); }
+    _wbUpdateCanonStatus();
     const saveBtn = document.getElementById('wb-save-canon');
     if (saveBtn) saveBtn.onclick = async () => {
       // #1482: przy wybranej krainie zapisujemy TYLKO ją — nie mieszamy krain w jednym pliku.
@@ -2762,6 +2773,7 @@ const _ROW_REGISTRY = {
       const orig = saveBtn.textContent; saveBtn.disabled = true; saveBtn.textContent = '💾 Zapisuję…';
       try {
         const res = await apiFetch(`/api/admin/world/map/snapshot${rq}`, { method: 'POST' });
+        _wbUnsavedCount = 0; _wbUpdateCanonStatus();   // MU-6b: pieczęć = kanon zgodny
         _showToast(`Mapa zapisana jako kanon (${res.count} heksów). Przeżyje reset DB.`, 'success');
       } catch (e) {
         _showToast('Błąd zapisu mapy: ' + (e && e.message ? e.message : e), 'error');
@@ -3550,8 +3562,9 @@ function _sectionHtml() {
               <div style="padding:0 6px 2px">
                 <button id="wb-loc-overlay" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Podświetl heksy z przypiętymi lokacjami (zielone = ma lokację)">📍 Lokacje na mapie</button>
               </div>
+              <div id="wb-canon-status" class="wb-canon-status" style="padding:2px 8px 3px"></div>
               <div style="padding:0 6px 2px">
-                <button id="wb-save-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#c9a54a;color:#1a1206;border:1px solid #c9a54a;font-weight:700" title="Zapisz bieżącą mapę jako kanon — trwałe, przeżywa reset/wipe DB">💾 Zapisz mapę (kanon)</button>
+                <button id="wb-save-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#c9a54a;color:#1a1206;border:1px solid #c9a54a;font-weight:700" title="Zapisz bieżącą mapę jako kanon — trwałe, przeżywa reset/wipe DB">🖋 Pieczętuj kanon</button>
               </div>
               <div style="padding:0 6px 4px">
                 <button id="wb-restore-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#2a4a2a;color:#a8d4a8;border:1px solid #4a7a4a;font-weight:700" title="Wczytaj mapę z ostatnio zapisanego kanonu — nadpisze bieżącą mapę">📂 Wczytaj mapę (z kanonu)</button>
