@@ -2036,7 +2036,8 @@ const _ROW_REGISTRY = {
     const onChange = () => {
       const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
       const btn = document.getElementById('wb-fullscreen');
-      if (btn) btn.textContent = fs ? '⛶ Wyjdź (Esc)' : '⛶ Pełny ekran';
+      if (btn) { btn.textContent = fs ? '⤢' : '⛶';
+        btn.title = fs ? 'Wyjdź z pełnego ekranu (Esc)' : 'Pełny ekran — mapa na cały monitor (Esc wychodzi)'; }
       setTimeout(() => { _wbCenter(); _wbRender(); }, 120);   // przelicz fit pod nowy rozmiar
     };
     document.addEventListener('fullscreenchange', onChange);
@@ -3648,10 +3649,7 @@ function _sectionHtml() {
               <div class="wb-palette" id="wb-palette"></div>
               <div class="wb-hint" id="wb-hint">Przeciągnij → przesuń mapę<br>Kliknij hex → edytuj<br>Maluj: wybierz typ + przeciągnij<br>Ctrl+Z → cofnij · Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
-              <div style="display:flex;gap:4px;margin:6px 8px;width:calc(100% - 16px)">
-                <button onclick="wbCenter()" style="flex:1;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer">⊡ Dopasuj</button>
-                <button id="wb-fullscreen" onclick="wbToggleFullscreen()" title="Pełny ekran — mapa na cały monitor (Esc wychodzi)" style="flex:1;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer">⛶ Pełny ekran</button>
-              </div>
+              <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
               <button id="wb-engine-toggle" onclick="wbToggleEngine()" title="Silnik renderowania mapy: PixiJS (GPU, pod skalę krain) ↔ SVG (awaryjny). Wygląd identyczny." style="margin:0 8px 6px;font-size:0.66rem;padding:4px 8px;background:#16281c;border:1px solid #2f6b3d;border-radius:5px;color:#8de89f;cursor:pointer;width:calc(100% - 16px)">🗺 Silnik: PixiJS</button>
             </div>
             <!-- MU-6d: mapa full-bleed (baza), panele pływają nad nią (z-index w CSS) -->
@@ -3660,6 +3658,8 @@ function _sectionHtml() {
               <svg id="wb-svg" style="position:absolute;inset:0;background:#0e1a26"></svg>
             </div>
             <div id="wb-region-bar" class="wb-region-float"></div>
+            <!-- MU-6e: pływający przycisk pełnego ekranu (zawsze widoczny, róg mapy) -->
+            <button id="wb-fullscreen" class="wb-fs-float" onclick="wbToggleFullscreen()" title="Pełny ekran — mapa na cały monitor (Esc wychodzi)">⛶</button>
             <div class="wb-detail" id="wb-detail">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować.</div>
             </div>
