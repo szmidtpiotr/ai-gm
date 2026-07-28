@@ -3239,14 +3239,21 @@ const _ROW_REGISTRY = {
         e.preventDefault();
         _wbSetMode(k === 'b' ? 'paint' : (k === 'l' ? 'locate' : 'select'));
       });
-      // Touch: pinch-zoom + 1-finger pan + tap-to-edit (M5)
+      // MU-9: dotyk (Procreate-style). 1 palec: w Maluj maluje, inaczej pan+tap-edycja.
+      // 2 palce: ZAWSZE pan+pinch (nawigacja niezależna od trybu). Tap = geometryczny
+      // _wbHexUnderPoint (działa w Pixi — brak polygonów DOM) → _wbHexClickAt.
       let _wbTs = null;
       svg.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (e.touches.length === 1) {
-          _wbTs = { type: 'pan', x: e.touches[0].clientX, y: e.touches[0].clientY,
-            px: _wbPan.x, py: _wbPan.y, moved: false };
+          const t = e.touches[0];
+          if (_wbPaintMode && _wbPaintType) {
+            const cell = _wbHexUnderPoint(t.clientX, t.clientY);
+            if (cell) { _wbTs = { type: 'paint' }; _wbPainting = true; _wbStroke = new Map(); _wbPaintCell(cell.q, cell.r); return; }
+          }
+          _wbTs = { type: 'pan', x: t.clientX, y: t.clientY, px: _wbPan.x, py: _wbPan.y, moved: false };
         } else if (e.touches.length === 2) {
+          if (_wbPainting) { _wbPainting = false; _wbStroke = null; }   // przerwij malowanie na 2 palce
           const dx = e.touches[1].clientX - e.touches[0].clientX;
           const dy = e.touches[1].clientY - e.touches[0].clientY;
           const rect = svg.getBoundingClientRect();
@@ -3259,7 +3266,9 @@ const _ROW_REGISTRY = {
       svg.addEventListener('touchmove', (e) => {
         e.preventDefault();
         if (!_wbTs) return;
-        if (_wbTs.type === 'pan' && e.touches.length === 1) {
+        if (_wbTs.type === 'paint' && e.touches.length === 1) {
+          const t = e.touches[0]; const c = _wbHexUnderPoint(t.clientX, t.clientY); if (c) _wbPaintCell(c.q, c.r);
+        } else if (_wbTs.type === 'pan' && e.touches.length === 1) {
           const dx = e.touches[0].clientX - _wbTs.x;
           const dy = e.touches[0].clientY - _wbTs.y;
           if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _wbTs.moved = true;
@@ -3277,15 +3286,11 @@ const _ROW_REGISTRY = {
         }
       }, { passive: false });
       svg.addEventListener('touchend', (e) => {
-        if (_wbTs?.type === 'pan' && !_wbTs.moved) {
+        if (_wbTs?.type === 'paint') { _wbPainting = false; _wbCommitStroke(); }
+        else if (_wbTs?.type === 'pan' && !_wbTs.moved) {
           const t = e.changedTouches[0];
-          const el = document.elementFromPoint(t.clientX, t.clientY);
-          if (el) {
-            if (el.classList.contains('whx') || el.classList.contains('whg'))
-              _wbOnHexClick({ target: el });
-            else if (el.classList.contains('wloc-marker'))
-              _wbOnLocMarkerClick({ target: el });
-          }
+          const cell = _wbHexUnderPoint(t.clientX, t.clientY);   // geometryczny — Pixi i SVG
+          if (cell) _wbHexClickAt(cell.q, cell.r);
         }
         _wbTs = null;
       });
