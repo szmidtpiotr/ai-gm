@@ -1,0 +1,9 @@
+[Unit]
+Description=Auto-commit AI-GM canon map snapshot (#1551)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=piotrszmidt
+WorkingDirectory=/home/piotrszmidt/ai-gm
+ExecStart=/home/piotrszmidt/ai-gm/scripts/autocommit_canon.sh

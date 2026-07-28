@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch AI-GM canon map files (data/regions) for changes (#1551)
+
+[Path]
+PathModified=/home/piotrszmidt/ai-gm/data/regions
+Unit=aigm-canon-autocommit.service
+
+[Install]
+WantedBy=multi-user.target
