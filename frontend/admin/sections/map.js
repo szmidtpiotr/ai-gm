@@ -1758,6 +1758,14 @@ const _ROW_REGISTRY = {
     _wbActiveRegion = key || null;
     _wbRenderRegionBar();
     await _wbLoadHexes();
+    // #1551: sync filtr legendy z górnym paskiem + zcache'uj typy krainy z załadowanych hexów.
+    if (_wbActiveRegion) {
+      _wbRegionTypeCache[_wbActiveRegion] = new Set(Object.values(_wbHexes).map(h => h.hex_type));
+      _wbLegRegion = _wbActiveRegion;
+    } else {
+      _wbLegRegion = '';
+    }
+    if (typeof _wbRenderPalette === 'function') _wbRenderPalette();
     _wbCenter();
     _wbRender();
   }
@@ -2641,7 +2649,8 @@ const _ROW_REGISTRY = {
     pustynia: 'Pustynia', pustkowia: 'Pustkowia', woda: 'Woda',
     drogi_osady: 'Drogi i osady', obiekty: 'Obiekty', inne: 'Inne' };
   let _wbPaletteSearch = '';
-  let _wbPaletteShowAll = false;
+  let _wbLegRegion = '';               // #1551: kraina wybrana w filtrze legendy ('' = wszystkie)
+  const _wbRegionTypeCache = {};       // regionKey → Set(hex_type) charakterystycznych dla krainy
   const _wbPaletteCollapsed = new Set();
   let _wbRecentTypes = [];
   try { _wbRecentTypes = JSON.parse(localStorage.getItem('wbRecentTerrain') || '[]') || []; } catch (e) {}
@@ -2659,22 +2668,28 @@ const _ROW_REGISTRY = {
   function _wbRenderPalette() {
     const pal = document.getElementById('wb-palette');
     if (!pal) return;
-    const regionActive = !!_wbActiveRegion;
-    const restrict = regionActive && !_wbPaletteShowAll;
-    const inView = restrict ? new Set(Object.values(_wbHexes).map(h => h.hex_type)) : null;
+    // #1551: filtr „teren charakterystyczny dla krainy” — restrykcja gdy wybrana
+    // kraina i mamy jej zestaw typów w cache (inaczej pokazujemy wszystko + docieramy set).
+    const regionTypes = _wbLegRegion ? _wbRegionTypeCache[_wbLegRegion] : null;
+    const restrict = !!regionTypes;
     const q = _wbPaletteSearch.trim().toLowerCase();
     // grupowanie wg rodzin
     const fams = {};
     for (const [type, cfg] of Object.entries(_wbHexTypes)) {
-      if (restrict && !inView.has(type)) continue;
+      if (restrict && !regionTypes.has(type)) continue;
       const s = _wbPaletteStyleFor(type);
       if (q && !s.label.toLowerCase().includes(q) && !type.toLowerCase().includes(q)) continue;
       (fams[s.family] ||= []).push({ type, ...s });
     }
     let html = '';
     html += `<input id="wb-leg-search" class="wb-leg-search" placeholder="🔍 Szukaj terenu…" value="${_esc(_wbPaletteSearch)}">`;
-    if (regionActive)
-      html += `<div class="wb-leg-toggle" id="wb-leg-showall">${_wbPaletteShowAll ? '● wszystkie typy — pokaż tylko z krainy' : '○ tylko z tej krainy — pokaż wszystkie'}</div>`;
+    if (_wbRegions.length) {
+      const opts = ['<option value="">🌍 Wszystkie krainy</option>']
+        .concat(_wbRegions.map(r => `<option value="${_esc(r.key)}"${r.key === _wbLegRegion ? ' selected' : ''}>${_esc(r.label)}</option>`)).join('');
+      html += `<select id="wb-leg-region" class="wb-leg-region" title="Pokaż tylko teren charakterystyczny dla wybranej krainy">${opts}</select>`;
+      if (_wbLegRegion && !regionTypes)
+        html += `<div class="wb-leg-empty">Wczytuję tereny krainy…</div>`;
+    }
     // ostatnio używane
     const recent = _wbRecentTypes.filter(t => _wbHexTypes[t]).slice(0, 6);
     if (recent.length && !q) {
@@ -2700,8 +2715,19 @@ const _ROW_REGISTRY = {
     const searchEl = document.getElementById('wb-leg-search');
     if (searchEl) searchEl.oninput = () => { _wbPaletteSearch = searchEl.value; _wbRenderPalette();
       const s2 = document.getElementById('wb-leg-search'); if (s2) { s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length); } };
-    const showAll = document.getElementById('wb-leg-showall');
-    if (showAll) showAll.onclick = () => { _wbPaletteShowAll = !_wbPaletteShowAll; _wbRenderPalette(); };
+    const regSel = document.getElementById('wb-leg-region');
+    if (regSel) regSel.onchange = async () => {
+      _wbLegRegion = regSel.value;
+      // dociągnij zestaw typów krainy (bez ruszania widoku mapy), zcache'uj
+      if (_wbLegRegion && !_wbRegionTypeCache[_wbLegRegion]) {
+        _wbRenderPalette();  // pokaż „Wczytuję…”
+        try {
+          const m = await apiFetch('/api/admin/world/map?region=' + encodeURIComponent(_wbLegRegion));
+          _wbRegionTypeCache[_wbLegRegion] = new Set((m.hexes || []).map(h => h.hex_type));
+        } catch (e) { _wbRegionTypeCache[_wbLegRegion] = new Set(); }
+      }
+      _wbRenderPalette();
+    };
     pal.querySelectorAll('.wb-leg-fam-h').forEach(h => h.onclick = () => {
       const f = h.dataset.fam; _wbPaletteCollapsed.has(f) ? _wbPaletteCollapsed.delete(f) : _wbPaletteCollapsed.add(f); _wbRenderPalette();
     });

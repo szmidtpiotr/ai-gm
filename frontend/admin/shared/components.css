@@ -1425,6 +1425,8 @@
     .wb-leg-search { width: calc(100% - 12px); box-sizing: border-box; margin: 2px 6px 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--t1); padding: 4px 7px; font-size: 0.7rem; }
     .wb-leg-toggle { font-size: 0.62rem; color: var(--t3); padding: 3px 8px 5px; cursor: pointer; user-select: none; }
     .wb-leg-toggle:hover { color: #f0c040; }
+    .wb-leg-region { width: calc(100% - 12px); box-sizing: border-box; margin: 0 6px 5px; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--t1); padding: 4px 6px; font-size: 0.68rem; cursor: pointer; }
+    .wb-leg-region:focus { border-color: #f0c040; outline: none; }
     .wb-leg-cap { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; color: var(--t3); padding: 2px 2px 3px; }
     .wb-leg-recent { padding: 0 6px 4px; }
     .wb-leg-recent-row { display: flex; gap: 3px; flex-wrap: wrap; }
