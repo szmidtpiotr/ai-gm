@@ -171,22 +171,40 @@ def paint_interior(hexes, local, rng):
         hexes[k]["hex_type"] = assigned.get(k, "tundra")
 
 
-def paint_north_range(hexes, local, cfg, rng):
+def paint_north_range(hexes, local, cfg, rng, foreign):
     """Pas gór na północy (#1549, spójność z masywem Siwych Grań).
 
-    Masyw Grań dotyka tła górną częścią krawędzi od strony SG — ale bariera
-    lodowa tła to ledwie 2 rzędy, więc łańcuch „urywał się" na szwie. Ten pas
-    maluje szeroki grzbiet pod barierą: głęboki przy narożniku Grań (zlewa się
-    z masywem), zwężający się ku przeciwnej krawędzi. Efekt: jeden ciągły łuk
-    bariera NW → masyw Grań → bariera NE."""
+    Masyw Grań siedzi w PIONOWYM środku swojego bloku, a bloki tła są
+    przesunięte schodkowo o ±25 rzędów — więc „pas przy górnej krawędzi"
+    nie trafiał w szerokość geograficzną masywu i łańcuch urywał się na szwie.
+
+    Ten pass kotwiczy się w DANYCH sąsiada: na krawędzi od strony Grań
+    znajduje pełną rozpiętość kontaktu z masywem (rodzina MOUNTAIN) i maluje
+    KLIN — przy szwie pokrywa całą rozpiętość kontaktu (masyw wpływa w tło),
+    a ku przeciwnej krawędzi zwęża się łukiem do wąskiego grzbietu pod barierą
+    lodową. Efekt: brązowa masa masywu ciągnie się przez oba tła."""
     sg_east = cfg["grania_side"] == "E"     # NW: Granie na wschodzie
-    deep, shallow = 12, 3                    # głębokość pasa przy/naprzeciw Grań
-    # jitter per KOLUMNA (nie per hex) → dolna krawędź pasa faluje gładko
+    edge_c = (W - 1) if sg_east else 0
+
+    # rozpiętość kontaktu z masywem: wiersze lokalne krawędzi SG, których
+    # obcy sąsiad (axial) jest rodziny MOUNTAIN
+    contact = []
+    for k, (c, r) in local.items():
+        if c != edge_c:
+            continue
+        for nb in ax_neighbors(*k):
+            if nb in foreign and BLEND_FAM.get(foreign[nb]) == "MOUNTAIN":
+                contact.append(r)
+                break
+    deep = max(contact) if contact else 12   # dolny skraj klina przy szwie
+    shallow = 4                              # wąski grzbiet na drugim końcu
+
+    # jitter per KOLUMNA → krawędź klina faluje gładko, nie szumi per hex
     jitter = [2.0 * (rng.random() - 0.5) + 1.2 * (rng.random() - 0.5)
               for _ in range(W)]
     for k, (c, r) in sorted(local.items()):
         prox = (c / (W - 1)) if sg_east else (1 - c / (W - 1))
-        depth = shallow + (deep - shallow) * prox + jitter[c]
+        depth = shallow + (deep - shallow) * (prox ** 1.6) + jitter[c]
         band_r = r - BARRIER_ICE_ROWS
         if band_r < 0 or band_r >= depth:
             continue
@@ -194,11 +212,11 @@ def paint_north_range(hexes, local, cfg, rng):
             continue
         rel = band_r / max(depth, 1)         # 0 = pod barierą, 1 = dolny skraj
         roll = rng.random()
-        if rel < 0.55:                       # rdzeń grzbietu — lity jak masyw Grań
-            hexes[k]["hex_type"] = "mountain" if roll < 0.75 else "snow"
+        if rel < 0.7:                        # rdzeń grzbietu — lity jak masyw Grań
+            hexes[k]["hex_type"] = "mountain" if roll < 0.8 else "snow"
         else:                                # pogórze na dolnym skraju
             hexes[k]["hex_type"] = "hills" if roll < 0.55 else \
-                ("mountain" if roll < 0.7 else "tundra")
+                ("mountain" if roll < 0.75 else "tundra")
 
 
 def carve_lakes(hexes, local, rng, n_lakes=N_LAKES):
@@ -323,7 +341,9 @@ def blend_to_neighbors(hexes, local, rng, foreign, band=BLEND_BAND):
         p = (band - d + 1) / band + 0.25 * (rng.random() - 0.5)
         cur = h["hex_type"]; new = None
         if fam_n == "MOUNTAIN":
-            if d <= 2:
+            if BLEND_FAM.get(cur) == "MOUNTAIN":
+                new = None                     # już górski (np. klin masywu) — nie rozcieńczaj
+            elif d <= 2:
                 new = "mountain" if rng.random() < 0.7 else "snow"
             elif d <= 4 and rng.random() < p:
                 new = "mountain" if rng.random() < 0.35 else "hills"
@@ -442,15 +462,16 @@ def main():
     print("[1] wnętrze: tundra-dominant + tajga/wzgórza/góry/śnieg")
     paint_interior(hexes, local, rng)
 
-    print("[1b] pas gór na północy (ciągłość z masywem Siwych Grań)")
-    paint_north_range(hexes, local, cfg, rng)
+    foreign = load_foreign(region)
+
+    print("[1b] pas gór na północy (klin od masywu Grań, kotwiczony w danych)")
+    paint_north_range(hexes, local, cfg, rng, foreign)
 
     print("[2] jeziora (z dala od gór — #1545)")
     lakes = carve_lakes(hexes, local, rng)
     print(f"  jeziora: {len(lakes)} hexów")
 
     print("[3] blend do sąsiadów (data-driven z kanonu, pas %d hexów)" % BLEND_BAND)
-    foreign = load_foreign(region)
     n_blend = blend_to_neighbors(hexes, local, rng, foreign)
     print(f"  przemalowane: {n_blend} hexów")
     # blend mógł postawić górę przy naszym jeziorze — pogórze mostkuje (#1545)
