@@ -4,7 +4,7 @@
  "status": "background",
  "w": 50,
  "h": 50,
- "note": "DLC paczka FAZY RM — Morze. Kanon = ten plik w git.",
+ "note": "DLC paczka FAZY RM — Morze. Kanon = ten plik w git (commit = zgoda Piotra). Seed: scripts/seed_world_map.py --region tlo_morze. Snapshot: scripts/snapshot_world_map.py --region tlo_morze.",
  "hexes": [
   {
    "q": 48,
@@ -97,7 +97,7 @@
   {
    "q": 49,
    "r": 28,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -161,7 +161,7 @@
   {
    "q": 49,
    "r": 29,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -5201,7 +5201,7 @@
   {
    "q": 49,
    "r": 50,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -5601,7 +5601,7 @@
   {
    "q": 49,
    "r": 51,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -5993,7 +5993,7 @@
   {
    "q": 48,
    "r": 52,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -6001,7 +6001,7 @@
   {
    "q": 49,
    "r": 52,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -6393,7 +6393,7 @@
   {
    "q": 48,
    "r": 53,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -6401,7 +6401,7 @@
   {
    "q": 49,
    "r": 53,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -6785,7 +6785,7 @@
   {
    "q": 47,
    "r": 54,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -6793,7 +6793,7 @@
   {
    "q": 48,
    "r": 54,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -6801,7 +6801,7 @@
   {
    "q": 49,
    "r": 54,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -7185,7 +7185,7 @@
   {
    "q": 47,
    "r": 55,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -7193,7 +7193,7 @@
   {
    "q": 48,
    "r": 55,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -7201,7 +7201,7 @@
   {
    "q": 49,
    "r": 55,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -7593,7 +7593,7 @@
   {
    "q": 48,
    "r": 56,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -7601,7 +7601,7 @@
   {
    "q": 49,
    "r": 56,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -8001,7 +8001,7 @@
   {
    "q": 49,
    "r": 57,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -8401,7 +8401,7 @@
   {
    "q": 49,
    "r": 58,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -9601,7 +9601,7 @@
   {
    "q": 49,
    "r": 61,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -10001,7 +10001,7 @@
   {
    "q": 49,
    "r": 62,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -10401,7 +10401,7 @@
   {
    "q": 49,
    "r": 63,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -10801,7 +10801,7 @@
   {
    "q": 49,
    "r": 64,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -12801,7 +12801,7 @@
   {
    "q": 49,
    "r": 69,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -13193,7 +13193,7 @@
   {
    "q": 48,
    "r": 70,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -13201,7 +13201,7 @@
   {
    "q": 49,
    "r": 70,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -13593,7 +13593,7 @@
   {
    "q": 48,
    "r": 71,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -13601,7 +13601,7 @@
   {
    "q": 49,
    "r": 71,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -13993,7 +13993,7 @@
   {
    "q": 48,
    "r": 72,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -14001,7 +14001,7 @@
   {
    "q": 49,
    "r": 72,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -14393,7 +14393,7 @@
   {
    "q": 48,
    "r": 73,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -14401,7 +14401,7 @@
   {
    "q": 49,
    "r": 73,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
@@ -14801,7 +14801,7 @@
   {
    "q": 49,
    "r": 74,
-   "hex_type": "morze",
+   "hex_type": "coast",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.0
