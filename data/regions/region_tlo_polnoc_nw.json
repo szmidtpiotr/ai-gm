@@ -27,7 +27,7 @@
   {
    "q": -50,
    "r": -24,
-   "hex_type": "lodowiec",
+   "hex_type": "grania",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -54,7 +54,7 @@
   {
    "q": -50,
    "r": -21,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -63,7 +63,7 @@
   {
    "q": -50,
    "r": -20,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -72,7 +72,7 @@
   {
    "q": -50,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -459,7 +459,7 @@
   {
    "q": -50,
    "r": 24,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -504,7 +504,7 @@
   {
    "q": -49,
    "r": -21,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -522,7 +522,7 @@
   {
    "q": -49,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -882,7 +882,7 @@
   {
    "q": -49,
    "r": 21,
-   "hex_type": "heath",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -909,7 +909,7 @@
   {
    "q": -49,
    "r": 24,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -936,7 +936,7 @@
   {
    "q": -48,
    "r": -24,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -954,7 +954,7 @@
   {
    "q": -48,
    "r": -22,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -963,7 +963,7 @@
   {
    "q": -48,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1332,15 +1332,6 @@
   {
    "q": -48,
    "r": 20,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -48,
-   "r": 21,
    "hex_type": "tundra",
    "label": null,
    "location_key": null,
@@ -1349,8 +1340,17 @@
   },
   {
    "q": -48,
-   "r": 22,
+   "r": 21,
    "hex_type": "heath",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -48,
+   "r": 22,
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1377,7 +1377,7 @@
   {
    "q": -47,
    "r": -25,
-   "hex_type": "lodowiec",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1395,7 +1395,7 @@
   {
    "q": -47,
    "r": -23,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1413,7 +1413,7 @@
   {
    "q": -47,
    "r": -21,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1422,7 +1422,7 @@
   {
    "q": -47,
    "r": -20,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1809,7 +1809,7 @@
   {
    "q": -47,
    "r": 23,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1827,7 +1827,7 @@
   {
    "q": -46,
    "r": -26,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1863,7 +1863,7 @@
   {
    "q": -46,
    "r": -22,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -1872,7 +1872,7 @@
   {
    "q": -46,
    "r": -21,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2043,7 +2043,7 @@
   {
    "q": -46,
    "r": -2,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2052,7 +2052,7 @@
   {
    "q": -46,
    "r": -1,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2223,7 +2223,7 @@
   {
    "q": -46,
    "r": 18,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2241,7 +2241,7 @@
   {
    "q": -46,
    "r": 20,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2259,7 +2259,7 @@
   {
    "q": -46,
    "r": 22,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2277,7 +2277,7 @@
   {
    "q": -45,
    "r": -26,
-   "hex_type": "snow",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2295,15 +2295,6 @@
   {
    "q": -45,
    "r": -24,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -45,
-   "r": -23,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -2312,8 +2303,17 @@
   },
   {
    "q": -45,
+   "r": -23,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -45,
    "r": -22,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2322,7 +2322,7 @@
   {
    "q": -45,
    "r": -21,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2493,7 +2493,7 @@
   {
    "q": -45,
    "r": -2,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2502,7 +2502,7 @@
   {
    "q": -45,
    "r": -1,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2673,7 +2673,7 @@
   {
    "q": -45,
    "r": 18,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2682,7 +2682,7 @@
   {
    "q": -45,
    "r": 19,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2700,7 +2700,7 @@
   {
    "q": -45,
    "r": 21,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2709,7 +2709,7 @@
   {
    "q": -45,
    "r": 22,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2754,7 +2754,7 @@
   {
    "q": -44,
    "r": -24,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2763,7 +2763,7 @@
   {
    "q": -44,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2772,7 +2772,7 @@
   {
    "q": -44,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -2817,7 +2817,7 @@
   {
    "q": -44,
    "r": -17,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3132,7 +3132,7 @@
   {
    "q": -44,
    "r": 18,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3177,7 +3177,7 @@
   {
    "q": -43,
    "r": -27,
-   "hex_type": "grania",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3195,7 +3195,7 @@
   {
    "q": -43,
    "r": -25,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3204,7 +3204,7 @@
   {
    "q": -43,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3213,7 +3213,7 @@
   {
    "q": -43,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3267,7 +3267,7 @@
   {
    "q": -43,
    "r": -17,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3276,7 +3276,7 @@
   {
    "q": -43,
    "r": -16,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3582,7 +3582,7 @@
   {
    "q": -43,
    "r": 18,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -3627,447 +3627,6 @@
   {
    "q": -42,
    "r": -28,
-   "hex_type": "lodowiec",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -27,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -26,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -25,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -24,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -23,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -22,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -21,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -20,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -19,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -18,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -17,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -16,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -15,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -14,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -12,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -11,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -10,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -9,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -8,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -7,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -6,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -5,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -4,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -3,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -2,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": -1,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 0,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 1,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 2,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 3,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 4,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 5,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 6,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 7,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 8,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 9,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 10,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 11,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 12,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 13,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 14,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 15,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 16,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 17,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 18,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 19,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -42,
-   "r": 20,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -41,
-   "r": -29,
    "hex_type": "grania",
    "label": null,
    "location_key": null,
@@ -4075,8 +3634,8 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
-   "r": -28,
+   "q": -42,
+   "r": -27,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -4084,16 +3643,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
-   "r": -27,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -41,
+   "q": -42,
    "r": -26,
    "hex_type": "mountain",
    "label": null,
@@ -4102,8 +3652,26 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -25,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -42,
+   "r": -24,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -42,
+   "r": -23,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -4111,35 +3679,26 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
-   "r": -24,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -41,
-   "r": -23,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -41,
+   "q": -42,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -21,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -42,
+   "r": -20,
    "hex_type": "tundra",
    "label": null,
    "location_key": null,
@@ -4147,16 +3706,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
-   "r": -20,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -41,
+   "q": -42,
    "r": -19,
    "hex_type": "tundra",
    "label": null,
@@ -4165,16 +3715,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -18,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -17,
    "hex_type": "tundra",
    "label": null,
@@ -4183,7 +3733,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -16,
    "hex_type": "tundra",
    "label": null,
@@ -4192,25 +3742,25 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -15,
-   "hex_type": "tundra",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -14,
-   "hex_type": "snow",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -13,
    "hex_type": "mountain",
    "label": null,
@@ -4219,16 +3769,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -12,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -11,
    "hex_type": "tundra",
    "label": null,
@@ -4237,7 +3787,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -10,
    "hex_type": "tundra",
    "label": null,
@@ -4246,7 +3796,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -9,
    "hex_type": "hills",
    "label": null,
@@ -4255,7 +3805,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -8,
    "hex_type": "hills",
    "label": null,
@@ -4264,16 +3814,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -7,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -6,
    "hex_type": "tundra",
    "label": null,
@@ -4282,8 +3832,17 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -5,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -42,
+   "r": -4,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -4291,16 +3850,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
-   "r": -4,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -41,
+   "q": -42,
    "r": -3,
    "hex_type": "mountain",
    "label": null,
@@ -4309,16 +3859,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -2,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": -1,
    "hex_type": "tundra",
    "label": null,
@@ -4327,7 +3877,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 0,
    "hex_type": "tundra",
    "label": null,
@@ -4336,7 +3886,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 1,
    "hex_type": "tundra",
    "label": null,
@@ -4345,7 +3895,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 2,
    "hex_type": "tundra",
    "label": null,
@@ -4354,7 +3904,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 3,
    "hex_type": "tundra",
    "label": null,
@@ -4363,7 +3913,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 4,
    "hex_type": "tundra",
    "label": null,
@@ -4372,7 +3922,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 5,
    "hex_type": "tundra",
    "label": null,
@@ -4381,7 +3931,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 6,
    "hex_type": "tundra",
    "label": null,
@@ -4390,7 +3940,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 7,
    "hex_type": "tundra",
    "label": null,
@@ -4399,7 +3949,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 8,
    "hex_type": "tundra",
    "label": null,
@@ -4408,7 +3958,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 9,
    "hex_type": "tundra",
    "label": null,
@@ -4417,7 +3967,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 10,
    "hex_type": "tundra",
    "label": null,
@@ -4426,7 +3976,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 11,
    "hex_type": "tundra",
    "label": null,
@@ -4435,16 +3985,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 12,
-   "hex_type": "snow",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 13,
    "hex_type": "mountain",
    "label": null,
@@ -4453,7 +4003,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 14,
    "hex_type": "mountain",
    "label": null,
@@ -4462,16 +4012,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 15,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 16,
    "hex_type": "tundra",
    "label": null,
@@ -4480,7 +4030,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 17,
    "hex_type": "tundra",
    "label": null,
@@ -4489,16 +4039,16 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 18,
-   "hex_type": "hills",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 19,
    "hex_type": "heath",
    "label": null,
@@ -4507,7 +4057,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -41,
+   "q": -42,
    "r": 20,
    "hex_type": "plains",
    "label": null,
@@ -4516,6 +4066,456 @@
    "encounter_chance": 0.0
   },
   {
+   "q": -41,
+   "r": -29,
+   "hex_type": "grania",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -28,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -27,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -26,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -25,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -24,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -23,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -22,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -21,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -20,
+   "hex_type": "las_iglasty",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -19,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -18,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -17,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -16,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -15,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -14,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -13,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -11,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -10,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -9,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -8,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -7,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -6,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -5,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -4,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -3,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -2,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": -1,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 0,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 1,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 2,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 3,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 4,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 5,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 6,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 7,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 8,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 9,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 10,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 11,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 12,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 13,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 14,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 15,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 16,
+   "hex_type": "heath",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 17,
+   "hex_type": "heath",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 18,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 19,
+   "hex_type": "heath",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -41,
+   "r": 20,
+   "hex_type": "heath",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
    "q": -40,
    "r": -30,
    "hex_type": "grania",
@@ -4545,7 +4545,7 @@
   {
    "q": -40,
    "r": -27,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4563,7 +4563,7 @@
   {
    "q": -40,
    "r": -25,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4572,7 +4572,7 @@
   {
    "q": -40,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4581,7 +4581,7 @@
   {
    "q": -40,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4590,7 +4590,7 @@
   {
    "q": -40,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4923,7 +4923,7 @@
   {
    "q": -40,
    "r": 15,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4932,7 +4932,7 @@
   {
    "q": -40,
    "r": 16,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4950,7 +4950,7 @@
   {
    "q": -40,
    "r": 18,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -4977,7 +4977,7 @@
   {
    "q": -39,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5004,7 +5004,7 @@
   {
    "q": -39,
    "r": -26,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5013,7 +5013,7 @@
   {
    "q": -39,
    "r": -25,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5022,7 +5022,7 @@
   {
    "q": -39,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5040,7 +5040,7 @@
   {
    "q": -39,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5328,7 +5328,7 @@
   {
    "q": -39,
    "r": 10,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5337,7 +5337,7 @@
   {
    "q": -39,
    "r": 11,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5400,7 +5400,7 @@
   {
    "q": -39,
    "r": 18,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5409,7 +5409,7 @@
   {
    "q": -39,
    "r": 19,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5427,7 +5427,7 @@
   {
    "q": -38,
    "r": -30,
-   "hex_type": "grania",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5445,7 +5445,7 @@
   {
    "q": -38,
    "r": -28,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5463,7 +5463,7 @@
   {
    "q": -38,
    "r": -26,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5472,7 +5472,7 @@
   {
    "q": -38,
    "r": -25,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5481,7 +5481,7 @@
   {
    "q": -38,
    "r": -24,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5499,7 +5499,7 @@
   {
    "q": -38,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5787,7 +5787,7 @@
   {
    "q": -38,
    "r": 10,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5832,7 +5832,7 @@
   {
    "q": -38,
    "r": 15,
-   "hex_type": "tundra",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5841,7 +5841,7 @@
   {
    "q": -38,
    "r": 16,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5886,7 +5886,7 @@
   {
    "q": -37,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5895,7 +5895,7 @@
   {
    "q": -37,
    "r": -28,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5913,7 +5913,7 @@
   {
    "q": -37,
    "r": -26,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5922,7 +5922,7 @@
   {
    "q": -37,
    "r": -25,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5931,7 +5931,7 @@
   {
    "q": -37,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -5940,7 +5940,7 @@
   {
    "q": -37,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6291,7 +6291,7 @@
   {
    "q": -37,
    "r": 16,
-   "hex_type": "tundra",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6327,7 +6327,7 @@
   {
    "q": -36,
    "r": -31,
-   "hex_type": "lodowiec",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6336,7 +6336,7 @@
   {
    "q": -36,
    "r": -30,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6354,7 +6354,7 @@
   {
    "q": -36,
    "r": -28,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6363,7 +6363,7 @@
   {
    "q": -36,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6381,7 +6381,7 @@
   {
    "q": -36,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6390,7 +6390,7 @@
   {
    "q": -36,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6750,7 +6750,7 @@
   {
    "q": -36,
    "r": 16,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6795,7 +6795,7 @@
   {
    "q": -35,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6804,7 +6804,7 @@
   {
    "q": -35,
    "r": -28,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6813,7 +6813,7 @@
   {
    "q": -35,
    "r": -27,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6822,7 +6822,7 @@
   {
    "q": -35,
    "r": -26,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6831,7 +6831,7 @@
   {
    "q": -35,
    "r": -25,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6840,7 +6840,7 @@
   {
    "q": -35,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -6858,7 +6858,7 @@
   {
    "q": -35,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -7209,6 +7209,456 @@
   {
    "q": -35,
    "r": 17,
+   "hex_type": "las_iglasty",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -33,
+   "hex_type": "grania",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -32,
+   "hex_type": "lodowiec",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -31,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -30,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -29,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -28,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -27,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -26,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -25,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -24,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -23,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -22,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -21,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -20,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -19,
+   "hex_type": "las_iglasty",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -18,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -17,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -16,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -15,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -14,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -13,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -12,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -11,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -10,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -9,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -8,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -7,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -6,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -5,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -4,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -3,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -2,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": -1,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 0,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 1,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 2,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 3,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 4,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 5,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 6,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 7,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 8,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 9,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 10,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 11,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 12,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 13,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 14,
+   "hex_type": "las_iglasty",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 15,
+   "hex_type": "las_iglasty",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -34,
+   "r": 16,
    "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
@@ -7216,7 +7666,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -34,
+   "q": -33,
    "r": -33,
    "hex_type": "grania",
    "label": null,
@@ -7225,7 +7675,7 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -34,
+   "q": -33,
    "r": -32,
    "hex_type": "lodowiec",
    "label": null,
@@ -7234,456 +7684,6 @@
    "encounter_chance": 0.0
   },
   {
-   "q": -34,
-   "r": -31,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -30,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -29,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -28,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -27,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -26,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -25,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -24,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -23,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -22,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -21,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -20,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -19,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -18,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -17,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -16,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -15,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -14,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -12,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -11,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -10,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -9,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -8,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -7,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -6,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -5,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -4,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -3,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -2,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": -1,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 0,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 1,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 2,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 3,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 4,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 5,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 6,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 7,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 8,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 9,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 10,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 11,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 12,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 13,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 14,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 15,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -34,
-   "r": 16,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -33,
-   "r": -33,
-   "hex_type": "grania",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -33,
-   "r": -32,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
    "q": -33,
    "r": -31,
    "hex_type": "mountain",
@@ -7713,7 +7713,7 @@
   {
    "q": -33,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -7722,7 +7722,7 @@
   {
    "q": -33,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -7749,7 +7749,7 @@
   {
    "q": -33,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -7794,7 +7794,7 @@
   {
    "q": -33,
    "r": -19,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -7803,7 +7803,7 @@
   {
    "q": -33,
    "r": -18,
-   "hex_type": "lake",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8109,7 +8109,7 @@
   {
    "q": -33,
    "r": 16,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8127,7 +8127,7 @@
   {
    "q": -32,
    "r": -33,
-   "hex_type": "snow",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8136,7 +8136,7 @@
   {
    "q": -32,
    "r": -32,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8154,7 +8154,7 @@
   {
    "q": -32,
    "r": -30,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8163,7 +8163,7 @@
   {
    "q": -32,
    "r": -29,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8172,24 +8172,6 @@
   {
    "q": -32,
    "r": -28,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -32,
-   "r": -27,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -32,
-   "r": -26,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -8198,8 +8180,26 @@
   },
   {
    "q": -32,
+   "r": -27,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -32,
+   "r": -26,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -32,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8208,7 +8208,7 @@
   {
    "q": -32,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8217,7 +8217,7 @@
   {
    "q": -32,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8253,7 +8253,7 @@
   {
    "q": -32,
    "r": -19,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8550,7 +8550,7 @@
   {
    "q": -32,
    "r": 14,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8577,7 +8577,7 @@
   {
    "q": -31,
    "r": -33,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8595,7 +8595,7 @@
   {
    "q": -31,
    "r": -31,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8604,7 +8604,7 @@
   {
    "q": -31,
    "r": -30,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8613,7 +8613,7 @@
   {
    "q": -31,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8622,7 +8622,7 @@
   {
    "q": -31,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8631,7 +8631,7 @@
   {
    "q": -31,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8649,7 +8649,7 @@
   {
    "q": -31,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8658,7 +8658,7 @@
   {
    "q": -31,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8667,7 +8667,7 @@
   {
    "q": -31,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8676,7 +8676,7 @@
   {
    "q": -31,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8973,7 +8973,7 @@
   {
    "q": -31,
    "r": 11,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8982,7 +8982,7 @@
   {
    "q": -31,
    "r": 12,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -8991,7 +8991,7 @@
   {
    "q": -31,
    "r": 13,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9009,7 +9009,7 @@
   {
    "q": -31,
    "r": 15,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9045,7 +9045,7 @@
   {
    "q": -30,
    "r": -32,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9072,7 +9072,7 @@
   {
    "q": -30,
    "r": -29,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9081,7 +9081,7 @@
   {
    "q": -30,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9090,7 +9090,7 @@
   {
    "q": -30,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9099,7 +9099,7 @@
   {
    "q": -30,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9108,7 +9108,7 @@
   {
    "q": -30,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9126,7 +9126,7 @@
   {
    "q": -30,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9450,7 +9450,7 @@
   {
    "q": -30,
    "r": 13,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9459,7 +9459,7 @@
   {
    "q": -30,
    "r": 14,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9477,7 +9477,7 @@
   {
    "q": -29,
    "r": -34,
-   "hex_type": "lodowiec",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9504,7 +9504,7 @@
   {
    "q": -29,
    "r": -31,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9522,7 +9522,7 @@
   {
    "q": -29,
    "r": -29,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9531,7 +9531,7 @@
   {
    "q": -29,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9540,7 +9540,7 @@
   {
    "q": -29,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9549,7 +9549,7 @@
   {
    "q": -29,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9558,7 +9558,7 @@
   {
    "q": -29,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9567,7 +9567,7 @@
   {
    "q": -29,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9576,7 +9576,7 @@
   {
    "q": -29,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9585,7 +9585,7 @@
   {
    "q": -29,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9873,7 +9873,7 @@
   {
    "q": -29,
    "r": 10,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9882,7 +9882,7 @@
   {
    "q": -29,
    "r": 11,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9945,7 +9945,7 @@
   {
    "q": -28,
    "r": -33,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9954,7 +9954,7 @@
   {
    "q": -28,
    "r": -32,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -9972,24 +9972,6 @@
   {
    "q": -28,
    "r": -30,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -28,
-   "r": -29,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -28,
-   "r": -28,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -9998,8 +9980,26 @@
   },
   {
    "q": -28,
+   "r": -29,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -28,
+   "r": -28,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -28,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10017,7 +10017,7 @@
   {
    "q": -28,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10026,7 +10026,7 @@
   {
    "q": -28,
    "r": -24,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10035,7 +10035,7 @@
   {
    "q": -28,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10341,7 +10341,7 @@
   {
    "q": -28,
    "r": 11,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10359,7 +10359,7 @@
   {
    "q": -28,
    "r": 13,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10413,7 +10413,7 @@
   {
    "q": -27,
    "r": -31,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10449,7 +10449,7 @@
   {
    "q": -27,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10467,7 +10467,7 @@
   {
    "q": -27,
    "r": -25,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10476,7 +10476,7 @@
   {
    "q": -27,
    "r": -24,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10494,7 +10494,7 @@
   {
    "q": -27,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10503,7 +10503,7 @@
   {
    "q": -27,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10782,7 +10782,7 @@
   {
    "q": -27,
    "r": 10,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10809,7 +10809,7 @@
   {
    "q": -27,
    "r": 13,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10836,7 +10836,7 @@
   {
    "q": -26,
    "r": -35,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10881,7 +10881,7 @@
   {
    "q": -26,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10890,7 +10890,7 @@
   {
    "q": -26,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10899,7 +10899,7 @@
   {
    "q": -26,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10908,7 +10908,7 @@
   {
    "q": -26,
    "r": -27,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10926,7 +10926,7 @@
   {
    "q": -26,
    "r": -25,
-   "hex_type": "mountain",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10935,7 +10935,7 @@
   {
    "q": -26,
    "r": -24,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -10953,7 +10953,7 @@
   {
    "q": -26,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11223,7 +11223,7 @@
   {
    "q": -26,
    "r": 8,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11241,7 +11241,7 @@
   {
    "q": -26,
    "r": 10,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11250,7 +11250,7 @@
   {
    "q": -26,
    "r": 11,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11259,7 +11259,7 @@
   {
    "q": -26,
    "r": 12,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11331,7 +11331,7 @@
   {
    "q": -25,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11340,7 +11340,7 @@
   {
    "q": -25,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11349,7 +11349,7 @@
   {
    "q": -25,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11367,15 +11367,6 @@
   {
    "q": -25,
    "r": -26,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -25,
-   "r": -25,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -11384,8 +11375,17 @@
   },
   {
    "q": -25,
+   "r": -25,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -25,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11394,7 +11394,7 @@
   {
    "q": -25,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11403,7 +11403,7 @@
   {
    "q": -25,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11673,7 +11673,7 @@
   {
    "q": -25,
    "r": 8,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11709,7 +11709,7 @@
   {
    "q": -25,
    "r": 12,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11727,7 +11727,7 @@
   {
    "q": -24,
    "r": -37,
-   "hex_type": "lodowiec",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11745,7 +11745,7 @@
   {
    "q": -24,
    "r": -35,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11754,7 +11754,7 @@
   {
    "q": -24,
    "r": -34,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11763,7 +11763,7 @@
   {
    "q": -24,
    "r": -33,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11772,7 +11772,7 @@
   {
    "q": -24,
    "r": -32,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11781,7 +11781,7 @@
   {
    "q": -24,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11790,7 +11790,7 @@
   {
    "q": -24,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11799,7 +11799,7 @@
   {
    "q": -24,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11808,7 +11808,7 @@
   {
    "q": -24,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11826,7 +11826,7 @@
   {
    "q": -24,
    "r": -26,
-   "hex_type": "mountain",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11835,7 +11835,7 @@
   {
    "q": -24,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -11853,7 +11853,7 @@
   {
    "q": -24,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12123,7 +12123,7 @@
   {
    "q": -24,
    "r": 7,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12177,7 +12177,7 @@
   {
    "q": -23,
    "r": -37,
-   "hex_type": "lodowiec",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12186,7 +12186,7 @@
   {
    "q": -23,
    "r": -36,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12222,7 +12222,7 @@
   {
    "q": -23,
    "r": -32,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12231,7 +12231,7 @@
   {
    "q": -23,
    "r": -31,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12249,7 +12249,7 @@
   {
    "q": -23,
    "r": -29,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12258,7 +12258,7 @@
   {
    "q": -23,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12276,7 +12276,7 @@
   {
    "q": -23,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12285,7 +12285,7 @@
   {
    "q": -23,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12303,7 +12303,7 @@
   {
    "q": -23,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12312,7 +12312,7 @@
   {
    "q": -23,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12321,7 +12321,7 @@
   {
    "q": -23,
    "r": -21,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12357,7 +12357,7 @@
   {
    "q": -23,
    "r": -17,
-   "hex_type": "snow",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12600,7 +12600,7 @@
   {
    "q": -23,
    "r": 10,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12609,7 +12609,7 @@
   {
    "q": -23,
    "r": 11,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12627,7 +12627,7 @@
   {
    "q": -22,
    "r": -38,
-   "hex_type": "lodowiec",
+   "hex_type": "grania",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12654,15 +12654,6 @@
   {
    "q": -22,
    "r": -35,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -22,
-   "r": -34,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -12671,8 +12662,17 @@
   },
   {
    "q": -22,
+   "r": -34,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -22,
    "r": -33,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12681,7 +12681,7 @@
   {
    "q": -22,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12699,7 +12699,7 @@
   {
    "q": -22,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12708,7 +12708,7 @@
   {
    "q": -22,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12717,7 +12717,7 @@
   {
    "q": -22,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12726,7 +12726,7 @@
   {
    "q": -22,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12753,7 +12753,7 @@
   {
    "q": -22,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12762,7 +12762,7 @@
   {
    "q": -22,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -12816,7 +12816,7 @@
   {
    "q": -22,
    "r": -17,
-   "hex_type": "snow",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13050,7 +13050,7 @@
   {
    "q": -22,
    "r": 9,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13077,7 +13077,7 @@
   {
    "q": -21,
    "r": -38,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13113,7 +13113,7 @@
   {
    "q": -21,
    "r": -34,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13131,7 +13131,7 @@
   {
    "q": -21,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13140,7 +13140,7 @@
   {
    "q": -21,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13149,7 +13149,7 @@
   {
    "q": -21,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13158,7 +13158,7 @@
   {
    "q": -21,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13167,7 +13167,7 @@
   {
    "q": -21,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13176,7 +13176,7 @@
   {
    "q": -21,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13185,7 +13185,7 @@
   {
    "q": -21,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13194,7 +13194,7 @@
   {
    "q": -21,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13212,7 +13212,7 @@
   {
    "q": -21,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13221,7 +13221,7 @@
   {
    "q": -21,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13473,15 +13473,6 @@
   {
    "q": -21,
    "r": 6,
-   "hex_type": "heath",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -21,
-   "r": 7,
    "hex_type": "tundra",
    "label": null,
    "location_key": null,
@@ -13490,8 +13481,17 @@
   },
   {
    "q": -21,
+   "r": 7,
+   "hex_type": "heath",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -21,
    "r": 8,
-   "hex_type": "snow",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13536,7 +13536,7 @@
   {
    "q": -20,
    "r": -38,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13563,7 +13563,7 @@
   {
    "q": -20,
    "r": -35,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13590,7 +13590,7 @@
   {
    "q": -20,
    "r": -32,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13599,7 +13599,7 @@
   {
    "q": -20,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13608,7 +13608,7 @@
   {
    "q": -20,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13617,7 +13617,7 @@
   {
    "q": -20,
    "r": -29,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13626,7 +13626,7 @@
   {
    "q": -20,
    "r": -28,
-   "hex_type": "las_iglasty",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13635,7 +13635,7 @@
   {
    "q": -20,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13644,7 +13644,7 @@
   {
    "q": -20,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13653,7 +13653,7 @@
   {
    "q": -20,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13662,7 +13662,7 @@
   {
    "q": -20,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13671,7 +13671,7 @@
   {
    "q": -20,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13680,7 +13680,7 @@
   {
    "q": -20,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13689,7 +13689,7 @@
   {
    "q": -20,
    "r": -21,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13923,7 +13923,7 @@
   {
    "q": -20,
    "r": 5,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13932,7 +13932,7 @@
   {
    "q": -20,
    "r": 6,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -13941,7 +13941,7 @@
   {
    "q": -20,
    "r": 7,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14022,7 +14022,7 @@
   {
    "q": -19,
    "r": -34,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14040,7 +14040,7 @@
   {
    "q": -19,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14049,7 +14049,7 @@
   {
    "q": -19,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14058,7 +14058,7 @@
   {
    "q": -19,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14067,7 +14067,7 @@
   {
    "q": -19,
    "r": -29,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14076,7 +14076,7 @@
   {
    "q": -19,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14085,7 +14085,7 @@
   {
    "q": -19,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14094,7 +14094,7 @@
   {
    "q": -19,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14103,7 +14103,7 @@
   {
    "q": -19,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14112,7 +14112,7 @@
   {
    "q": -19,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14121,7 +14121,7 @@
   {
    "q": -19,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14130,7 +14130,7 @@
   {
    "q": -19,
    "r": -22,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14139,7 +14139,7 @@
   {
    "q": -19,
    "r": -21,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14373,7 +14373,7 @@
   {
    "q": -19,
    "r": 5,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14391,7 +14391,7 @@
   {
    "q": -19,
    "r": 7,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14400,7 +14400,7 @@
   {
    "q": -19,
    "r": 8,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14409,7 +14409,7 @@
   {
    "q": -19,
    "r": 9,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14472,7 +14472,7 @@
   {
    "q": -18,
    "r": -35,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14481,7 +14481,7 @@
   {
    "q": -18,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14490,7 +14490,7 @@
   {
    "q": -18,
    "r": -33,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14499,7 +14499,7 @@
   {
    "q": -18,
    "r": -32,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14508,7 +14508,7 @@
   {
    "q": -18,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14517,7 +14517,7 @@
   {
    "q": -18,
    "r": -30,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14526,7 +14526,7 @@
   {
    "q": -18,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14535,7 +14535,7 @@
   {
    "q": -18,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14544,7 +14544,7 @@
   {
    "q": -18,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14553,7 +14553,7 @@
   {
    "q": -18,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14562,7 +14562,7 @@
   {
    "q": -18,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14571,7 +14571,7 @@
   {
    "q": -18,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14580,7 +14580,7 @@
   {
    "q": -18,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14589,7 +14589,7 @@
   {
    "q": -18,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14823,7 +14823,7 @@
   {
    "q": -18,
    "r": 4,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14841,7 +14841,7 @@
   {
    "q": -18,
    "r": 6,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14850,7 +14850,7 @@
   {
    "q": -18,
    "r": 7,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14859,7 +14859,7 @@
   {
    "q": -18,
    "r": 8,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14895,7 +14895,7 @@
   {
    "q": -17,
    "r": -38,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14949,7 +14949,7 @@
   {
    "q": -17,
    "r": -32,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14958,7 +14958,7 @@
   {
    "q": -17,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14967,7 +14967,7 @@
   {
    "q": -17,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14976,7 +14976,7 @@
   {
    "q": -17,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14985,7 +14985,7 @@
   {
    "q": -17,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -14994,7 +14994,7 @@
   {
    "q": -17,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15012,7 +15012,7 @@
   {
    "q": -17,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15021,7 +15021,7 @@
   {
    "q": -17,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15030,7 +15030,7 @@
   {
    "q": -17,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15048,7 +15048,7 @@
   {
    "q": -17,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15327,7 +15327,7 @@
   {
    "q": -16,
    "r": -41,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15381,7 +15381,7 @@
   {
    "q": -16,
    "r": -35,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15390,7 +15390,7 @@
   {
    "q": -16,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15399,7 +15399,7 @@
   {
    "q": -16,
    "r": -33,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15408,7 +15408,7 @@
   {
    "q": -16,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15417,7 +15417,7 @@
   {
    "q": -16,
    "r": -31,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15426,7 +15426,7 @@
   {
    "q": -16,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15435,7 +15435,7 @@
   {
    "q": -16,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15444,7 +15444,7 @@
   {
    "q": -16,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15453,7 +15453,7 @@
   {
    "q": -16,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15462,7 +15462,7 @@
   {
    "q": -16,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15471,7 +15471,7 @@
   {
    "q": -16,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15480,7 +15480,7 @@
   {
    "q": -16,
    "r": -24,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15489,7 +15489,7 @@
   {
    "q": -16,
    "r": -23,
-   "hex_type": "snow",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15498,7 +15498,7 @@
   {
    "q": -16,
    "r": -22,
-   "hex_type": "snow",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15507,7 +15507,7 @@
   {
    "q": -16,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15723,7 +15723,7 @@
   {
    "q": -16,
    "r": 3,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15750,7 +15750,7 @@
   {
    "q": -16,
    "r": 6,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15777,7 +15777,7 @@
   {
    "q": -15,
    "r": -41,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15786,7 +15786,7 @@
   {
    "q": -15,
    "r": -40,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15813,7 +15813,7 @@
   {
    "q": -15,
    "r": -37,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15840,7 +15840,7 @@
   {
    "q": -15,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15849,7 +15849,7 @@
   {
    "q": -15,
    "r": -33,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15858,7 +15858,7 @@
   {
    "q": -15,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15876,7 +15876,7 @@
   {
    "q": -15,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -15885,51 +15885,6 @@
   {
    "q": -15,
    "r": -29,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -15,
-   "r": -28,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -15,
-   "r": -27,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -15,
-   "r": -26,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -15,
-   "r": -25,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -15,
-   "r": -24,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -15938,7 +15893,16 @@
   },
   {
    "q": -15,
-   "r": -23,
+   "r": -28,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -15,
+   "r": -27,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -15947,7 +15911,34 @@
   },
   {
    "q": -15,
-   "r": -22,
+   "r": -26,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -15,
+   "r": -25,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -15,
+   "r": -24,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -15,
+   "r": -23,
    "hex_type": "hills",
    "label": null,
    "location_key": null,
@@ -15956,8 +15947,17 @@
   },
   {
    "q": -15,
+   "r": -22,
+   "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -15,
    "r": -21,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16173,7 +16173,7 @@
   {
    "q": -15,
    "r": 3,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16191,7 +16191,7 @@
   {
    "q": -15,
    "r": 5,
-   "hex_type": "snow",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16200,7 +16200,7 @@
   {
    "q": -15,
    "r": 6,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16209,7 +16209,7 @@
   {
    "q": -15,
    "r": 7,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16254,15 +16254,6 @@
   {
    "q": -14,
    "r": -39,
-   "hex_type": "mountain",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -14,
-   "r": -38,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -16271,7 +16262,7 @@
   },
   {
    "q": -14,
-   "r": -37,
+   "r": -38,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -16280,8 +16271,17 @@
   },
   {
    "q": -14,
+   "r": -37,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -14,
    "r": -36,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16290,7 +16290,7 @@
   {
    "q": -14,
    "r": -35,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16308,7 +16308,7 @@
   {
    "q": -14,
    "r": -33,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16317,7 +16317,7 @@
   {
    "q": -14,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16326,7 +16326,7 @@
   {
    "q": -14,
    "r": -31,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16353,7 +16353,7 @@
   {
    "q": -14,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16362,7 +16362,7 @@
   {
    "q": -14,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16371,7 +16371,7 @@
   {
    "q": -14,
    "r": -26,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16380,7 +16380,7 @@
   {
    "q": -14,
    "r": -25,
-   "hex_type": "snow",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16389,7 +16389,7 @@
   {
    "q": -14,
    "r": -24,
-   "hex_type": "snow",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16416,7 +16416,7 @@
   {
    "q": -14,
    "r": -21,
-   "hex_type": "lake",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16425,7 +16425,7 @@
   {
    "q": -14,
    "r": -20,
-   "hex_type": "lake",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16650,7 +16650,7 @@
   {
    "q": -14,
    "r": 5,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16677,7 +16677,7 @@
   {
    "q": -13,
    "r": -42,
-   "hex_type": "grania",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16695,7 +16695,7 @@
   {
    "q": -13,
    "r": -40,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16731,7 +16731,7 @@
   {
    "q": -13,
    "r": -36,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16740,7 +16740,7 @@
   {
    "q": -13,
    "r": -35,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16749,7 +16749,7 @@
   {
    "q": -13,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16758,7 +16758,7 @@
   {
    "q": -13,
    "r": -33,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16794,7 +16794,7 @@
   {
    "q": -13,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16803,7 +16803,7 @@
   {
    "q": -13,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16812,7 +16812,7 @@
   {
    "q": -13,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16821,7 +16821,7 @@
   {
    "q": -13,
    "r": -26,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16830,7 +16830,7 @@
   {
    "q": -13,
    "r": -25,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16839,7 +16839,7 @@
   {
    "q": -13,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16848,7 +16848,7 @@
   {
    "q": -13,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16866,7 +16866,7 @@
   {
    "q": -13,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -16875,7 +16875,7 @@
   {
    "q": -13,
    "r": -20,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17091,7 +17091,7 @@
   {
    "q": -13,
    "r": 4,
-   "hex_type": "las_iglasty",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17109,7 +17109,7 @@
   {
    "q": -13,
    "r": 6,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17199,7 +17199,7 @@
   {
    "q": -12,
    "r": -35,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17208,7 +17208,7 @@
   {
    "q": -12,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17217,7 +17217,7 @@
   {
    "q": -12,
    "r": -33,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17253,7 +17253,7 @@
   {
    "q": -12,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17262,7 +17262,7 @@
   {
    "q": -12,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17271,7 +17271,7 @@
   {
    "q": -12,
    "r": -27,
-   "hex_type": "las_iglasty",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17280,7 +17280,7 @@
   {
    "q": -12,
    "r": -26,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17289,7 +17289,7 @@
   {
    "q": -12,
    "r": -25,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17307,7 +17307,7 @@
   {
    "q": -12,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17325,7 +17325,7 @@
   {
    "q": -12,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17334,7 +17334,7 @@
   {
    "q": -12,
    "r": -20,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17343,7 +17343,7 @@
   {
    "q": -12,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17532,7 +17532,7 @@
   {
    "q": -12,
    "r": 2,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17577,7 +17577,7 @@
   {
    "q": -11,
    "r": -43,
-   "hex_type": "grania",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17586,7 +17586,7 @@
   {
    "q": -11,
    "r": -42,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17613,7 +17613,7 @@
   {
    "q": -11,
    "r": -39,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17649,7 +17649,7 @@
   {
    "q": -11,
    "r": -35,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17667,7 +17667,7 @@
   {
    "q": -11,
    "r": -33,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17676,7 +17676,7 @@
   {
    "q": -11,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17694,7 +17694,7 @@
   {
    "q": -11,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17703,7 +17703,7 @@
   {
    "q": -11,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17712,7 +17712,7 @@
   {
    "q": -11,
    "r": -28,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17721,7 +17721,7 @@
   {
    "q": -11,
    "r": -27,
-   "hex_type": "las_iglasty",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17730,7 +17730,7 @@
   {
    "q": -11,
    "r": -26,
-   "hex_type": "las_iglasty",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17739,7 +17739,7 @@
   {
    "q": -11,
    "r": -25,
-   "hex_type": "las_iglasty",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17748,7 +17748,7 @@
   {
    "q": -11,
    "r": -24,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17757,7 +17757,7 @@
   {
    "q": -11,
    "r": -23,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17766,7 +17766,7 @@
   {
    "q": -11,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17775,7 +17775,7 @@
   {
    "q": -11,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17784,7 +17784,7 @@
   {
    "q": -11,
    "r": -20,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17793,7 +17793,7 @@
   {
    "q": -11,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -17973,7 +17973,7 @@
   {
    "q": -11,
    "r": 1,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18000,7 +18000,7 @@
   {
    "q": -11,
    "r": 4,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18009,7 +18009,7 @@
   {
    "q": -11,
    "r": 5,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18027,7 +18027,7 @@
   {
    "q": -10,
    "r": -44,
-   "hex_type": "snow",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18099,7 +18099,7 @@
   {
    "q": -10,
    "r": -36,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18108,7 +18108,7 @@
   {
    "q": -10,
    "r": -35,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18117,7 +18117,7 @@
   {
    "q": -10,
    "r": -34,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18126,7 +18126,7 @@
   {
    "q": -10,
    "r": -33,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18144,7 +18144,7 @@
   {
    "q": -10,
    "r": -31,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18153,7 +18153,7 @@
   {
    "q": -10,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18162,7 +18162,7 @@
   {
    "q": -10,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18171,7 +18171,7 @@
   {
    "q": -10,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18180,7 +18180,7 @@
   {
    "q": -10,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18189,7 +18189,7 @@
   {
    "q": -10,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18198,7 +18198,7 @@
   {
    "q": -10,
    "r": -25,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18207,7 +18207,7 @@
   {
    "q": -10,
    "r": -24,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18225,7 +18225,7 @@
   {
    "q": -10,
    "r": -22,
-   "hex_type": "hills",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18234,7 +18234,7 @@
   {
    "q": -10,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18243,7 +18243,7 @@
   {
    "q": -10,
    "r": -20,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18450,7 +18450,7 @@
   {
    "q": -10,
    "r": 3,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18459,7 +18459,7 @@
   {
    "q": -10,
    "r": 4,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18495,7 +18495,7 @@
   {
    "q": -9,
    "r": -42,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18549,15 +18549,6 @@
   {
    "q": -9,
    "r": -36,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -9,
-   "r": -35,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -18566,16 +18557,7 @@
   },
   {
    "q": -9,
-   "r": -34,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -9,
-   "r": -33,
+   "r": -35,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -18584,8 +18566,26 @@
   },
   {
    "q": -9,
+   "r": -34,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -9,
+   "r": -33,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -9,
    "r": -32,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18594,7 +18594,7 @@
   {
    "q": -9,
    "r": -31,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18603,7 +18603,7 @@
   {
    "q": -9,
    "r": -30,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18612,7 +18612,7 @@
   {
    "q": -9,
    "r": -29,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18621,7 +18621,7 @@
   {
    "q": -9,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18630,7 +18630,7 @@
   {
    "q": -9,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18639,7 +18639,7 @@
   {
    "q": -9,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18648,7 +18648,7 @@
   {
    "q": -9,
    "r": -25,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18666,24 +18666,6 @@
   {
    "q": -9,
    "r": -23,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -9,
-   "r": -22,
-   "hex_type": "snow",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -9,
-   "r": -21,
    "hex_type": "hills",
    "label": null,
    "location_key": null,
@@ -18692,8 +18674,26 @@
   },
   {
    "q": -9,
-   "r": -20,
+   "r": -22,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -9,
+   "r": -21,
    "hex_type": "tundra",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -9,
+   "r": -20,
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18819,7 +18819,7 @@
   {
    "q": -9,
    "r": -6,
-   "hex_type": "snow",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18828,7 +18828,7 @@
   {
    "q": -9,
    "r": -5,
-   "hex_type": "snow",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18882,7 +18882,7 @@
   {
    "q": -9,
    "r": 1,
-   "hex_type": "las_iglasty",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18900,7 +18900,7 @@
   {
    "q": -9,
    "r": 3,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18927,7 +18927,7 @@
   {
    "q": -8,
    "r": -45,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -18999,7 +18999,7 @@
   {
    "q": -8,
    "r": -37,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19008,7 +19008,7 @@
   {
    "q": -8,
    "r": -36,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19026,96 +19026,6 @@
   {
    "q": -8,
    "r": -34,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -33,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -32,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -31,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -30,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -29,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -28,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -27,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -26,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -25,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -8,
-   "r": -24,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -19124,7 +19034,7 @@
   },
   {
    "q": -8,
-   "r": -23,
+   "r": -33,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -19133,7 +19043,79 @@
   },
   {
    "q": -8,
-   "r": -22,
+   "r": -32,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -31,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -30,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -29,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -28,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -27,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -26,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -25,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -24,
    "hex_type": "tundra",
    "label": null,
    "location_key": null,
@@ -19142,8 +19124,26 @@
   },
   {
    "q": -8,
+   "r": -23,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
+   "r": -22,
+   "hex_type": "hills",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -8,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19161,7 +19161,7 @@
   {
    "q": -8,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19170,7 +19170,7 @@
   {
    "q": -8,
    "r": -18,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19179,7 +19179,7 @@
   {
    "q": -8,
    "r": -17,
-   "hex_type": "snow",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19278,7 +19278,7 @@
   {
    "q": -8,
    "r": -6,
-   "hex_type": "snow",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19323,7 +19323,7 @@
   {
    "q": -8,
    "r": -1,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19332,7 +19332,7 @@
   {
    "q": -8,
    "r": 0,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19377,7 +19377,7 @@
   {
    "q": -7,
    "r": -45,
-   "hex_type": "lodowiec",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19395,7 +19395,7 @@
   {
    "q": -7,
    "r": -43,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19431,7 +19431,7 @@
   {
    "q": -7,
    "r": -39,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19440,7 +19440,7 @@
   {
    "q": -7,
    "r": -38,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19449,7 +19449,7 @@
   {
    "q": -7,
    "r": -37,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19476,7 +19476,7 @@
   {
    "q": -7,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19485,7 +19485,7 @@
   {
    "q": -7,
    "r": -33,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19494,7 +19494,7 @@
   {
    "q": -7,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19503,7 +19503,7 @@
   {
    "q": -7,
    "r": -31,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19512,7 +19512,7 @@
   {
    "q": -7,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19521,7 +19521,7 @@
   {
    "q": -7,
    "r": -29,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19530,7 +19530,7 @@
   {
    "q": -7,
    "r": -28,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19539,7 +19539,7 @@
   {
    "q": -7,
    "r": -27,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19575,7 +19575,7 @@
   {
    "q": -7,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19584,7 +19584,7 @@
   {
    "q": -7,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19593,7 +19593,7 @@
   {
    "q": -7,
    "r": -21,
-   "hex_type": "hills",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19611,7 +19611,7 @@
   {
    "q": -7,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19629,7 +19629,7 @@
   {
    "q": -7,
    "r": -17,
-   "hex_type": "lake",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19638,7 +19638,7 @@
   {
    "q": -7,
    "r": -16,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19719,7 +19719,7 @@
   {
    "q": -7,
    "r": -7,
-   "hex_type": "tundra",
+   "hex_type": "lake",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19773,7 +19773,7 @@
   {
    "q": -7,
    "r": -1,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19782,7 +19782,7 @@
   {
    "q": -7,
    "r": 0,
-   "hex_type": "las_iglasty",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19791,7 +19791,7 @@
   {
    "q": -7,
    "r": 1,
-   "hex_type": "las_iglasty",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19809,7 +19809,7 @@
   {
    "q": -7,
    "r": 3,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19836,7 +19836,7 @@
   {
    "q": -6,
    "r": -45,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19863,7 +19863,7 @@
   {
    "q": -6,
    "r": -42,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19881,7 +19881,7 @@
   {
    "q": -6,
    "r": -40,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19899,15 +19899,6 @@
   {
    "q": -6,
    "r": -38,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -6,
-   "r": -37,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -19916,8 +19907,17 @@
   },
   {
    "q": -6,
+   "r": -37,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -6,
    "r": -36,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19926,7 +19926,7 @@
   {
    "q": -6,
    "r": -35,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19935,7 +19935,7 @@
   {
    "q": -6,
    "r": -34,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -19953,33 +19953,6 @@
   {
    "q": -6,
    "r": -32,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -6,
-   "r": -31,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -6,
-   "r": -30,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -6,
-   "r": -29,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -19988,8 +19961,35 @@
   },
   {
    "q": -6,
-   "r": -28,
+   "r": -31,
    "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -6,
+   "r": -30,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -6,
+   "r": -29,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -6,
+   "r": -28,
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20025,7 +20025,7 @@
   {
    "q": -6,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20034,7 +20034,7 @@
   {
    "q": -6,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20043,7 +20043,7 @@
   {
    "q": -6,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20052,7 +20052,7 @@
   {
    "q": -6,
    "r": -21,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20070,7 +20070,7 @@
   {
    "q": -6,
    "r": -19,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20079,7 +20079,7 @@
   {
    "q": -6,
    "r": -18,
-   "hex_type": "lake",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20088,7 +20088,7 @@
   {
    "q": -6,
    "r": -17,
-   "hex_type": "lake",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20097,7 +20097,7 @@
   {
    "q": -6,
    "r": -16,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20115,7 +20115,7 @@
   {
    "q": -6,
    "r": -14,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20223,7 +20223,7 @@
   {
    "q": -6,
    "r": -2,
-   "hex_type": "tundra",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20232,7 +20232,7 @@
   {
    "q": -6,
    "r": -1,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20241,7 +20241,7 @@
   {
    "q": -6,
    "r": 0,
-   "hex_type": "heath",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20259,7 +20259,7 @@
   {
    "q": -6,
    "r": 2,
-   "hex_type": "plains",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20277,7 +20277,7 @@
   {
    "q": -5,
    "r": -46,
-   "hex_type": "snow",
+   "hex_type": "grania",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20286,7 +20286,7 @@
   {
    "q": -5,
    "r": -45,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20295,7 +20295,7 @@
   {
    "q": -5,
    "r": -44,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20322,24 +20322,6 @@
   {
    "q": -5,
    "r": -41,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -40,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -39,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -20348,8 +20330,8 @@
   },
   {
    "q": -5,
-   "r": -38,
-   "hex_type": "tundra",
+   "r": -40,
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20357,79 +20339,7 @@
   },
   {
    "q": -5,
-   "r": -37,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -36,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -35,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -34,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -33,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -32,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -31,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -30,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -29,
+   "r": -39,
    "hex_type": "snow",
    "label": null,
    "location_key": null,
@@ -20438,8 +20348,98 @@
   },
   {
    "q": -5,
+   "r": -38,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -37,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -36,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -35,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -34,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -33,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -32,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -31,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -30,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -29,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20448,7 +20448,7 @@
   {
    "q": -5,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20457,7 +20457,7 @@
   {
    "q": -5,
    "r": -26,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20466,7 +20466,7 @@
   {
    "q": -5,
    "r": -25,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20475,7 +20475,7 @@
   {
    "q": -5,
    "r": -24,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20520,33 +20520,6 @@
   {
    "q": -5,
    "r": -19,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -18,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -17,
-   "hex_type": "tundra",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -5,
-   "r": -16,
    "hex_type": "hills",
    "label": null,
    "location_key": null,
@@ -20555,8 +20528,35 @@
   },
   {
    "q": -5,
+   "r": -18,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -17,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
+   "r": -16,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -5,
    "r": -15,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20565,7 +20565,7 @@
   {
    "q": -5,
    "r": -14,
-   "hex_type": "tundra",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20574,7 +20574,7 @@
   {
    "q": -5,
    "r": -13,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20610,7 +20610,7 @@
   {
    "q": -5,
    "r": -9,
-   "hex_type": "tundra",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20619,7 +20619,7 @@
   {
    "q": -5,
    "r": -8,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20637,7 +20637,7 @@
   {
    "q": -5,
    "r": -6,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20682,7 +20682,7 @@
   {
    "q": -5,
    "r": -1,
-   "hex_type": "heath",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20691,7 +20691,7 @@
   {
    "q": -5,
    "r": 0,
-   "hex_type": "las_iglasty",
+   "hex_type": "heath",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20700,7 +20700,7 @@
   {
    "q": -5,
    "r": 1,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20727,7 +20727,7 @@
   {
    "q": -4,
    "r": -47,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20745,7 +20745,7 @@
   {
    "q": -4,
    "r": -45,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20772,7 +20772,7 @@
   {
    "q": -4,
    "r": -42,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20790,7 +20790,7 @@
   {
    "q": -4,
    "r": -40,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20799,7 +20799,7 @@
   {
    "q": -4,
    "r": -39,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20808,7 +20808,7 @@
   {
    "q": -4,
    "r": -38,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20817,7 +20817,7 @@
   {
    "q": -4,
    "r": -37,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20835,7 +20835,7 @@
   {
    "q": -4,
    "r": -35,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20853,7 +20853,7 @@
   {
    "q": -4,
    "r": -33,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20862,7 +20862,7 @@
   {
    "q": -4,
    "r": -32,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20871,7 +20871,7 @@
   {
    "q": -4,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20880,7 +20880,7 @@
   {
    "q": -4,
    "r": -30,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20907,7 +20907,7 @@
   {
    "q": -4,
    "r": -27,
-   "hex_type": "tundra",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20916,7 +20916,7 @@
   {
    "q": -4,
    "r": -26,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20925,7 +20925,7 @@
   {
    "q": -4,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -20934,7 +20934,7 @@
   {
    "q": -4,
    "r": -24,
-   "hex_type": "mountain",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21006,7 +21006,7 @@
   {
    "q": -4,
    "r": -16,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21015,7 +21015,7 @@
   {
    "q": -4,
    "r": -15,
-   "hex_type": "mountain",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21042,7 +21042,7 @@
   {
    "q": -4,
    "r": -12,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21051,7 +21051,7 @@
   {
    "q": -4,
    "r": -11,
-   "hex_type": "tundra",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21087,7 +21087,7 @@
   {
    "q": -4,
    "r": -7,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21186,7 +21186,7 @@
   {
    "q": -3,
    "r": -46,
-   "hex_type": "hills",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21222,7 +21222,7 @@
   {
    "q": -3,
    "r": -42,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21231,7 +21231,7 @@
   {
    "q": -3,
    "r": -41,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21240,7 +21240,7 @@
   {
    "q": -3,
    "r": -40,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21249,7 +21249,7 @@
   {
    "q": -3,
    "r": -39,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21267,7 +21267,7 @@
   {
    "q": -3,
    "r": -37,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21285,60 +21285,6 @@
   {
    "q": -3,
    "r": -35,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -3,
-   "r": -34,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -3,
-   "r": -33,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -3,
-   "r": -32,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -3,
-   "r": -31,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -3,
-   "r": -30,
-   "hex_type": "hills",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -3,
-   "r": -29,
    "hex_type": "mountain",
    "label": null,
    "location_key": null,
@@ -21347,8 +21293,62 @@
   },
   {
    "q": -3,
+   "r": -34,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -3,
+   "r": -33,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -3,
+   "r": -32,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -3,
+   "r": -31,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -3,
+   "r": -30,
+   "hex_type": "mountain",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -3,
+   "r": -29,
+   "hex_type": "snow",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -3,
    "r": -28,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21357,7 +21357,7 @@
   {
    "q": -3,
    "r": -27,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21366,7 +21366,7 @@
   {
    "q": -3,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21411,7 +21411,7 @@
   {
    "q": -3,
    "r": -21,
-   "hex_type": "las_iglasty",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21429,7 +21429,7 @@
   {
    "q": -3,
    "r": -19,
-   "hex_type": "hills",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21438,7 +21438,7 @@
   {
    "q": -3,
    "r": -18,
-   "hex_type": "mountain",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21456,7 +21456,7 @@
   {
    "q": -3,
    "r": -16,
-   "hex_type": "mountain",
+   "hex_type": "hills",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21501,7 +21501,7 @@
   {
    "q": -3,
    "r": -11,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21519,7 +21519,7 @@
   {
    "q": -3,
    "r": -9,
-   "hex_type": "las_iglasty",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21600,7 +21600,7 @@
   {
    "q": -3,
    "r": 0,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21609,7 +21609,7 @@
   {
    "q": -3,
    "r": 1,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21627,7 +21627,7 @@
   {
    "q": -2,
    "r": -48,
-   "hex_type": "grania",
+   "hex_type": "lodowiec",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21708,7 +21708,7 @@
   {
    "q": -2,
    "r": -39,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21717,7 +21717,7 @@
   {
    "q": -2,
    "r": -38,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21726,7 +21726,7 @@
   {
    "q": -2,
    "r": -37,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21735,7 +21735,7 @@
   {
    "q": -2,
    "r": -36,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21744,7 +21744,7 @@
   {
    "q": -2,
    "r": -35,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21780,7 +21780,7 @@
   {
    "q": -2,
    "r": -31,
-   "hex_type": "hills",
+   "hex_type": "tundra",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21789,7 +21789,7 @@
   {
    "q": -2,
    "r": -30,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21798,7 +21798,7 @@
   {
    "q": -2,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21888,7 +21888,7 @@
   {
    "q": -2,
    "r": -19,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21915,7 +21915,7 @@
   {
    "q": -2,
    "r": -16,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21924,7 +21924,7 @@
   {
    "q": -2,
    "r": -15,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21933,7 +21933,7 @@
   {
    "q": -2,
    "r": -14,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21942,7 +21942,7 @@
   {
    "q": -2,
    "r": -13,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21951,7 +21951,7 @@
   {
    "q": -2,
    "r": -12,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21978,7 +21978,7 @@
   {
    "q": -2,
    "r": -9,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -21996,7 +21996,7 @@
   {
    "q": -2,
    "r": -7,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22005,7 +22005,7 @@
   {
    "q": -2,
    "r": -6,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22059,7 +22059,7 @@
   {
    "q": -2,
    "r": 0,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22077,7 +22077,7 @@
   {
    "q": -1,
    "r": -48,
-   "hex_type": "lodowiec",
+   "hex_type": "grania",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22086,7 +22086,7 @@
   {
    "q": -1,
    "r": -47,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22104,7 +22104,7 @@
   {
    "q": -1,
    "r": -45,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22203,7 +22203,7 @@
   {
    "q": -1,
    "r": -34,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22230,7 +22230,7 @@
   {
    "q": -1,
    "r": -31,
-   "hex_type": "heath",
+   "hex_type": "plains",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22248,7 +22248,7 @@
   {
    "q": -1,
    "r": -29,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22257,7 +22257,7 @@
   {
    "q": -1,
    "r": -28,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22266,7 +22266,7 @@
   {
    "q": -1,
    "r": -27,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22275,7 +22275,7 @@
   {
    "q": -1,
    "r": -26,
-   "hex_type": "mountain",
+   "hex_type": "snow",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22293,7 +22293,7 @@
   {
    "q": -1,
    "r": -24,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22311,7 +22311,7 @@
   {
    "q": -1,
    "r": -22,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22320,7 +22320,7 @@
   {
    "q": -1,
    "r": -21,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22329,7 +22329,7 @@
   {
    "q": -1,
    "r": -20,
-   "hex_type": "snow",
+   "hex_type": "mountain",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22365,7 +22365,7 @@
   {
    "q": -1,
    "r": -16,
-   "hex_type": "czarny_las",
+   "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
    "atmosphere": null,
@@ -22401,24 +22401,6 @@
   {
    "q": -1,
    "r": -12,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -1,
-   "r": -11,
-   "hex_type": "las_iglasty",
-   "label": null,
-   "location_key": null,
-   "atmosphere": null,
-   "encounter_chance": 0.0
-  },
-  {
-   "q": -1,
-   "r": -10,
    "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
@@ -22427,7 +22409,16 @@
   },
   {
    "q": -1,
-   "r": -9,
+   "r": -11,
+   "hex_type": "czarny_las",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -1,
+   "r": -10,
    "hex_type": "las_iglasty",
    "label": null,
    "location_key": null,
@@ -22436,8 +22427,17 @@
   },
   {
    "q": -1,
+   "r": -9,
+   "hex_type": "czarny_las",
+   "label": null,
+   "location_key": null,
+   "atmosphere": null,
+   "encounter_chance": 0.0
+  },
+  {
+   "q": -1,
    "r": -8,
-   "hex_type": "las_iglasty",
+   "hex_type": "czarny_las",
    "label": null,
    "location_key": null,
    "atmosphere": null,
