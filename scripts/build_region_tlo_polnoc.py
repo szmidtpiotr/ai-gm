@@ -171,6 +171,36 @@ def paint_interior(hexes, local, rng):
         hexes[k]["hex_type"] = assigned.get(k, "tundra")
 
 
+def paint_north_range(hexes, local, cfg, rng):
+    """Pas gór na północy (#1549, spójność z masywem Siwych Grań).
+
+    Masyw Grań dotyka tła górną częścią krawędzi od strony SG — ale bariera
+    lodowa tła to ledwie 2 rzędy, więc łańcuch „urywał się" na szwie. Ten pas
+    maluje szeroki grzbiet pod barierą: głęboki przy narożniku Grań (zlewa się
+    z masywem), zwężający się ku przeciwnej krawędzi. Efekt: jeden ciągły łuk
+    bariera NW → masyw Grań → bariera NE."""
+    sg_east = cfg["grania_side"] == "E"     # NW: Granie na wschodzie
+    deep, shallow = 12, 3                    # głębokość pasa przy/naprzeciw Grań
+    # jitter per KOLUMNA (nie per hex) → dolna krawędź pasa faluje gładko
+    jitter = [2.0 * (rng.random() - 0.5) + 1.2 * (rng.random() - 0.5)
+              for _ in range(W)]
+    for k, (c, r) in sorted(local.items()):
+        prox = (c / (W - 1)) if sg_east else (1 - c / (W - 1))
+        depth = shallow + (deep - shallow) * prox + jitter[c]
+        band_r = r - BARRIER_ICE_ROWS
+        if band_r < 0 or band_r >= depth:
+            continue
+        if hexes[k]["hex_type"] == "lake":
+            continue
+        rel = band_r / max(depth, 1)         # 0 = pod barierą, 1 = dolny skraj
+        roll = rng.random()
+        if rel < 0.55:                       # rdzeń grzbietu — lity jak masyw Grań
+            hexes[k]["hex_type"] = "mountain" if roll < 0.75 else "snow"
+        else:                                # pogórze na dolnym skraju
+            hexes[k]["hex_type"] = "hills" if roll < 0.55 else \
+                ("mountain" if roll < 0.7 else "tundra")
+
+
 def carve_lakes(hexes, local, rng, n_lakes=N_LAKES):
     """Jeziora TYLKO z dala od gór (reguła #1545: woda nigdy obok gór)."""
     def near_mountain(k):
@@ -411,6 +441,9 @@ def main():
 
     print("[1] wnętrze: tundra-dominant + tajga/wzgórza/góry/śnieg")
     paint_interior(hexes, local, rng)
+
+    print("[1b] pas gór na północy (ciągłość z masywem Siwych Grań)")
+    paint_north_range(hexes, local, cfg, rng)
 
     print("[2] jeziora (z dala od gór — #1545)")
     lakes = carve_lakes(hexes, local, rng)
