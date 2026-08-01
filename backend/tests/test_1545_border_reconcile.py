@@ -71,3 +71,49 @@ def test_protected_hexes_never_retyped():
     assert br.protected(_hex(0, 0, "road"))
     assert br.protected(_hex(0, 0, "plains", lk="wioska"))
     assert not br.protected(_hex(0, 0, "plains"))
+
+
+# ── #1549: morze = osobna rodzina SEA; sól↔morze dozwolone, góry↔morze zakazane ─
+def test_sea_is_own_family_not_open():
+    """`morze`/`sea` mają rodzinę SEA (nie wpadają po cichu w OPEN)."""
+    assert br.fam("morze") == "SEA"
+    assert br.fam("sea") == "SEA"
+    assert br.fam("river") == "WATER"   # słodka woda osobno
+
+
+def test_salt_meets_sea_allowed_but_not_freshwater():
+    """sól/martwa ziemia MOŻE schodzić prosto w morze, ale NIE w słodką wodę (#1549)."""
+    assert not br.is_harsh("WASTE", "SEA"), "sól↔morze musi być dozwolone"
+    assert br.is_harsh("WASTE", "WATER"), "sól↔słodka woda pozostaje zakazana"
+
+
+def test_mountain_never_beside_sea():
+    """Góry NIGDY obok morza (#1549)."""
+    assert br.is_harsh("MOUNTAIN", "SEA")
+
+
+def test_coast_feather_breaks_straight_seam():
+    """Pionowy styk morze↔ląd: coast-feather ma pofalować brzeg (zatoki+mierzeje),
+    bez twardych skoków po. Prosta linia q=const → różne q krawędzi coast."""
+    # A = morze (q 0..2), B = ląd wrzos (q 3..5), wspólne wiersze r 0..11 — styk PROSTY.
+    A = {(q, r): _hex(q, r, "morze") for q in range(0, 3) for r in range(0, 12)}
+    B = {(q, r): _hex(q, r, "heath") for q in range(3, 6) for r in range(0, 12)}
+    changes = br.feather_coast(A, B, "morze", "lad", seed=2026, band=3, amp1=2.0)
+    assert changes, "coast-feather nic nie zmienił na prostym styku"
+    kinds = {c[3] + "→" + c[4] for c in changes}
+    # muszą pojawić się i zatoki (ląd→morze), i plaże/mierzeje (→coast)
+    assert any(v.endswith("→morze") for v in kinds), "brak zatok (ląd→morze)"
+    assert any(v.endswith("→coast") for v in kinds), "brak plaż/mierzei (→coast)"
+    # po feather + reconcile: zero twardych skoków
+    br.reconcile(A, B, "morze", "lad")
+    _, harsh = br.analyze(A, B)
+    assert not harsh, "coast-feather zostawił twardy skok"
+
+
+def test_coast_feather_never_drowns_ruins():
+    """Ruiny = landmark terenu — coast-feather ich nie zatapia."""
+    A = {(q, r): _hex(q, r, "morze") for q in range(0, 3) for r in range(0, 12)}
+    B = {(3, r): _hex(3, r, "ruins") for r in range(0, 12)}
+    B.update({(q, r): _hex(q, r, "heath") for q in range(4, 6) for r in range(0, 12)})
+    changes = br.feather_coast(A, B, "morze", "lad", seed=2026, band=3, amp1=2.0)
+    assert all(old != "ruins" for _, _, _, old, _ in changes), "ruiny nie mogą być retypowane"

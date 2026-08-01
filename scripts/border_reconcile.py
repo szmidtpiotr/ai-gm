@@ -37,9 +37,10 @@ ROOT = Path(__file__).resolve().parent.parent
 # ── RODZINY TERENU ───────────────────────────────────────────────────────────
 # Każdy hex_type → rodzina. Nowe typy krain (czarny_las, lodowiec, sol…) wpięte.
 FAMILY = {
-    # woda
-    "sea": "WATER", "lake": "WATER", "river": "WATER", "water": "WATER",
-    "brod": "WATER", "ocean": "WATER",
+    # słona woda (morze) — osobna rodzina: sól MOŻE schodzić prosto w morze (#1549)
+    "sea": "SEA", "morze": "SEA", "ocean": "SEA",
+    # słodka woda (jezioro/rzeka) — sól/martwa ziemia NIE stykają się z nią wprost
+    "lake": "WATER", "river": "WATER", "water": "WATER", "brod": "WATER",
     "coast": "COAST",
     # otwarte / trawiaste
     "plains": "OPEN", "heath": "OPEN", "step": "OPEN", "tundra": "OPEN",
@@ -68,10 +69,11 @@ def fam(hex_type: str) -> str:
 # ── ZAKAZY: pary rodzin, które NIE mogą się stykać (twardy skok) ──────────────
 # symetryczne
 FORBIDDEN = {
-    frozenset({"MOUNTAIN", "WATER"}),   # śnieżne góry ↔ jezioro/morze  (przykład Piotra)
+    frozenset({"MOUNTAIN", "WATER"}),   # śnieżne góry ↔ jezioro/rzeka  (przykład Piotra)
+    frozenset({"MOUNTAIN", "SEA"}),     # góry NIGDY obok morza (#1549)
     frozenset({"MOUNTAIN", "WASTE"}),   # góry ↔ martwa jałowizna
     frozenset({"MOUNTAIN", "OPEN"}),    # urwisko: szczyt ↔ równina bez pogórza
-    frozenset({"WASTE", "WATER"}),      # sól/martwa ziemia ↔ woda
+    frozenset({"WASTE", "WATER"}),      # sól/martwa ziemia ↔ SŁODKA woda (sól↔MORZE dozwolone, #1549)
     frozenset({"FOREST", "WASTE"}),     # gęsty las ↔ nagła martwa ziemia (heath mostkuje)
 }
 def is_harsh(a: str, b: str) -> bool:
@@ -87,8 +89,8 @@ BRIDGE_STEP = {          # rodzina → (typ mostka, nowa rodzina po retypie)
 }
 # „Twardość" — którą stronę retypować (wyższa = bardziej wroga, ustępuje pierwsza).
 HOSTILITY = {"MOUNTAIN": 5, "WASTE": 4, "HILL": 3, "FOREST": 3,
-             "WETLAND": 2, "FOREST_x": 2, "OPEN": 1, "COAST": 1, "WATER": 0,
-             "STRUCT": 99}
+             "WETLAND": 2, "FOREST_x": 2, "OPEN": 1, "COAST": 1,
+             "WATER": 0, "SEA": 0, "STRUCT": 99}
 
 NB = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
 
@@ -269,6 +271,91 @@ def feather(A: dict, B: dict, region_a: str, region_b: str, *,
     return changes
 
 
+# ── FEATHERING BRZEGOWY: pionowy styk ląd↔morze (#1545 + #1549) ───────────────
+# Odpowiednik feather() dla granicy PIONOWEJ (morze mniejsze q ↔ ląd większe q).
+# Faluje linię brzegową: zatoki morza wcinają się w ląd, mierzeje/cyple lądu
+# wchodzą w morze, cienki pas `coast` = plaża. Region-ownership zostaje prosty —
+# przemalowujemy TYLKO typ terenu w pasie brzegowym. sól↔morze wprost (dozwolone).
+COAST_REPAINT = {"SEA", "COAST", "OPEN", "WASTE", "FOREST", "WETLAND"}
+
+def _edge_cols(G: dict, east: bool) -> dict:
+    """Dla każdego wiersza r: q krawędzi (east=True → min q lądu, else max q morza)."""
+    from collections import defaultdict
+    rows = defaultdict(list)
+    for (q, r) in G:
+        rows[r].append(q)
+    return {r: (min(qs) if east else max(qs)) for r, qs in rows.items()}
+
+def feather_coast(A: dict, B: dict, region_a: str, region_b: str, *,
+                  seed=2026, band=4, amp1=2.5, period1=6.0,
+                  amp2=1.0, period2=2.9, shore=1.2):
+    """Zwróć zmiany [(region,q,r,old,new)] falujące pionowy styk A(zachód/morze)
+    ↔ B(wschód/ląd). Dla każdego wiersza r liczymy linię brzegu i falę wave(r):
+    hex po stronie morza z q<wave zostaje morzem, wypchnięty na stronę lądu →
+    coast (mierzeja); hex lądu z q<wave → morze (zatoka), tuż przy linii → coast
+    (plaża). Chronione (POI/trakt/osady) nietknięte."""
+    a_edge = _edge_cols(A, east=False)   # wschodnia krawędź morza: max q
+    b_edge = _edge_cols(B, east=True)    # zachodnia krawędź lądu:  min q
+    rows = set(a_edge) & set(b_edge)
+    seam = {r: (a_edge[r] + b_edge[r]) / 2.0 for r in rows}
+
+    def wave(r):
+        return (seam[r] + amp1 * _vnoise1(r / period1, seed)
+                        + amp2 * _vnoise1(r / period2, seed + 7))
+
+    changes = []
+    for grid, region, is_A in ((A, region_a, True), (B, region_b, False)):
+        edge = a_edge if is_A else b_edge
+        for (q, r), h in grid.items():
+            if r not in rows:
+                continue
+            depth = (edge[r] - q) if is_A else (q - edge[r])   # 0 = na krawędzi
+            if depth < 0 or depth >= band:
+                continue
+            cur = h["hex_type"]; curfam = fam(cur)
+            if protected(h) or curfam not in COAST_REPAINT or cur == "ruins":
+                continue                       # ruiny = landmark terenu, nie zatapiać
+            w = wave(r); sea_side = q < w; dist = abs(q - w)
+            if is_A:                       # hex morza
+                if not sea_side:           # wypchnięty na ląd → mierzeja/plaża
+                    new = "coast"
+                elif dist < shore:         # tuż przy linii → plaża
+                    new = "coast"
+                else:
+                    new = cur              # zostaje morze
+            else:                          # hex lądu
+                if sea_side:               # zalany → zatoka morska
+                    new = "morze"
+                elif dist < shore:         # tuż przy linii → plaża
+                    new = "coast"
+                else:
+                    new = cur
+            if new != cur:
+                changes.append((region, q, r, cur, new))
+                h["hex_type"] = new
+    return changes
+
+
+def render_border_v(A: dict, B: dict, region_a: str, region_b: str,
+                    out_path: str, context=12, scale=14):
+    """PNG pionowego pasa brzegowego (styk ląd↔morze)."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from reseed_region_terrain import save_png
+    a_edge = _edge_cols(A, east=False)
+    b_edge = _edge_cols(B, east=True)
+    rows = set(a_edge) & set(b_edge)
+    win = {}
+    for (q, r), h in A.items():
+        if r in rows and 0 <= a_edge[r] - q <= context:
+            win[(q, r)] = h
+    for (q, r), h in B.items():
+        if r in rows and 0 <= q - b_edge[r] <= context:
+            win[(q, r)] = h
+    save_png(win, f"{region_a} / {region_b}", "styk ląd↔morze (pas brzegowy)",
+             Path(out_path), S=scale)
+    return len(win)
+
+
 def render_border(A: dict, B: dict, region_a: str, region_b: str,
                   out_path: str, context=12, scale=14):
     """Zapisz PNG pasa przygranicznego (obie krainy) kolorami hex_type."""
@@ -310,7 +397,9 @@ def main():
     ap.add_argument("--a"); ap.add_argument("--b")
     ap.add_argument("--apply", action="store_true", help="zapisz do DB (backup najpierw)")
     ap.add_argument("--feather", action="store_true",
-                    help="organiczne faliste wcięcia terenu na granicy (interdigitacja)")
+                    help="organiczne faliste wcięcia terenu na granicy poziomej (interdigitacja)")
+    ap.add_argument("--coast", action="store_true",
+                    help="feathering brzegowy: pionowy styk ląd↔morze (zatoki + mierzeje + plaża)")
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--band", type=int, default=5, help="głębokość pasa feather (hexy/stronę)")
     ap.add_argument("--amp", type=float, default=3.0, help="amplituda fali (rzędy)")
@@ -327,6 +416,36 @@ def main():
 
     A = load_region(a.a, a.container, a.db)
     B = load_region(a.b, a.container, a.db)
+
+    if a.coast:
+        # A musi być krainą zachodnią (mniejsze q = strona morza). Zamień jeśli trzeba.
+        qa = sum(h["q"] for h in A.values()) / max(len(A), 1)
+        qb = sum(h["q"] for h in B.values()) / max(len(B), 1)
+        (An, Bn, an, bn) = (A, B, a.a, a.b) if qa <= qb else (B, A, a.b, a.a)
+        if a.png:
+            n = render_border_v(An, Bn, an, bn, f"{a.png}_before.png")
+            print(f"🖼  PNG przed: {a.png}_before.png ({n} hexów pasa)")
+        fch = feather_coast(An, Bn, an, bn, seed=a.seed, band=a.band, amp1=a.amp)
+        rch = reconcile(An, Bn, an, bn)          # domknij ewentualne twarde skoki
+        changes = fch + rch
+        from collections import Counter
+        print(f"═══ COAST-FEATHER {an}(zach/morze) ↔ {bn}(wsch/ląd)  seed={a.seed} band={a.band} amp={a.amp} ═══")
+        print(f"zmiany terenu: {len(fch)} (brzeg) + {len(rch)} (reconcile domykający) = {len(changes)}")
+        per = Counter((c[0], c[3] + '→' + c[4]) for c in changes)
+        for (reg, tr), n in per.most_common(20):
+            print(f"  {reg:18} {tr:22} ×{n}")
+        _, harsh_after = analyze(An, Bn)
+        print(f"twarde skoki po coast-feather+reconcile: {len(harsh_after)}")
+        if a.png:
+            n = render_border_v(An, Bn, an, bn, f"{a.png}_after.png")
+            print(f"🖼  PNG po: {a.png}_after.png ({n} hexów pasa)")
+        if a.apply:
+            print("\n📦 backup DB…"); subprocess.run(["./scripts/backup.sh"], cwd=str(ROOT))
+            apply_changes(changes, a.container, a.db)
+            print(f"✅ zastosowano {len(changes)} zmian. Snapshot obu krain + commit.")
+        else:
+            print("\n(dry-run — nic nie zapisano. Dodaj --apply.)")
+        return
 
     if a.feather:
         # A musi być krainą północną (mniejsze r). Zamień jeśli trzeba.
