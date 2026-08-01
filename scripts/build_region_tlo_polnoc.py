@@ -219,38 +219,146 @@ def paint_barrier(hexes, local, rng):
     return n
 
 
-def paint_gradients(hexes, local, cfg, rng):
-    """Pogórze od Grań (E/W) + zejście południowe (heath / taiga→czarny_las)."""
-    band = 3  # głębokość pasa gradientowego
-    grania_side = cfg["grania_side"]
+# ── BLEND DO SĄSIADÓW (data-driven, #1545/#1549) ─────────────────────────────
+# Zamiast ślepych pasów per-krawędź: czytamy FAKTYCZNY teren sąsiadów z kanonu
+# (data/regions/*.json), BFS od obcych hexów w głąb tła i rampujemy teren ku
+# rodzinie konkretnego odcinka granicy. Tam gdzie Granie mają śnieg → tło ma
+# góry; gdzie Granie mają rzekę/jezioro → tło ma dolinę (NIE górę, #1545);
+# gdzie Niziny mają równiny → tło schodzi wrzosem w równiny; gdzie Czarnobór
+# ma las → tło gęstnieje w śnieżną tajgę/czarny las.
+BLEND_BAND = 8            # głębokość rampy (hexy w głąb tła)
 
-    for k, (c, r) in local.items():
-        if r < BARRIER_ICE_ROWS:
-            continue  # bariera nienaruszalna
+BLEND_FAM = {
+    "mountain": "MOUNTAIN", "snow": "MOUNTAIN", "grania": "MOUNTAIN",
+    "lodowiec": "MOUNTAIN", "peak": "MOUNTAIN",
+    "hills": "HILL", "foothills": "HILL", "przelecz": "HILL",
+    "forest": "FOREST", "czarny_las": "FOREST", "las_iglasty": "FOREST",
+    "plains": "OPEN", "heath": "OPEN", "step": "OPEN", "tundra": "OPEN",
+    "grassland": "OPEN", "pola_uprawne": "OPEN",
+    "river": "WATER", "lake": "WATER", "water": "WATER", "sea": "WATER",
+    "morze": "WATER", "brod": "WATER", "coast": "WATER",
+    "swamp": "WETLAND", "bagno": "WETLAND", "trzesawisko": "WETLAND",
+}
 
-        # ── pogórze od Siwych Grań (E dla NW / W dla NE) ──
-        edge_d = (W - 1 - c) if grania_side == "E" else c
-        if edge_d < band:
-            # bliżej krawędzi = więcej gór, dalej = wzgórza; z szumem
-            if edge_d == 0 and rng.random() < 0.6:
-                hexes[k]["hex_type"] = "mountain"
-            elif rng.random() < 0.65:
-                hexes[k]["hex_type"] = "hills" if hexes[k]["hex_type"] not in ("mountain",) \
-                    else "mountain"
 
-        # ── zejście południowe (ostatnie rzędy) ──
-        south_d = (H - 1) - r
-        if south_d < band:
-            if cfg["south_mode"] == "heath":
-                # miękkie zejście do Koronnych Nizin: wrzosowiska / równiny
-                if hexes[k]["hex_type"] not in ("lake", "mountain"):
-                    hexes[k]["hex_type"] = "heath" if rng.random() < 0.6 else "plains"
-            else:  # taiga → czarny las (do Czarnoboru)
-                if hexes[k]["hex_type"] not in ("lake", "mountain"):
-                    if south_d == 0 and rng.random() < 0.5:
-                        hexes[k]["hex_type"] = "czarny_las"
-                    else:
-                        hexes[k]["hex_type"] = "las_iglasty"
+def load_foreign(self_region):
+    """Kanon terenu wszystkich innych krain: {(q,r): hex_type}."""
+    foreign = {}
+    for p in sorted((ROOT / "data" / "regions").glob("region_*.json")):
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if data.get("region") == self_region:
+            continue
+        for h in data["hexes"]:
+            foreign[(h["q"], h["r"])] = h["hex_type"]
+    return foreign
+
+
+def blend_to_neighbors(hexes, local, rng, foreign, band=BLEND_BAND):
+    """Rampa terenu tła ku rodzinie faktycznego sąsiada (BFS od granicy).
+
+    Zwraca liczbę przemalowanych hexów. Bariera (górne rzędy), jeziora i grań
+    nietykalne. Szum deterministyczny (rng slotu) strzępi krawędź rampy."""
+    from collections import deque, Counter as C
+
+    dist, votes = {}, {}
+    dq = deque()
+    for k in hexes:
+        v = C()
+        for nb in ax_neighbors(*k):
+            if nb in foreign:
+                f = BLEND_FAM.get(foreign[nb])
+                if f:
+                    v[f] += 1
+        if v:
+            dist[k] = 1; votes[k] = v; dq.append(k)
+    while dq:
+        k = dq.popleft()
+        if dist[k] >= band:
+            continue
+        for nb in ax_neighbors(*k):
+            if nb in hexes:
+                if nb not in dist:
+                    dist[nb] = dist[k] + 1; votes[nb] = C(votes[k]); dq.append(nb)
+                elif dist[nb] == dist[k] + 1:
+                    votes[nb].update(votes[k])
+
+    n = 0
+    for k, d in sorted(dist.items()):
+        h = hexes[k]
+        c, r = local[k]
+        if r < BARRIER_ICE_ROWS or h["hex_type"] in ("lake", "grania"):
+            continue
+        fam_n = votes[k].most_common(1)[0][0]
+        # siła rampy: 1.0 na krawędzi → 0 na końcu pasa, ze strzępiącym szumem
+        p = (band - d + 1) / band + 0.25 * (rng.random() - 0.5)
+        cur = h["hex_type"]; new = None
+        if fam_n == "MOUNTAIN":
+            if d <= 2:
+                new = "mountain" if rng.random() < 0.7 else "snow"
+            elif d <= 4 and rng.random() < p:
+                new = "mountain" if rng.random() < 0.35 else "hills"
+            elif d <= 6 and rng.random() < p:
+                new = "hills"
+        elif fam_n == "HILL":
+            if d <= 3 and rng.random() < p:
+                new = "hills"
+        elif fam_n == "FOREST":
+            if d <= 2:
+                new = "czarny_las" if rng.random() < 0.35 else "las_iglasty"
+            elif d <= 5 and rng.random() < p:
+                new = "las_iglasty"
+        elif fam_n == "OPEN":
+            if d <= 2:
+                # równiny/wrzos przy krawędzi; góry/las ustępują (zakaz MOUNTAIN↔OPEN)
+                new = "plains" if rng.random() < 0.4 else "heath"
+            elif d <= 5 and rng.random() < p:
+                if cur in ("mountain", "snow"):
+                    new = "hills"                  # pogórze mostkuje
+                elif cur not in ("hills",):
+                    new = "heath"
+        elif fam_n == "WATER":
+            # dolina przy wodzie sąsiada: nigdy góra/śnieg przy rzece/jeziorze (#1545)
+            if d <= 2 and cur in ("mountain", "snow", "lodowiec"):
+                new = "tundra"
+        if new and new != cur:
+            h["hex_type"] = new; n += 1
+
+    # sprzątanie: żaden hex tła przy obcej wodzie nie może być górą/śniegiem
+    for k in [k for k, d in dist.items() if d == 1]:
+        if hexes[k]["hex_type"] in ("mountain", "snow", "lodowiec"):
+            if any(BLEND_FAM.get(foreign[nb]) == "WATER"
+                   for nb in ax_neighbors(*k) if nb in foreign):
+                hexes[k]["hex_type"] = "tundra"; n += 1
+    return n
+
+
+def enforce_edge_compat(hexes, foreign):
+    """Twardy strażnik #1545 na samej granicy: hex tła nie może tworzyć
+    zakazanej pary z ŻADNYM obcym sąsiadem (sąsiadów NIE ruszamy — kanon
+    Piotra). Retyp na pierwszy zgodny mostek: hills (uniwersalny) → tundra →
+    heath. Wyjątek: grań bariery (rząd 0, kraniec świata) zostaje."""
+    from border_reconcile import fam, is_harsh
+    fixed, stuck = 0, []
+    for _ in range(3):   # retyp może odsłonić kolejną parę — domknij iteracyjnie
+        dirty = False
+        for k in sorted(hexes):
+            h = hexes[k]
+            if h["hex_type"] in ("grania", "lake"):
+                continue
+            ffams = [fam(foreign[nb]) for nb in ax_neighbors(*k) if nb in foreign]
+            if not ffams:
+                continue
+            if not any(is_harsh(fam(h["hex_type"]), f) for f in ffams):
+                continue
+            for cand in ("hills", "tundra", "heath"):
+                if not any(is_harsh(fam(cand), f) for f in ffams):
+                    h["hex_type"] = cand; fixed += 1; dirty = True
+                    break
+            else:
+                stuck.append(k)
+        if not dirty:
+            break
+    return fixed, stuck
 
 
 def place_poi(hexes, local, cfg):
@@ -308,12 +416,24 @@ def main():
     lakes = carve_lakes(hexes, local, rng)
     print(f"  jeziora: {len(lakes)} hexów")
 
-    print("[3] gradienty: pogórze od Grań + zejście południowe")
-    paint_gradients(hexes, local, cfg, rng)
+    print("[3] blend do sąsiadów (data-driven z kanonu, pas %d hexów)" % BLEND_BAND)
+    foreign = load_foreign(region)
+    n_blend = blend_to_neighbors(hexes, local, rng, foreign)
+    print(f"  przemalowane: {n_blend} hexów")
+    # blend mógł postawić górę przy naszym jeziorze — pogórze mostkuje (#1545)
+    for k in list(hexes):
+        if hexes[k]["hex_type"] == "mountain" and any(
+                hexes[nb]["hex_type"] == "lake"
+                for nb in ax_neighbors(*k) if nb in hexes):
+            hexes[k]["hex_type"] = "hills"
 
     print("[4] bariera północna: grań (nieprzechodnia) + lodowiec/śnieg")
     n_bar = paint_barrier(hexes, local, rng)
     print(f"  bariera: {n_bar} hexów")
+
+    print("[4b] strażnik krawędzi: zero zakazanych par z obcymi sąsiadami")
+    n_fix, stuck = enforce_edge_compat(hexes, foreign)
+    print(f"  domknięte: {n_fix}; nierozwiązywalne: {len(stuck)} {stuck[:5]}")
 
     print("[5] POI (label-only)")
     poi = place_poi(hexes, local, cfg)
