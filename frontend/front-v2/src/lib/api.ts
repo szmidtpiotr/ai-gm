@@ -60,6 +60,15 @@ async function tryRefresh(): Promise<boolean> {
   return false;
 }
 
+/** Wyrzuca na logowanie po nieudanym odświeżeniu sesji (raz, bez pętli). */
+function redirectToLogin(): void {
+  if (typeof window === "undefined") return;
+  const base = import.meta.env.BASE_URL || "/"; // "/graj/"
+  const loginPath = `${base}login`.replace(/\/{2,}/g, "/");
+  if (window.location.pathname === loginPath) return;
+  window.location.replace(loginPath);
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   opts: ApiOptions = {},
@@ -85,7 +94,10 @@ export async function apiFetch<T = unknown>(
   if (res.status === 401 && !anon && !_retried) {
     const ok = await tryRefresh();
     if (ok) return apiFetch<T>(path, { ...opts, _retried: true });
+    // Sesja wygasła — bez tego przekierowania ekran zostaje na trasie
+    // chronionej i pokazuje generyczny błąd ("Nie udało się wczytać…").
     clearSession();
+    redirectToLogin();
   }
 
   if (res.status === 204) return undefined as T;
